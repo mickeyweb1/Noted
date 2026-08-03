@@ -1,0 +1,181 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* If you have run `npx shadcn@latest init`, uncomment the line below: */
+/* @import 'shadcn/tailwind.css'; */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui;
+  --font-display: 'Outfit', ui-sans-serif, system-ui;
+  --font-mono: ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-electric: var(--electric);
+  --color-electric-foreground: var(--electric-foreground);
+  --color-electric-soft: var(--electric-soft);
+  --color-flame: var(--flame);
+  --color-flame-foreground: var(--flame-foreground);
+  --color-flame-soft: var(--flame-soft);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --shadow-soft: 0 1px 2px oklch(0.25 0.06 295 / 0.04), 0 8px 24px -6px oklch(0.25 0.06 295 / 0.12);
+  --shadow-glow: 0 8px 32px -8px oklch(0.48 0.22 295 / 0.55);
+}
+
+:root {
+  color-scheme: light;
+  --radius: 1rem;
+
+  --background: oklch(0.985 0.004 295);
+  --foreground: oklch(0.24 0.02 295);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.02 295);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.02 295);
+  --primary: oklch(0.46 0.2 295);
+  --primary-foreground: oklch(0.99 0.005 295);
+  --secondary: oklch(0.96 0.012 295);
+  --secondary-foreground: oklch(0.34 0.09 295);
+  --muted: oklch(0.965 0.008 295);
+  --muted-foreground: oklch(0.53 0.03 295);
+  --accent: oklch(0.95 0.02 295);
+  --accent-foreground: oklch(0.36 0.12 295);
+  --destructive: oklch(0.58 0.22 22);
+  --border: oklch(0.91 0.012 295);
+  --input: oklch(0.91 0.012 295);
+  --ring: oklch(0.46 0.2 295);
+
+  --brand: oklch(0.46 0.2 295);
+  --brand-foreground: oklch(0.99 0.005 295);
+  --brand-soft: oklch(0.94 0.035 295);
+  --electric: oklch(0.58 0.2 258);
+  --electric-foreground: oklch(0.99 0.005 258);
+  --electric-soft: oklch(0.94 0.04 258);
+  --flame: oklch(0.68 0.17 45);
+  --flame-foreground: oklch(0.99 0.005 45);
+  --flame-soft: oklch(0.95 0.04 60);
+
+  --chart-1: oklch(0.46 0.2 295);
+  --chart-2: oklch(0.58 0.2 258);
+  --chart-3: oklch(0.68 0.17 45);
+  --chart-4: oklch(0.62 0.16 295);
+  --chart-5: oklch(0.72 0.12 258);
+
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.24 0.02 295);
+  --sidebar-primary: oklch(0.46 0.2 295);
+  --sidebar-primary-foreground: oklch(0.99 0.005 295);
+  --sidebar-accent: oklch(0.95 0.025 295);
+  --sidebar-accent-foreground: oklch(0.36 0.12 295);
+  --sidebar-border: oklch(0.92 0.012 295);
+  --sidebar-ring: oklch(0.46 0.2 295);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.17 0.015 292);
+  --foreground: oklch(0.96 0.006 295);
+  --card: oklch(0.215 0.018 292);
+  --card-foreground: oklch(0.96 0.006 295);
+  --popover: oklch(0.215 0.018 292);
+  --popover-foreground: oklch(0.96 0.006 295);
+  --primary: oklch(0.63 0.19 296);
+  --primary-foreground: oklch(0.16 0.02 295);
+  --secondary: oklch(0.27 0.025 292);
+  --secondary-foreground: oklch(0.96 0.006 295);
+  --muted: oklch(0.26 0.02 292);
+  --muted-foreground: oklch(0.72 0.02 295);
+  --accent: oklch(0.29 0.045 295);
+  --accent-foreground: oklch(0.95 0.02 295);
+  --destructive: oklch(0.66 0.19 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.63 0.19 296);
+
+  --brand: oklch(0.63 0.19 296);
+  --brand-foreground: oklch(0.16 0.02 295);
+  --brand-soft: oklch(0.31 0.06 295);
+  --electric: oklch(0.68 0.17 258);
+  --electric-foreground: oklch(0.16 0.02 258);
+  --electric-soft: oklch(0.31 0.06 258);
+  --flame: oklch(0.75 0.15 50);
+  --flame-foreground: oklch(0.18 0.03 45);
+  --flame-soft: oklch(0.32 0.055 55);
+
+  --chart-1: oklch(0.63 0.19 296);
+  --chart-2: oklch(0.68 0.17 258);
+  --chart-3: oklch(0.75 0.15 50);
+  --chart-4: oklch(0.55 0.17 295);
+  --chart-5: oklch(0.58 0.14 258);
+
+  --sidebar: oklch(0.205 0.018 292);
+  --sidebar-foreground: oklch(0.96 0.006 295);
+  --sidebar-primary: oklch(0.63 0.19 296);
+  --sidebar-primary-foreground: oklch(0.16 0.02 295);
+  --sidebar-accent: oklch(0.29 0.045 295);
+  --sidebar-accent-foreground: oklch(0.95 0.02 295);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.63 0.19 296);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
