@@ -8,6 +8,7 @@ import {
   Timer,
   User,
   LogOut,
+  Calendar
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../userContext"; // Using the AuthContext we built earlier
@@ -30,6 +31,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
     { to: "/quiz", icon: BookOpen, label: "Quiz" },
     { to: "/focusTime", icon: Timer, label: "Focus Time" },
     { to: "/studentSetting", icon: Settings, label: "Settings" },
+    {to: "/reminder", icon: Calendar, label: "Schedule" }
   ];
 
   const handleLogout = () => {
