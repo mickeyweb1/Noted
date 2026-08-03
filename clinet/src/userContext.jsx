@@ -10,7 +10,8 @@ const initialUserState = {
     password: "",
   },
   signup: {
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",

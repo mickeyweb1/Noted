@@ -162,13 +162,27 @@ export default function YourLoginForm() {
               {/* Full Name Input */}
               <div className="space-y-2 text-left">
                 <label className="text-sm font-medium leading-none text-foreground">
-                  Full Name
+                  First Name
                 </label>
                 <input
                   type="text"
-                  value={user.signup.fullName}
+                  value={user.signup.firstName}
                   onChange={(e) =>
-                    updateUserField("signup", "fullName", e.target.value)
+                    updateUserField("signup", "firstName", e.target.value)
+                  }
+                  placeholder="John Doe"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+              <div className="space-y-2 text-left">
+                <label className="text-sm font-medium leading-none text-foreground">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  value={user.signup.lastName}
+                  onChange={(e) =>
+                    updateUserField("signup", "lastName", e.target.value)
                   }
                   placeholder="John Doe"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

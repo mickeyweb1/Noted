@@ -103,7 +103,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-sm font-semibold text-sidebar-foreground truncate">
-              {userData.fullName}
+              {userData.firstName} {userData.lastName}
             </span>
             <p className="text-xs text-sidebar-foreground/60 truncate">
               {userData.email}
