@@ -1,24 +1,53 @@
 import { useState, useRef } from "react";
 import Tesseract from "tesseract.js";
-import { Camera, Upload, Loader2, X, Scan, RefreshCw } from "lucide-react";
+import { Camera, Upload, Loader2, X, Scan, RefreshCw, AlertCircle } from "lucide-react";
+import api from "../utils/api";
 
 export default function NoteScanner({ onScanComplete }) {
   const [image, setImage] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [extractedText, setExtractedText] = useState("");
+  const [scanMethod, setScanMethod] = useState("auto"); 
+  const [scanStatus, setScanStatus] = useState("");
   const fileInputRef = useRef(null);
 
-  const handleImageUpload = (e) => {
+  // ✅ NEW: Compress image in the browser before sending to API
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1024; // Resize to max 1024px width (perfect for text)
+          const scaleSize = MAX_WIDTH / img.width;
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleSize;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          // Compress to JPEG with 70% quality (usually brings 5MB down to ~300KB)
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(compressedBase64);
+        };
+      };
+    });
+  };
+
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setImage(event.target.result);
-        setExtractedText("");
-        setProgress(0);
-      };
-      reader.readAsDataURL(file);
+      setScanStatus("🔄 Optimizing image for best results...");
+      // ✅ Compress the image automatically
+      const compressedImage = await compressImage(file);
+      setImage(compressedImage);
+      setExtractedText("");
+      setProgress(0);
+      setScanStatus("");
     }
   };
 
@@ -27,25 +56,58 @@ export default function NoteScanner({ onScanComplete }) {
 
     setScanning(true);
     setProgress(0);
+    setScanStatus("🔄 Sending to OCR.Space (Handwriting optimized)...");
 
     try {
-      const result = await Tesseract.recognize(image, "eng", {
-        logger: (message) => {
-          if (message.status === "recognizing text") {
-            setProgress(Math.round(message.progress * 100));
-          }
-        },
-      });
+      let finalText = "";
 
-      setExtractedText(result.data.text);
-      
-      // Auto-send to parent component
-      if (onScanComplete && result.data.text.trim()) {
-        onScanComplete(result.data.text);
+      if (scanMethod === "auto" || scanMethod === "google") {
+        try {
+          const response = await api.post('/ai/ocr/extract-text', {
+            imageUrl: image
+          });
+          
+          if (response.data.success && response.data.text) {
+            finalText = response.data.text;
+            setScanStatus("✅ OCR.Space successful!");
+          } else {
+            throw new Error("No text found");
+          }
+        } catch (apiError) {
+          console.warn("OCR.Space failed, falling back to Tesseract:", apiError);
+          setScanStatus("⚠️ API failed. Using local fallback (Tesseract)...");
+          
+          const result = await Tesseract.recognize(image, "eng", {
+            logger: (message) => {
+              if (message.status === "recognizing text") {
+                setProgress(Math.round(message.progress * 100));
+              }
+            },
+          });
+          finalText = result.data.text;
+          setScanStatus("✅ Tesseract fallback complete!");
+        }
+      } else {
+        setScanStatus("🔍 Using Tesseract OCR...");
+        const result = await Tesseract.recognize(image, "eng", {
+          logger: (message) => {
+            if (message.status === "recognizing text") {
+              setProgress(Math.round(message.progress * 100));
+            }
+          },
+        });
+        finalText = result.data.text;
+        setScanStatus("✅ Tesseract scan complete!");
       }
+
+      setExtractedText(finalText);
+      if (onScanComplete && finalText.trim()) {
+        onScanComplete(finalText);
+      }
+
     } catch (error) {
-      console.error("OCR Error:", error);
-      alert("Failed to scan the image. Please try again.");
+      console.error("Final OCR Error:", error);
+      setScanStatus("❌ Scan failed. Please try a clearer image.");
     } finally {
       setScanning(false);
     }
@@ -55,6 +117,7 @@ export default function NoteScanner({ onScanComplete }) {
     setImage(null);
     setExtractedText("");
     setProgress(0);
+    setScanStatus("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -62,17 +125,42 @@ export default function NoteScanner({ onScanComplete }) {
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white">
-          <Scan className="w-5 h-5" />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white">
+            <Scan className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-display font-bold text-foreground">Scan Your Notes</h3>
+            <p className="text-xs text-muted-foreground">Snap a photo or upload an image</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-display font-bold text-foreground">Scan Your Notes</h3>
-          <p className="text-xs text-muted-foreground">Snap a photo or upload an image</p>
-        </div>
+        
+        <select
+          value={scanMethod}
+          onChange={(e) => setScanMethod(e.target.value)}
+          className="text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-brand"
+        >
+          <option value="auto">Auto (Best Accuracy + Fallback)</option>
+          <option value="tesseract">Tesseract Only (100% Free)</option>
+        </select>
       </div>
 
-      {/* Upload Area */}
+      {scanStatus && (
+        <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
+          scanStatus.includes("✅") ? "bg-green-500/10 text-green-700 border border-green-500/20" :
+          scanStatus.includes("⚠️") ? "bg-yellow-500/10 text-yellow-700 border border-yellow-500/20" :
+          scanStatus.includes("❌") ? "bg-red-500/10 text-red-700 border border-red-500/20" :
+          "bg-blue-500/10 text-blue-700 border border-blue-500/20"
+        }`}>
+          {scanStatus.includes("✅") ? <AlertCircle className="w-4 h-4" /> :
+           scanStatus.includes("⚠️") ? <AlertCircle className="w-4 h-4" /> :
+           scanStatus.includes("❌") ? <AlertCircle className="w-4 h-4" /> :
+           <Loader2 className="w-4 h-4 animate-spin" />}
+          {scanStatus}
+        </div>
+      )}
+
       {!image && (
         <div
           onClick={() => fileInputRef.current?.click()}
@@ -83,19 +171,19 @@ export default function NoteScanner({ onScanComplete }) {
             Click to upload or take a photo
           </p>
           <p className="text-xs text-muted-foreground">
-            Supports: JPG, PNG, WEBP
+            Supports: JPG, PNG, WEBP (Auto-compressed)
           </p>
           <input
-  ref={fileInputRef}
-  type="file"
-  accept="image/*"
-  onChange={handleImageUpload}
-  className="hidden"
-/>
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
         </div>
       )}
 
-      {/* Image Preview */}
       {image && !extractedText && (
         <div className="space-y-4">
           <div className="relative rounded-lg overflow-hidden border border-border">
@@ -108,23 +196,7 @@ export default function NoteScanner({ onScanComplete }) {
             </button>
           </div>
 
-          {scanning ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Scanning text...
-                </span>
-                <span className="font-medium text-brand">{progress}%</span>
-              </div>
-              <div className="h-2 bg-background rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-brand transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          ) : (
+          {!scanning && (
             <button
               onClick={handleScan}
               className="w-full py-3 rounded-xl bg-brand text-brand-foreground font-bold hover:bg-brand/90 transition-all flex items-center justify-center gap-2"
@@ -133,23 +205,42 @@ export default function NoteScanner({ onScanComplete }) {
               Extract Text
             </button>
           )}
+
+          {scanning && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Scanning...
+                </span>
+                {scanMethod === "tesseract" && (
+                  <span className="font-medium text-brand">{progress}%</span>
+                )}
+              </div>
+              {scanMethod === "tesseract" && (
+                <div className="h-2 bg-background rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-brand transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Extracted Text */}
       {extractedText && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-foreground">Extracted Text:</h4>
-            <div className="flex gap-2">
-              <button
-                onClick={handleReset}
-                className="px-3 py-1.5 rounded-lg bg-background text-foreground text-xs font-medium hover:bg-background/80 transition-all flex items-center gap-1"
-              >
-                <RefreshCw className="w-3 h-3" />
-                Scan New
-              </button>
-            </div>
+            <button
+              onClick={handleReset}
+              className="px-3 py-1.5 rounded-lg bg-background text-foreground text-xs font-medium hover:bg-background/80 transition-all flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Scan New
+            </button>
           </div>
           <textarea
             value={extractedText}
@@ -160,7 +251,7 @@ export default function NoteScanner({ onScanComplete }) {
             className="w-full h-40 rounded-lg border border-border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand resize-none"
           />
           <p className="text-xs text-muted-foreground">
-            ️ You can edit the text before using it
+            ✅ You can edit the text before using it
           </p>
         </div>
       )}

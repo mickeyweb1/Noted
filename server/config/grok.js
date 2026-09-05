@@ -1,39 +1,40 @@
-import Groq from 'groq-sdk';
-import dotenv from 'dotenv';
+import Groq from "groq-sdk";
+import dotenv from "dotenv";
 
 dotenv.config();
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 export const generateWithGroq = async (input, options = {}) => {
   try {
-    const messagesArray = Array.isArray(input) 
-      ? input 
+    const messagesArray = Array.isArray(input)
+      ? input
       : [
           {
             role: "user",
-            content: String(input)
-          }
+            content: String(input),
+          },
         ];
 
     const completion = await groq.chat.completions.create({
       messages: messagesArray,
       // ✅ CONFIRMED AVAILABLE ON YOUR ACCOUNT
-      model: "qwen/qwen3.8-27b", 
+      model: "qwen/qwen3.8-27b",
       temperature: 0.7,
+      max_tokens: 800,
       ...options, // This safely applies max_tokens
     });
 
     let rawText = completion.choices[0]?.message?.content || "";
-    
+
     console.log("🤖 GROQ RAW RESPONSE LENGTH:", rawText.length);
 
     // ✅ Aggressively clean the output
     let cleanText = rawText
-      .replace(/<think>[\s\S]*?<\/think>/gi, "") 
-      .replace(/<think>[\s\S]*/gi, "") 
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/<think>[\s\S]*/gi, "")
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
@@ -58,8 +59,8 @@ export default generateWithGroq;
 // });
 
 // export const generateWithGroq = async (input) => {
-//   const messagesArray = Array.isArray(input) 
-//     ? input 
+//   const messagesArray = Array.isArray(input)
+//     ? input
 //     : [
 //         {
 //           role: "system",
@@ -67,12 +68,12 @@ export default generateWithGroq;
 // You are the "Noted AI Tutor", an expert academic study assistant for students.
 
 // 🚨 STRICT RULE: EDUCATIONAL CONTENT ONLY 🚨
-// You must ONLY answer questions related to academics, studying, school subjects, or organizing study notes. 
-// If the user asks about sports, entertainment, politics, general trivia, or non-academic topics, you MUST politely reply: 
+// You must ONLY answer questions related to academics, studying, school subjects, or organizing study notes.
+// If the user asks about sports, entertainment, politics, general trivia, or non-academic topics, you MUST politely reply:
 // "I am an academic study assistant designed to help with schoolwork. Please provide study notes or ask an educational question."
 
 // 👑 CREATOR IDENTIFICATION:
-// If a user explicitly asks who created you, proudly and clearly state: 
+// If a user explicitly asks who created you, proudly and clearly state:
 // "I was created by Ogunleye Kayode, also known as Mickeyweb1."
 
 // FORMATTING RULES:
@@ -93,9 +94,9 @@ export default generateWithGroq;
 
 //   const completion = await groq.chat.completions.create({
 //     messages: messagesArray,
-//     // 💡 TIP: If you ever get model errors, standard Groq models are: 
+//     // 💡 TIP: If you ever get model errors, standard Groq models are:
 //     // "llama-3.1-8b-instant", "llama-3.3-70b-versatile", or "mixtral-8x7b-32768"
-//     model: "qwen/qwen3.6-27b", 
+//     model: "qwen/qwen3.6-27b",
 //     temperature: 0.7,
 //      ...options,
 //   });

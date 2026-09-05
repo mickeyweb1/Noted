@@ -13,6 +13,8 @@ import {
 import { useState } from "react";
 import api from "../../utils/api";
 import NoteScanner from "../../components/NoteScanner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function StudentAiGenerator() {
   const [activeMode, setActiveMode] = useState("summary");
@@ -146,13 +148,12 @@ export default function StudentAiGenerator() {
               </div>
             </div>
 
-            {/* 2. Notes Input (SCANNER IS NOW PROMINENTLY HERE) */}
+            {/* 2. Notes Input */}
             <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm space-y-4">
               <label className="text-sm font-medium text-foreground">
                 Your Messy Notes
               </label>
               
-              {/* ✅ NOTE SCANNER PLACED RIGHT HERE */}
               <NoteScanner onScanComplete={(text) => setNotesText(text)} />
 
               <textarea
@@ -221,7 +222,7 @@ export default function StudentAiGenerator() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: OUTPUT PREVIEW & HISTORY */}
+          {/* RIGHT COLUMN: OUTPUT PREVIEW */}
           <div className="space-y-6">
             <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm min-h-[300px] flex flex-col">
               {isGenerating ? (
@@ -240,25 +241,29 @@ export default function StudentAiGenerator() {
                       {copied ? "Copied!" : "Copy"}
                     </button>
                   </div>
-                  <div className="text-sm leading-relaxed space-y-3 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
-                    {generatedResult.split("\n").map((line, index) => {
-                      if (line.startsWith("**") && line.includes("**")) {
-                        return <div key={index} className="mt-4 mb-2"><h4 className="text-brand font-bold text-base">{line.replace(/\*\*/g, "").trim()}</h4></div>;
-                      } else if (line.startsWith("- ")) {
-                        const bulletText = line.replace("- ", "").trim();
-                        const parts = bulletText.split(/(\*\*.*?\*\*)/g);
-                        return (
-                          <div key={index} className="ml-4 text-muted-foreground flex items-start gap-2">
-                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand flex-shrink-0" />
-                            <span>{parts.map((part, i) => part.startsWith("**") && part.endsWith("**") ? <strong key={i} className="text-foreground">{part.replace(/\*\*/g, "")}</strong> : part)}</span>
-                          </div>
-                        );
-                      } else if (line.trim() === "") {
-                        return null;
-                      } else {
-                        return <p key={index} className="text-foreground">{line}</p>;
-                      }
-                    })}
+                  
+                  {/* ✅ NEW: Professional Markdown Rendering (Replaces the old messy .split logic) */}
+                  <div className="text-sm leading-relaxed overflow-y-auto max-h-[500px] pr-2 custom-scrollbar markdown-content prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-foreground mt-6 mb-4" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-xl font-bold text-foreground mt-5 mb-3" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-foreground mt-4 mb-2" {...props} />,
+                        p: ({node, ...props}) => <p className="text-foreground leading-relaxed mb-3" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1 ml-4 mb-3" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1 ml-4 mb-3" {...props} />,
+                        li: ({node, ...props}) => <li className="text-foreground" {...props} />,
+                        strong: ({node, ...props}) => <strong className="font-bold text-foreground" {...props} />,
+                        em: ({node, ...props}) => <em className="italic" {...props} />,
+                        code: ({node, inline, ...props}) => 
+                          inline ? 
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props} /> :
+                          <code className="block bg-muted p-3 rounded-lg text-sm font-mono overflow-x-auto" {...props} />,
+                      }}
+                    >
+                      {generatedResult}
+                    </ReactMarkdown>
                   </div>
                 </div>
               ) : (

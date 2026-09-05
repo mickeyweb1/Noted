@@ -351,3 +351,62 @@ async function searchStockImages(keywords, sceneNumber, res) {
     return res.status(500).json({ success: false, message: "Failed to find media" });
   }
 }
+
+export const extractTextFromImage = async (req, res) => {
+  try {
+    const { imageUrl } = req.body;
+    
+    if (!imageUrl) {
+      return res.status(400).json({ success: false, message: "Image data required" });
+    }
+
+    const apiKey = process.env.OCR_SPACE_API_KEY;
+    if (!apiKey) {
+      throw new Error("OCR_SPACE_API_KEY is missing in .env file");
+    }
+
+    const url = 'https://api.ocr.space/parse/image';
+    
+    const formData = new URLSearchParams();
+    formData.append('apikey', apiKey);
+    formData.append('base64Image', imageUrl);
+    formData.append('language', 'eng');
+    formData.append('isOverlayRequired', 'false');
+    formData.append('OCREngine', '2'); // Engine 2 is optimized for handwriting
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Noted-App/1.0' 
+      },
+      body: formData.toString(),
+    });
+
+    const rawData = await response.text();
+    const data = JSON.parse(rawData);
+
+    if (data.IsErroredOnProcessing) {
+      throw new Error(data.ErrorMessage?.[0] || "OCR.Space processing error");
+    }
+
+    const extractedText = data.ParsedResults?.[0]?.ParsedText || "";
+
+    if (!extractedText.trim()) {
+      return res.status(200).json({ success: true, text: "", message: "No text detected", method: "ocr-space" });
+    }
+
+    // Success! Send the text to the frontend
+    res.status(200).json({ success: true, text: extractedText, method: "ocr-space" });
+
+  } catch (error) {
+    // Only log if there is an actual error
+    console.error("❌ OCR Extraction Error:", error.message);
+    
+    res.status(500).json({ 
+      success: false, 
+      message: "Primary OCR failed", 
+      useFallback: true 
+    });
+  }
+};

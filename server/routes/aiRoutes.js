@@ -8,7 +8,7 @@ import {
   generateChallengeLink, acceptBattle, resolveBattle,
   checkBattleStatus, startBattle 
 } from '../controllers/battleController.js';
-import { generateContent, generateSpeech, searchStockVideos } from '../controllers/aiController.js';
+import { generateContent, generateSpeech, searchStockVideos,  extractTextFromImage } from '../controllers/aiController.js';
 
 
 const router = express.Router();
@@ -33,5 +33,6 @@ router.post('/battle/accept', protect, acceptBattle);
 router.get('/battle/status', protect, checkBattleStatus);
 router.post('/battle/start', protect, startBattle);
 router.post('/battle/resolve', protect, resolveBattle);
+router.post('/ocr/extract-text', protect, extractTextFromImage);
 
 export default router;
