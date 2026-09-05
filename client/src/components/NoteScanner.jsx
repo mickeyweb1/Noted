@@ -86,13 +86,12 @@ export default function NoteScanner({ onScanComplete }) {
             Supports: JPG, PNG, WEBP
           </p>
           <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment" // Opens camera on mobile
-            onChange={handleImageUpload}
-            className="hidden"
-          />
+  ref={fileInputRef}
+  type="file"
+  accept="image/*"
+  onChange={handleImageUpload}
+  className="hidden"
+/>
         </div>
       )}
 
