@@ -97,38 +97,53 @@ CRITICAL: Output VALID JSON ONLY. No markdown, no extra text. Keep it extremely 
         console.error("❌ Video JSON parse error:", e.message);
         aiContent = generatedTextFull;
         aiTitle = title || "Video (Parse Failed)";
-      }}else if (mode === 'podcast') {
-      // 🎙️ THE PODCAST PROMPT
-      const podcastSystemPrompt = `You are a scriptwriter for a hilarious and mind-blowing educational podcast. 
-There are two hosts:
-1. "Leo" (The Curious Student): He is funny, asks relatable questions, makes jokes, and is easily amazed.
-2. "Dr. Nova" (The Expert Teacher): She is brilliant, explains things clearly, and drops MIND-BLOWING fun facts that make Leo's jaw drop.
+    }    } else if (mode === 'podcast') {
+      const length = req.body.length || 'short';
+      
+      let exchangeCount = "6 to 8 exchanges (quick and punchy)";
+      let detailLevel = "Keep it brief, high-energy, and fast-paced.";
+      if (length === 'medium') {
+        exchangeCount = "10 to 12 exchanges";
+        detailLevel = "Provide deeper explanations but keep the conversational, punchy energy.";
+      } else if (length === 'long') {
+        exchangeCount = "15 to 18 exchanges";
+        detailLevel = "Go into deep detail, but maintain the natural, interrupting conversational flow.";
+      }
 
-RULES:
-- The conversation MUST be funny and engaging. Use light jokes and casual language.
-- Dr. Nova MUST include at least one crazy, mind-blowing fun fact about the topic.
-- Leo MUST ask "Why do we actually need to know this?" and Dr. Nova must give a real-world, practical answer.
-- Keep each line short (max 2-3 sentences) so it sounds like a real conversation.
+      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging, natural-sounding educational podcast. 
+There are two hosts:
+1. "Leo" (The Curious Student): Casual, easily amazed, uses phrases like "No way!", "Wait, really?", and interrupts with excitement.
+2. "Dr. Nova" (The Expert Teacher): Smart but approachable, explains things clearly, sounds like a cool professor, NEVER sounds like a robot.
+
+CRITICAL STRUCTURE (MUST FOLLOW EXACTLY):
+- Line 1 (Leo): MUST start the podcast by blurting out a CRAZY, mind-blowing fun fact about the topic.
+- Line 2 (Dr. Nova): MUST immediately agree ("That's true!") and then naturally introduce the topic ("And that is exactly why we are talking about [Topic] in this podcast today.").
+- Throughout the script: They must sound like real humans. Use casual language, interruptions (use "—" to show interruption), and natural reactions like "No way!", "Exactly", "Wait, hold on". 
+- Include at least one historical misconception (what people wrongly believed in the past).
+- Leo MUST ask "Why do we actually need to know this?" and Dr. Nova must give a practical, real-world answer.
+- Keep each line short and punchy (max 2-3 sentences). 
 - Output VALID JSON ONLY. No markdown, no extra text.
 
 The JSON structure must be exactly:
 {
-  "title": "Catchy Podcast Title",
+  "title": "Catchy, Fun Podcast Title",
   "script": [
-    { "speaker": "Leo", "text": "Wait, so you're telling me..." },
-    { "speaker": "Dr. Nova", "text": "Exactly! And here is the crazy part..." }
+    { "speaker": "Leo", "text": "Did you know that [Crazy Fun Fact]?!" },
+    { "speaker": "Dr. Nova", "text": "That's true! And that is exactly why we are talking about [Topic] in this podcast today." },
+    { "speaker": "Leo", "text": "No way! But wait, why do we actually need to know this?" },
+    { "speaker": "Dr. Nova", "text": "Because [Practical Real-World Reason]." }
   ]
 }`;
 
       const groqMessages = [
         { role: "system", content: podcastSystemPrompt },
-        { role: "user", content: `Topic for the podcast:\n${text}` }
+        { role: "user", content: `Topic/Notes for the podcast:\n${text}` }
       ];
       
-      // Limit tokens to keep it under the 1000 OTPM free tier limit
-      const generatedTextFull = await generateWithGroq(groqMessages, { max_tokens: 800 });
+      const maxTokens = length === 'long' ? 2000 : length === 'medium' ? 1500 : 1000;
+      const generatedTextFull = await generateWithGroq(groqMessages, { max_tokens: maxTokens });
       
-      console.log("🎙️ RAW PODCAST OUTPUT:", generatedTextFull);
+      console.log(`🎙️ RAW PODCAST OUTPUT (${length}):`, generatedTextFull);
 
       try {
         let cleanJson = generatedTextFull.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -141,7 +156,7 @@ The JSON structure must be exactly:
           
           if (parsed && Array.isArray(parsed.script)) {
             aiTitle = parsed.title || title || "Study Podcast";
-            aiContent = generatedTextFull; // We save the raw JSON to the database
+            aiContent = generatedTextFull; 
           } else { 
             throw new Error("Missing script array in parsed JSON"); 
           }

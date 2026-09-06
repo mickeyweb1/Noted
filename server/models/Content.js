@@ -18,7 +18,7 @@ const contentSchema = new mongoose.Schema({
     // What type of generation was this?
     type: { 
         type: String, 
-        enum: ['summary', 'video', 'music', 'quiz', 'tutor'], 
+        enum: ['summary', 'video', 'music', 'quiz', 'tutor', 'podcast'], 
         required: true 
     },
     // The original messy notes the user pasted
