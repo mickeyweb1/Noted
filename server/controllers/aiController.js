@@ -97,7 +97,63 @@ CRITICAL: Output VALID JSON ONLY. No markdown, no extra text. Keep it extremely 
         console.error("❌ Video JSON parse error:", e.message);
         aiContent = generatedTextFull;
         aiTitle = title || "Video (Parse Failed)";
-      }} else if (mode === 'music') { // ✅ FIXED: Now properly outside the try/catch block
+      }}else if (mode === 'podcast') {
+      // 🎙️ THE PODCAST PROMPT
+      const podcastSystemPrompt = `You are a scriptwriter for a hilarious and mind-blowing educational podcast. 
+There are two hosts:
+1. "Leo" (The Curious Student): He is funny, asks relatable questions, makes jokes, and is easily amazed.
+2. "Dr. Nova" (The Expert Teacher): She is brilliant, explains things clearly, and drops MIND-BLOWING fun facts that make Leo's jaw drop.
+
+RULES:
+- The conversation MUST be funny and engaging. Use light jokes and casual language.
+- Dr. Nova MUST include at least one crazy, mind-blowing fun fact about the topic.
+- Leo MUST ask "Why do we actually need to know this?" and Dr. Nova must give a real-world, practical answer.
+- Keep each line short (max 2-3 sentences) so it sounds like a real conversation.
+- Output VALID JSON ONLY. No markdown, no extra text.
+
+The JSON structure must be exactly:
+{
+  "title": "Catchy Podcast Title",
+  "script": [
+    { "speaker": "Leo", "text": "Wait, so you're telling me..." },
+    { "speaker": "Dr. Nova", "text": "Exactly! And here is the crazy part..." }
+  ]
+}`;
+
+      const groqMessages = [
+        { role: "system", content: podcastSystemPrompt },
+        { role: "user", content: `Topic for the podcast:\n${text}` }
+      ];
+      
+      // Limit tokens to keep it under the 1000 OTPM free tier limit
+      const generatedTextFull = await generateWithGroq(groqMessages, { max_tokens: 800 });
+      
+      console.log("🎙️ RAW PODCAST OUTPUT:", generatedTextFull);
+
+      try {
+        let cleanJson = generatedTextFull.replace(/```json/g, '').replace(/```/g, '').trim();
+        const firstBracket = cleanJson.indexOf('{');
+        const lastBracket = cleanJson.lastIndexOf('}');
+        
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          const jsonString = cleanJson.substring(firstBracket, lastBracket + 1);
+          const parsed = JSON.parse(jsonString);
+          
+          if (parsed && Array.isArray(parsed.script)) {
+            aiTitle = parsed.title || title || "Study Podcast";
+            aiContent = generatedTextFull; // We save the raw JSON to the database
+          } else { 
+            throw new Error("Missing script array in parsed JSON"); 
+          }
+        } else { 
+          throw new Error(`No JSON brackets found.`); 
+        }
+      } catch (e) {
+        console.error("❌ Podcast JSON parse error:", e.message);
+        aiContent = generatedTextFull;
+        aiTitle = title || "Podcast (Parse Failed)";
+      }}
+ else if (mode === 'music') { // ✅ FIXED: Now properly outside the try/catch block
       const musicSystemPrompt = `You are a professional Hip-Hop and Afrobeat lyricist. Turn the following educational notes into a hard-hitting, rhythmic rap song.
 
 TOPIC FOCUS: 85% strict educational content based on the provided notes, 15% hype/filler (e.g., "let's go", "study hard", "we got the flow").
