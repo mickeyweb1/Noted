@@ -31,6 +31,7 @@ import StudentDirectorys from "./pages/Dashboard/StudentDirectory";
 import StudentProfile from "./pages/Dashboard/StudentProfile";
 import BattleArena from "./pages/Dashboard/BattleArena";
 import VideoGenerator from "./pages/VideoGenerator";
+import PodcastGenerator from "./pages/PodcastGenerator";
 // Admin Dashboard Pages
 import AdminDashboardLayout from "./components/layouts/AdminDashboardLayout";
 import AdminDashboard from "./pages/schoolAdmin/AdminDashboard";
@@ -86,6 +87,7 @@ function App() {
         <Route path="/aiGenerator" element={<StudentAiGenerator />} />
         <Route path="/myLibrary" element={<StudentLibrary />} />
         <Route path="/quiz" element={<StudentQuiz />} />
+        <Route path="/podcast" element={<PodcastGenerator />} />
         <Route path="/focusTime" element={<FocusTime />} />
         <Route path="/reminder" element={<StudentSchedule />} />
         <Route path="/studentSetting" element={<StudentSetting />} />
