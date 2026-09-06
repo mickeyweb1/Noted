@@ -4,7 +4,7 @@ export const getLeaderboard = async (req, res, next) => {
   try {
     const scope = req.query.scope || 'global'; 
     const currentUser = req.user;
-
+ 
     // 1. Determine the filter based on scope
     let filter = { isActive: true }; // Default to active users
     
