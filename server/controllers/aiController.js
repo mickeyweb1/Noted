@@ -1,483 +1,778 @@
-import { generateWithGroq } from '../config/grok.js';
-import { Content } from '../models/Content.js';
-import { User } from '../models/User.js'; 
+import { generateWithGroq } from "../config/grok.js";
+import { Content } from "../models/Content.js";
+import { User } from "../models/User.js";
+
+const ALLOWED_MODES = [
+  "summary",
+  "video",
+  "music",
+  "quiz",
+  "tutor",
+  "podcast",
+];
+
+const MAX_INPUT_LENGTH = 50000;
+const MAX_SPEECH_LENGTH = 30000;
+const MAX_IMAGE_PAYLOAD_LENGTH = 12000000;
+
+const httpError = (message, status = 500) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+const requireUser = (req) => {
+  if (!req.user?._id) {
+    throw httpError("Not authorized.", 401);
+  }
+
+  return req.user._id;
+};
+
+const ensureText = (value, message = "Please provide valid text.") => {
+  if (typeof value !== "string") {
+    throw httpError(message, 400);
+  }
+
+  const text = value.trim();
+
+  if (!text) {
+    throw httpError(message, 400);
+  }
+
+  return text;
+};
+
+const parseJsonObject = (rawText) => {
+  if (typeof rawText !== "string") {
+    throw httpError("The AI returned an empty response.", 502);
+  }
+
+  const cleaned = rawText
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    throw httpError("The AI did not return valid JSON. Please try again.", 502);
+  }
+
+  try {
+    return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+  } catch {
+    throw httpError("The AI returned malformed JSON. Please try again.", 502);
+  }
+};
+
+const runGroq = async (messagesOrPrompt, options = {}) => {
+  try {
+    return await generateWithGroq(messagesOrPrompt, options);
+  } catch (error) {
+    console.error("Groq generation failed:", error.message);
+    throw httpError("AI generation is temporarily unavailable.", 503);
+  }
+};
+
+const validatePodcast = (parsed) => {
+  if (
+    !parsed ||
+    typeof parsed.title !== "string" ||
+    !parsed.title.trim() ||
+    !Array.isArray(parsed.script) ||
+    parsed.script.length < 4
+  ) {
+    throw httpError("The AI returned an invalid podcast script.", 502);
+  }
+
+  const script = parsed.script.map((line) => {
+    if (
+      !line ||
+      typeof line.speaker !== "string" ||
+      typeof line.text !== "string" ||
+      !line.text.trim()
+    ) {
+      throw httpError("The AI returned an invalid podcast line.", 502);
+    }
+
+    const normalizedSpeaker = line.speaker.trim().toLowerCase();
+    if (normalizedSpeaker !== "leo" && normalizedSpeaker !== "dr. nova") {
+      throw httpError("The AI returned an unknown podcast speaker.", 502);
+    }
+
+    const speaker = normalizedSpeaker === "leo" ? "Leo" : "Dr. Nova";
+
+    return {
+      speaker,
+      text: line.text.trim().slice(0, 1200),
+    };
+  });
+
+  const hasRequiredQuestion = script.some((line) =>
+    line.text.toLowerCase().includes("why do we actually need to know this"),
+  );
+
+  if (
+    script[0].speaker !== "Leo" ||
+    script[1].speaker !== "Dr. Nova" ||
+    !hasRequiredQuestion
+  ) {
+    throw httpError("The AI returned an incomplete podcast structure.", 502);
+  }
+
+  return {
+    title: parsed.title.trim().slice(0, 160),
+    script,
+  };
+};
+
+const validateQuiz = (parsed) => {
+  if (!parsed || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+    throw httpError("The AI returned an invalid quiz.", 502);
+  }
+
+  return {
+    title:
+      typeof parsed.title === "string" && parsed.title.trim()
+        ? parsed.title.trim().slice(0, 160)
+        : "Quiz",
+    questions: parsed.questions,
+  };
+};
+
+const validateVideo = (parsed) => {
+  if (!parsed || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
+    throw httpError("The AI returned an invalid video storyboard.", 502);
+  }
+
+  return {
+    title:
+      typeof parsed.title === "string" && parsed.title.trim()
+        ? parsed.title.trim().slice(0, 160)
+        : "Video Storyboard",
+    scenes: parsed.scenes,
+  };
+};
+
+const getPodcastInstructions = (length) => {
+  if (length === "medium") {
+    return {
+      exchangeCount: "10 to 12 exchanges",
+      detailLevel:
+        "Provide deeper explanations but keep the conversational, punchy energy.",
+      maxTokens: 1500,
+    };
+  }
+
+  if (length === "long") {
+    return {
+      exchangeCount: "15 to 18 exchanges",
+      detailLevel:
+        "Go into deep detail, but maintain a natural and engaging conversation.",
+      maxTokens: 2000,
+    };
+  }
+
+  return {
+    exchangeCount: "6 to 8 exchanges",
+    detailLevel: "Keep it brief, high-energy, and fast-paced.",
+    maxTokens: 1000,
+  };
+};
 
 export const generateContent = async (req, res, next) => {
   try {
-    const { text, mode, vibe, title, subject, numQuestions, difficulty, messages } = req.body;
+    const userId = requireUser(req);
+    const {
+      text,
+      mode,
+      vibe,
+      title,
+      subject,
+      numQuestions,
+      difficulty,
+      messages,
+    } = req.body || {};
 
-    if (!req.user?._id) {
-      const error = new Error("Not authorized.");
-      error.status = 401; throw error;
+    if (!ALLOWED_MODES.includes(mode)) {
+      throw httpError("Invalid generation mode.", 400);
     }
-    const userId = req.user._id;
 
-    const inputToCheck = mode === 'tutor' 
-      ? (messages && messages.length > 0 ? messages[messages.length - 1].content : "") 
-      : text;
+    const inputToCheck =
+      mode === "tutor"
+        ? Array.isArray(messages) && messages.length > 0
+          ? messages[messages.length - 1]?.content
+          : ""
+        : text;
 
-    if (!inputToCheck || inputToCheck.trim().length < 5) {
-      const error = new Error("Please provide at least 5 characters.");
-      error.status = 400; throw error;
+    const cleanInput = ensureText(
+      inputToCheck,
+      "Please provide at least 5 characters.",
+    );
+
+    if (cleanInput.length < 5) {
+      throw httpError("Please provide at least 5 characters.", 400);
     }
 
-    let aiTitle = title || `${mode.charAt(0).toUpperCase() + mode.slice(1)} Notes`;
+    if (cleanInput.length > MAX_INPUT_LENGTH) {
+      throw httpError(
+        "Your notes are too long. Please use fewer than 50,000 characters.",
+        413,
+      );
+    }
+
+    const requestedTitle =
+      typeof title === "string" && title.trim()
+        ? title.trim().slice(0, 160)
+        : "";
+    const cleanSubject =
+      typeof subject === "string" && subject.trim()
+        ? subject.trim().slice(0, 100)
+        : "General";
+
+    let aiTitle =
+      requestedTitle ||
+      `${mode.charAt(0).toUpperCase()}${mode.slice(1)} Notes`;
     let aiContent = "";
 
-    if (mode === 'tutor') {
-      const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant. 
-STRICT RULE: EDUCATIONAL CONTENT ONLY. Answer clearly and concisely.`;
-      const groqMessages = [
+    if (mode === "tutor") {
+      const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant.
+STRICT RULE: EDUCATIONAL CONTENT ONLY.
+Answer clearly, accurately, and concisely. If a question is unclear, ask one short clarifying question.`;
+
+      const safeMessages = Array.isArray(messages)
+        ? messages
+            .slice(-20)
+            .filter(
+              (message) =>
+                message &&
+                typeof message.content === "string" &&
+                message.content.trim(),
+            )
+            .map((message) => ({
+              role:
+                message.role === "ai" || message.role === "assistant"
+                  ? "assistant"
+                  : "user",
+              content: message.content.trim().slice(0, 10000),
+            }))
+        : [];
+
+      aiContent = await runGroq([
         { role: "system", content: tutorSystemPrompt },
-        ...(Array.isArray(messages) ? messages.map(m => ({
-          role: (m.role === "ai" || m.role === "assistant") ? "assistant" : "user",
-          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-        })) : [])
-      ];
-      try { aiContent = await generateWithGroq(groqMessages); } 
-      catch (groqError) { throw new Error("AI service is temporarily unavailable."); }
-      aiTitle = title || 'Tutor Chat';
+        ...safeMessages,
+      ]);
+      aiTitle = requestedTitle || "Tutor Chat";
+    } else if (mode === "summary") {
+      const systemPrompt =
+        "You are an expert academic study assistant. Create an accurate, well-structured study summary. Educational content only.";
+      const generatedTextFull = await runGroq(
+        `${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`,
+      );
 
-    } else if (mode === 'summary') {
-      const systemPrompt = `You are an expert academic study assistant. STRICT RULE: EDUCATIONAL CONTENT ONLY.`;
-      const generatedTextFull = await generateWithGroq(`${systemPrompt}\n\nNotes/Topic:\n${text}`);
-      const lines = generatedTextFull.split('\n');
-      const firstLine = lines.find(line => line.trim().length > 0);
-      if (firstLine && !firstLine.startsWith('-') && !firstLine.startsWith('*') && !firstLine.startsWith('**') && !firstLine.startsWith('📚')) {
-        aiTitle = firstLine.trim().substring(0, 60);
-        aiContent = generatedTextFull.replace(firstLine, '').trim();
+      const lines = generatedTextFull.split("\n");
+      const firstLine = lines.find((line) => line.trim().length > 0);
+
+      if (
+        firstLine &&
+        !firstLine.trim().startsWith("-") &&
+        !firstLine.trim().startsWith("*") &&
+        !firstLine.trim().startsWith("**") &&
+        !firstLine.trim().startsWith("📚")
+      ) {
+        aiTitle =
+          requestedTitle ||
+          firstLine.trim().replace(/^#+\s*/, "").substring(0, 160);
+        aiContent = generatedTextFull.replace(firstLine, "").trim();
       } else {
-        aiTitle = title || text.substring(0, 40) + (text.length > 40 ? "..." : "");
-        aiContent = generatedTextFull;
+        aiTitle =
+          requestedTitle ||
+          cleanInput.substring(0, 40) +
+            (cleanInput.length > 40 ? "..." : "");
+        aiContent = generatedTextFull.trim();
       }
-
-    } else if (mode === 'video') {
-      const videoSystemPrompt = `You are a video director. Turn these notes into a 2-scene animated video script.
-CRITICAL: Output VALID JSON ONLY. No markdown, no extra text. Keep it extremely brief.
+    } else if (mode === "video") {
+      const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard.
+CRITICAL: Output VALID JSON ONLY. No markdown or extra text.
 {
   "title": "Topic Name",
   "scenes": [
     {
       "sceneNumber": 1,
-      "narration": "Max 10 words.",
-      "visualPrompt": "Max 10 words."
+      "narration": "Maximum 10 words.",
+      "visualPrompt": "Maximum 10 words."
     }
   ]
 }`;
 
-      const groqMessages = [
-        { role: "system", content: videoSystemPrompt },
-        { role: "user", content: `Notes:\n${text}` }
-      ];
-      
-      // ✅ STRICT LIMIT to prevent 429 OTPM errors
-      const generatedTextFull = await generateWithGroq(groqMessages, { max_tokens: 500 });
-      
-      console.log("🎬 RAW AI VIDEO OUTPUT:", generatedTextFull);
-      
-      try {
-        let cleanJson = generatedTextFull.replace(/```json/g, '').replace(/```/g, '').trim();
-        const firstBracket = cleanJson.indexOf('{');
-        const lastBracket = cleanJson.lastIndexOf('}');
-        
-        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-          const jsonString = cleanJson.substring(firstBracket, lastBracket + 1);
-          const parsed = JSON.parse(jsonString);
-          
-          if (parsed && Array.isArray(parsed.scenes)) {
-            aiTitle = parsed.title || title || "Video Storyboard";
-            aiContent = generatedTextFull; 
-          } else { 
-            throw new Error("Missing scenes array in parsed JSON"); 
-          }
-        } else { 
-          throw new Error(`No JSON brackets found.`); 
-        }
-      } catch (e) {
-        console.error("❌ Video JSON parse error:", e.message);
-        aiContent = generatedTextFull;
-        aiTitle = title || "Video (Parse Failed)";
-    }    } else if (mode === 'podcast') {
-      const length = req.body.length || 'short';
-      
-      let exchangeCount = "6 to 8 exchanges (quick and punchy)";
-      let detailLevel = "Keep it brief, high-energy, and fast-paced.";
-      if (length === 'medium') {
-        exchangeCount = "10 to 12 exchanges";
-        detailLevel = "Provide deeper explanations but keep the conversational, punchy energy.";
-      } else if (length === 'long') {
-        exchangeCount = "15 to 18 exchanges";
-        detailLevel = "Go into deep detail, but maintain the natural, interrupting conversational flow.";
+      const generatedTextFull = await runGroq(
+        [
+          { role: "system", content: videoSystemPrompt },
+          { role: "user", content: `Notes:\n${cleanInput}` },
+        ],
+        { max_tokens: 500 },
+      );
+
+      const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
+      aiTitle = requestedTitle || parsedVideo.title;
+      aiContent = JSON.stringify(parsedVideo);
+    } else if (mode === "podcast") {
+      const podcastLength = req.body?.length || "short";
+
+      if (!["short", "medium", "long"].includes(podcastLength)) {
+        throw httpError("Invalid podcast length.", 400);
       }
 
-      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging, natural-sounding educational podcast. 
+      const { exchangeCount, detailLevel, maxTokens } =
+        getPodcastInstructions(podcastLength);
+
+      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast.
+
 There are two hosts:
-1. "Leo" (The Curious Student): Casual, easily amazed, uses phrases like "No way!", "Wait, really?", and interrupts with excitement.
-2. "Dr. Nova" (The Expert Teacher): Smart but approachable, explains things clearly, sounds like a cool professor, NEVER sounds like a robot.
+1. "Leo" — a curious student. Casual, easily amazed, and energetic.
+2. "Dr. Nova" — an expert teacher. Smart, warm, practical, and never robotic.
 
-CRITICAL STRUCTURE (MUST FOLLOW EXACTLY):
-- Line 1 (Leo): MUST start the podcast by blurting out a CRAZY, mind-blowing fun fact about the topic.
-- Line 2 (Dr. Nova): MUST immediately agree ("That's true!") and then naturally introduce the topic ("And that is exactly why we are talking about [Topic] in this podcast today.").
-- Throughout the script: They must sound like real humans. Use casual language, interruptions (use "—" to show interruption), and natural reactions like "No way!", "Exactly", "Wait, hold on". 
-- Include at least one historical misconception (what people wrongly believed in the past).
-- Leo MUST ask "Why do we actually need to know this?" and Dr. Nova must give a practical, real-world answer.
-- Keep each line short and punchy (max 2-3 sentences). 
-- Output VALID JSON ONLY. No markdown, no extra text.
+The podcast must contain ${exchangeCount}.
+${detailLevel}
 
-The JSON structure must be exactly:
+Rules:
+- Leo must open with a surprising but accurate fact.
+- Dr. Nova must naturally introduce the topic.
+- Include at least one historical misconception and correct it.
+- Leo must ask exactly: "Why do we actually need to know this?"
+- Dr. Nova must give a practical real-world answer.
+- Keep each line short: no more than 2 or 3 sentences.
+- Do not invent facts. Stay grounded in the user's notes.
+- Output VALID JSON ONLY. No markdown and no extra text.
+
+Return exactly:
 {
-  "title": "Catchy, Fun Podcast Title",
+  "title": "Catchy educational podcast title",
   "script": [
-    { "speaker": "Leo", "text": "Did you know that [Crazy Fun Fact]?!" },
-    { "speaker": "Dr. Nova", "text": "That's true! And that is exactly why we are talking about [Topic] in this podcast today." },
-    { "speaker": "Leo", "text": "No way! But wait, why do we actually need to know this?" },
-    { "speaker": "Dr. Nova", "text": "Because [Practical Real-World Reason]." }
+    { "speaker": "Leo", "text": "..." },
+    { "speaker": "Dr. Nova", "text": "..." }
   ]
 }`;
 
-      const groqMessages = [
-        { role: "system", content: podcastSystemPrompt },
-        { role: "user", content: `Topic/Notes for the podcast:\n${text}` }
-      ];
-      
-      const maxTokens = length === 'long' ? 2000 : length === 'medium' ? 1500 : 1000;
-      const generatedTextFull = await generateWithGroq(groqMessages, { max_tokens: maxTokens });
-      
-      console.log(`🎙️ RAW PODCAST OUTPUT (${length}):`, generatedTextFull);
+      const generatedTextFull = await runGroq(
+        [
+          { role: "system", content: podcastSystemPrompt },
+          {
+            role: "user",
+            content: `Topic/Notes for the podcast:\n${cleanInput}`,
+          },
+        ],
+        { max_tokens: maxTokens },
+      );
 
-      try {
-        let cleanJson = generatedTextFull.replace(/```json/g, '').replace(/```/g, '').trim();
-        const firstBracket = cleanJson.indexOf('{');
-        const lastBracket = cleanJson.lastIndexOf('}');
-        
-        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-          const jsonString = cleanJson.substring(firstBracket, lastBracket + 1);
-          const parsed = JSON.parse(jsonString);
-          
-          if (parsed && Array.isArray(parsed.script)) {
-            aiTitle = parsed.title || title || "Study Podcast";
-            aiContent = generatedTextFull; 
-          } else { 
-            throw new Error("Missing script array in parsed JSON"); 
-          }
-        } else { 
-          throw new Error(`No JSON brackets found.`); 
-        }
-      } catch (e) {
-        console.error("❌ Podcast JSON parse error:", e.message);
-        aiContent = generatedTextFull;
-        aiTitle = title || "Podcast (Parse Failed)";
-      }}
- else if (mode === 'music') { // ✅ FIXED: Now properly outside the try/catch block
-      const musicSystemPrompt = `You are a professional Hip-Hop and Afrobeat lyricist. Turn the following educational notes into a hard-hitting, rhythmic rap song.
+      const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
+      aiTitle = requestedTitle || parsedPodcast.title;
 
-TOPIC FOCUS: 85% strict educational content based on the provided notes, 15% hype/filler (e.g., "let's go", "study hard", "we got the flow").
+      // Store clean JSON, not the model's raw response.
+      aiContent = JSON.stringify(parsedPodcast);
+    } else if (mode === "music") {
+      const musicSystemPrompt = `You are a professional educational Hip-Hop and Afrobeat lyricist.
+Turn the notes into an accurate study song.
 
-CRITICAL STRUCTURE:
-[Intro] (2 lines of hype, setting the beat)
-[Verse 1] (4-6 lines, explaining the first concept with strong end-rhymes)
-[Chorus] (4 lines, catchy, repetitive, summarizing the main topic)
-[Verse 2] (4-6 lines, explaining the second concept with strong end-rhymes)
-[Outro] (2 lines of hype, fading out)
+Use this structure:
+[Intro] 2 lines
+[Verse 1] 4-6 lines
+[Chorus] 4 lines
+[Verse 2] 4-6 lines
+[Outro] 2 lines
 
-RHYTHM & TTS RULES (CRITICAL FOR AUDIO):
-- Use commas (,) frequently to force the AI voice to pause and breathe.
-- Use exclamation marks (!) at the end of punchy lines to add energy.
-- Keep lines to 6-10 words max.
-- Do NOT output markdown like ** or #. Just raw text with line breaks.
-- Make it sound like a real rap song, not a robotic list.`;
+Keep the content 85% educational and 15% hype.
+Use commas for breathing pauses. Keep lines to 6-10 words.
+Do not output markdown.`;
 
-      aiContent = await generateWithGroq(`${musicSystemPrompt}\n\nNotes:\n${text}`);
-      aiTitle = title || `${vibe || 'Afrobeat'} Study Track`;
-      
-    } else if (mode === 'quiz') {
-      const qCount = numQuestions || 5;
-      const diffLevel = difficulty || 'Medium';
-      const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${qCount} multiple-choice questions. Difficulty: ${diffLevel}. Output VALID JSON ONLY.`;
-      const groqMessages = [
+      aiContent = await runGroq(
+        `${musicSystemPrompt}\n\nNotes:\n${cleanInput}`,
+      );
+      aiTitle = requestedTitle || `${vibe || "Afrobeat"} Study Track`;
+    } else if (mode === "quiz") {
+      const parsedQuestionCount = Number(numQuestions || 5);
+      const questionCount = Math.min(
+        Math.max(Number.isFinite(parsedQuestionCount) ? parsedQuestionCount : 5, 3),
+        15,
+      );
+      const difficultyLevel =
+        typeof difficulty === "string" && difficulty.trim()
+          ? difficulty.trim().slice(0, 30)
+          : "Medium";
+
+      const quizSystemPrompt = `You are a strict academic examiner.
+Generate exactly ${questionCount} multiple-choice questions.
+Difficulty: ${difficultyLevel}.
+Every question must be answerable from the notes.
+Output VALID JSON ONLY with this shape:
+{
+  "title": "Quiz title",
+  "questions": [
+    {
+      "question": "Question text",
+      "options": ["A", "B", "C", "D"],
+      "answer": "Correct option",
+      "explanation": "Short explanation"
+    }
+  ]
+}`;
+
+      const generatedTextFull = await runGroq([
         { role: "system", content: quizSystemPrompt },
-        { role: "user", content: `Notes:\n${text}` }
-      ];
-      const generatedTextFull = await generateWithGroq(groqMessages);
-      try {
-        let cleanJson = generatedTextFull.replace(/```json/g, '').replace(/```/g, '').trim();
-        const firstBracket = cleanJson.indexOf('{');
-        const lastBracket = cleanJson.lastIndexOf('}');
-        if (firstBracket !== -1 && lastBracket !== -1) {
-          const parsed = JSON.parse(cleanJson.substring(firstBracket, lastBracket + 1));
-          if (parsed && Array.isArray(parsed.questions)) {
-            aiTitle = parsed.title || title || "Quiz";
-            aiContent = generatedTextFull; 
-          } else { throw new Error("Missing questions"); }
-        } else { throw new Error("No JSON"); }
-      } catch (e) {
-        aiContent = generatedTextFull;
-        aiTitle = title || "Quiz (Parse Failed)";
-      }
-    } else {
-      const error = new Error("Invalid mode."); error.status = 400; throw error;
+        { role: "user", content: `Notes:\n${cleanInput}` },
+      ]);
+
+      const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull));
+      aiTitle = requestedTitle || parsedQuiz.title;
+      aiContent = JSON.stringify(parsedQuiz);
+    }
+
+    if (!aiContent.trim()) {
+      throw httpError("The AI returned empty content.", 502);
     }
 
     const newContent = await Content.create({
-      userId, title: aiTitle, subject: subject || 'General', type: mode,
-      rawText: inputToCheck, generatedText: aiContent,
+      userId,
+      title: aiTitle,
+      subject: cleanSubject,
+      type: mode,
+      rawText: cleanInput,
+      generatedText: aiContent,
     });
 
-    let xpGained = mode === 'summary' ? 10 : mode === 'quiz' ? 25 : mode === 'tutor' ? 5 : 15;
-    if (xpGained > 0) {
-      const user = await User.findById(userId);
-      if (user) {
-        user.xp += xpGained;
-        user.level = Math.floor(user.xp / 100) + 1; 
-        await user.save();
+    const xpGained =
+      mode === "summary"
+        ? 10
+        : mode === "quiz"
+          ? 25
+          : mode === "tutor"
+            ? 5
+            : 15;
+
+    // XP is atomic, so simultaneous requests cannot overwrite each other.
+    try {
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $inc: { xp: xpGained } },
+        { new: true },
+      );
+
+      if (updatedUser) {
+        const newLevel = Math.floor(updatedUser.xp / 100) + 1;
+
+        if (updatedUser.level !== newLevel) {
+          await User.findByIdAndUpdate(userId, {
+            $set: { level: newLevel },
+          });
+        }
+
         res.locals.xpGained = xpGained;
-        res.locals.newLevel = user.level;
+        res.locals.newLevel = newLevel;
       }
+    } catch (xpError) {
+      // Content was successfully created. Do not turn a successful generation
+      // into a 500 response only because the optional XP update failed.
+      console.error("XP update failed:", xpError.message);
     }
 
-    res.status(201).json({ success: true, message: 'Content generated!', data: newContent });
+    return res.status(201).json({
+      success: true,
+      message: "Content generated!",
+      data: newContent,
+    });
   } catch (error) {
-    console.error('❌ SERVER ERROR:', error.message);
-    next(error);
+    console.error("AI generation error:", error.message);
+    return next(error);
   }
 };
 
 const prepareLyricsForSpeech = (text) => {
   return text
-    .replace(/\[[^\]]*\]/g, '<break time="0.5s" />') 
-    .replace(/\n{2,}/g, '\n')
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\n{2,}/g, "\n")
     .trim();
+};
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 export const generateSpeech = async (req, res, next) => {
   try {
-    const { text, style } = req.body;
-    if (!text) return res.status(400).json({ success: false, message: "Text is required" });
+    requireUser(req);
+
+    const { text, style } = req.body || {};
+    const cleanText = ensureText(text, "Text is required.");
+
+    if (cleanText.length > MAX_SPEECH_LENGTH) {
+      throw httpError("The audio text is too long.", 413);
+    }
 
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) {
-      return res.status(503).json({ success: false, message: "No API key configured." });
+      throw httpError("Audio generation is not configured.", 503);
     }
 
-    const isRap = style === 'rap';
-    const speechText = isRap ? prepareLyricsForSpeech(text) : text;
-
-    const voiceId = "TxGEqnHWrfWFTfGW9XjX"; 
+    const isRap = style === "rap";
+    const speechText = isRap ? prepareLyricsForSpeech(cleanText) : cleanText;
+    const voiceId =
+      process.env.ELEVENLABS_VOICE_ID || "TxGEqnHWrfWFTfGW9XjX";
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
-    const response = await fetch(url, {
-      method: 'POST',
+    const response = await fetchWithTimeout(url, {
+      method: "POST",
       headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': apiKey
+        Accept: "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": apiKey,
       },
       body: JSON.stringify({
         text: speechText,
-        model_id: "eleven_turbo_v2_5", 
+        model_id: "eleven_turbo_v2_5",
         voice_settings: {
           stability: isRap ? 0.25 : 0.5,
-          similarity_boost: isRap ? 0.90 : 0.75,
-          style: isRap ? 0.75 : 0.0,
-          use_speaker_boost: true
-        }
-      })
+          similarity_boost: isRap ? 0.9 : 0.75,
+          style: isRap ? 0.75 : 0,
+          use_speaker_boost: true,
+        },
+      }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      return res.status(503).json({ success: false, message: errorData?.detail?.message || "ElevenLabs API failed" });
+      const errorData = await response.json().catch(() => null);
+      console.error("ElevenLabs failed:", response.status);
+      throw httpError(
+        errorData?.detail?.message || "Audio generation failed.",
+        503,
+      );
     }
 
     const audioBuffer = await response.arrayBuffer();
-    res.set('Content-Type', 'audio/mpeg');
-    res.send(Buffer.from(audioBuffer));
-
+    res.set("Content-Type", "audio/mpeg");
+    res.set("Cache-Control", "private, no-store");
+    return res.send(Buffer.from(audioBuffer));
   } catch (error) {
-    console.error("ElevenLabs Error:", error.message);
-    res.status(503).json({ success: false, message: "Audio generation failed." });
+    console.error("ElevenLabs error:", error.message);
+    return next(error);
   }
 };
 
-// @desc    Search for stock videos using Pexels API
-// @route   POST /ai/video/search-stock
+// @desc Search for stock videos using Pexels
+// @route POST /ai/video/search-stock
 export const searchStockVideos = async (req, res, next) => {
   try {
-    const { visualPrompt, sceneNumber } = req.body;
-    
-    if (!visualPrompt) {
-      return res.status(400).json({ success: false, message: "Visual prompt is required" });
-    }
+    requireUser(req);
 
-    // ✅ IMPROVED: Extract better educational keywords
-    const keywords = visualPrompt
-      .replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, '')
-      .split(/[,\s]+/) // Split by commas AND spaces
-      .filter(word => word.length > 2)
-      .slice(0, 5) // Get up to 5 keywords
-      .join(' ');
-
-    console.log(` Searching Pexels for: "${keywords}"`);
-
-    const searchQuery = encodeURIComponent(keywords || 'educational animation');
-    const url = `https://api.pexels.com/videos/search?query=${searchQuery}&per_page=5&orientation=landscape`;
+    const { visualPrompt, sceneNumber } = req.body || {};
+    const cleanPrompt = ensureText(
+      visualPrompt,
+      "Visual prompt is required.",
+    ).slice(0, 500);
 
     const apiKey = process.env.PEXELS_API_KEY;
-    
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': apiKey || '' 
-      }
+    if (!apiKey) {
+      throw httpError("Stock media search is not configured.", 503);
+    }
+
+    const keywords = cleanPrompt
+      .replace(
+        /anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi,
+        "",
+      )
+      .split(/[,\s]+/)
+      .map((word) => word.replace(/[^\w-]/g, ""))
+      .filter((word) => word.length > 2)
+      .slice(0, 5)
+      .join(" ");
+
+    const searchQuery = encodeURIComponent(keywords || "educational animation");
+    const url = `https://api.pexels.com/videos/search?query=${searchQuery}&per_page=5&orientation=landscape`;
+
+    const response = await fetchWithTimeout(url, {
+      headers: { Authorization: apiKey },
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ Pexels API Failed: Status ${response.status}`);
-      throw new Error(`Pexels API request failed with status ${response.status}`);
+      throw httpError("Stock video search failed.", 503);
     }
 
     const data = await response.json();
-    
-    if (!data.videos || data.videos.length === 0) {
-      console.log("⚠️ No videos found, falling back to images");
-      // ✅ FALLBACK: Search for images if no videos
-      return await searchStockImages(keywords, sceneNumber, res);
+
+    if (!Array.isArray(data.videos) || data.videos.length === 0) {
+      return searchStockImages(keywords, sceneNumber, res);
     }
 
-    // ✅ Find the BEST video (prefer longer duration and HD quality)
     const sortedVideos = data.videos.sort((a, b) => {
-      const aScore = (a.duration || 0) + (a.video_files.find(v => v.quality === 'hd') ? 10 : 0);
-      const bScore = (b.duration || 0) + (b.video_files.find(v => v.quality === 'hd') ? 10 : 0);
-      return bScore - aScore;
+      const aHasHd = a.video_files?.some((file) => file.quality === "hd");
+      const bHasHd = b.video_files?.some((file) => file.quality === "hd");
+      return (
+        Number(bHasHd) - Number(aHasHd) ||
+        (b.duration || 0) - (a.duration || 0)
+      );
     });
 
     const bestVideo = sortedVideos[0];
     const videoFiles = bestVideo.video_files || [];
-    const bestVideoFile = videoFiles.find(v => v.quality === 'hd' || v.quality === 'sd') || videoFiles[0];
+    const bestVideoFile =
+      videoFiles.find(
+        (file) =>
+          file.quality === "hd" &&
+          file.width >= file.height &&
+          file.file_type === "video/mp4",
+      ) ||
+      videoFiles.find(
+        (file) => file.width >= file.height && file.file_type === "video/mp4",
+      ) ||
+      videoFiles[0];
 
-    console.log(`✅ Found video: ${bestVideo.width}x${bestVideo.height}, ${bestVideo.duration}s`);
-
-    res.status(200).json({ 
-      success: true, 
-      message: `Stock video found for Scene ${sceneNumber}`,
+    return res.status(200).json({
+      success: true,
+      message: `Stock video found for Scene ${sceneNumber ?? ""}`.trim(),
       data: {
         videoUrl: bestVideoFile?.link || null,
-        sceneNumber: sceneNumber,
-        thumbnail: bestVideo.image,
-        duration: bestVideo.duration,
-        type: 'video'
-      }
+        sceneNumber: sceneNumber ?? null,
+        thumbnail: bestVideo.image || null,
+        duration: bestVideo.duration || 0,
+        type: "video",
+      },
     });
-
   } catch (error) {
-    console.error("Stock Video Search Error:", error.message);
-    res.status(500).json({ success: false, message: "Failed to find stock video" });
+    console.error("Stock video search error:", error.message);
+    return next(error);
   }
 };
 
-// ✅ NEW: Helper function to search for stock IMAGES as fallback
-async function searchStockImages(keywords, sceneNumber, res) {
+const searchStockImages = async (keywords, sceneNumber, res) => {
   try {
-    const searchQuery = encodeURIComponent(keywords || 'educational');
-    const url = `https://api.pexels.com/v1/search?query=${searchQuery}&per_page=3&orientation=landscape`;
-    
     const apiKey = process.env.PEXELS_API_KEY;
-    const response = await fetch(url, {
-      headers: { 'Authorization': apiKey || '' }
+    if (!apiKey) {
+      throw httpError("Stock media search is not configured.", 503);
+    }
+
+    const searchQuery = encodeURIComponent(keywords || "educational");
+    const url = `https://api.pexels.com/v1/search?query=${searchQuery}&per_page=3&orientation=landscape`;
+
+    const response = await fetchWithTimeout(url, {
+      headers: { Authorization: apiKey },
     });
 
     if (!response.ok) {
-      throw new Error('Image search failed');
+      throw httpError("Stock image search failed.", 503);
     }
 
     const data = await response.json();
-    
-    if (!data.photos || data.photos.length === 0) {
-      return res.status(200).json({ 
-        success: true, 
-        message: `No media found for Scene ${sceneNumber}`,
-        data: { videoUrl: null, sceneNumber, thumbnail: null, duration: 0, type: 'none' }
+
+    if (!Array.isArray(data.photos) || data.photos.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: `No media found for Scene ${sceneNumber ?? ""}`.trim(),
+        data: {
+          videoUrl: null,
+          sceneNumber: sceneNumber ?? null,
+          thumbnail: null,
+          duration: 0,
+          type: "none",
+        },
       });
     }
 
     const bestPhoto = data.photos[0];
-    
-    console.log(`✅ Found image fallback: ${bestPhoto.width}x${bestPhoto.height}`);
+    const imageUrl = bestPhoto.src?.large2x || bestPhoto.src?.large || null;
 
-    res.status(200).json({ 
-      success: true, 
-      message: `Stock image found for Scene ${sceneNumber}`,
+    return res.status(200).json({
+      success: true,
+      message: `Stock image found for Scene ${sceneNumber ?? ""}`.trim(),
       data: {
-        videoUrl: null, // No video, it's an image
-        sceneNumber: sceneNumber,
-        thumbnail: bestPhoto.src.large2x || bestPhoto.src.large,
-        imageUrl: bestPhoto.src.large2x || bestPhoto.src.large, // Add this for images
-        duration: 5, // Display for 5 seconds
-        type: 'image'
-      }
+        videoUrl: null,
+        sceneNumber: sceneNumber ?? null,
+        thumbnail: imageUrl,
+        imageUrl,
+        duration: 5,
+        type: "image",
+      },
     });
-
   } catch (error) {
-    console.error("Image Search Error:", error.message);
-    return res.status(500).json({ success: false, message: "Failed to find media" });
+    console.error("Stock image search error:", error.message);
+    return res.status(error.status || 503).json({
+      success: false,
+      message: error.message || "Failed to find media.",
+    });
   }
-}
+};
 
-export const extractTextFromImage = async (req, res) => {
+export const extractTextFromImage = async (req, res, next) => {
   try {
-    const { imageUrl } = req.body;
-    
-    if (!imageUrl) {
-      return res.status(400).json({ success: false, message: "Image data required" });
+    requireUser(req);
+
+    const imageUrl = ensureText(
+      req.body?.imageUrl,
+      "Image data is required.",
+    );
+
+    if (imageUrl.length > MAX_IMAGE_PAYLOAD_LENGTH) {
+      throw httpError("The image is too large to process.", 413);
     }
 
     const apiKey = process.env.OCR_SPACE_API_KEY;
     if (!apiKey) {
-      throw new Error("OCR_SPACE_API_KEY is missing in .env file");
+      throw httpError("OCR is not configured.", 503);
     }
 
-    const url = 'https://api.ocr.space/parse/image';
-    
     const formData = new URLSearchParams();
-    formData.append('apikey', apiKey);
-    formData.append('base64Image', imageUrl);
-    formData.append('language', 'eng');
-    formData.append('isOverlayRequired', 'false');
-    formData.append('OCREngine', '2'); // Engine 2 is optimized for handwriting
+    formData.append("apikey", apiKey);
+    formData.append("base64Image", imageUrl);
+    formData.append("language", "eng");
+    formData.append("isOverlayRequired", "false");
+    formData.append("OCREngine", "2");
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Noted-App/1.0' 
+    const response = await fetchWithTimeout(
+      "https://api.ocr.space/parse/image",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "Noted-App/1.0",
+        },
+        body: formData.toString(),
       },
-      body: formData.toString(),
-    });
+      60000,
+    );
 
-    const rawData = await response.text();
-    const data = JSON.parse(rawData);
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok || !data) {
+      throw httpError("OCR service failed.", 503);
+    }
 
     if (data.IsErroredOnProcessing) {
-      throw new Error(data.ErrorMessage?.[0] || "OCR.Space processing error");
+      throw httpError(
+        data.ErrorMessage?.[0] || "OCR could not process this image.",
+        422,
+      );
     }
 
     const extractedText = data.ParsedResults?.[0]?.ParsedText || "";
 
-    if (!extractedText.trim()) {
-      return res.status(200).json({ success: true, text: "", message: "No text detected", method: "ocr-space" });
-    }
-
-    // Success! Send the text to the frontend
-    res.status(200).json({ success: true, text: extractedText, method: "ocr-space" });
-
-  } catch (error) {
-    // Only log if there is an actual error
-    console.error("❌ OCR Extraction Error:", error.message);
-    
-    res.status(500).json({ 
-      success: false, 
-      message: "Primary OCR failed", 
-      useFallback: true 
+    return res.status(200).json({
+      success: true,
+      text: extractedText.trim(),
+      message: extractedText.trim() ? "Text extracted." : "No text detected.",
+      method: "ocr-space",
     });
+  } catch (error) {
+    console.error("OCR extraction error:", error.message);
+    return next(error);
   }
 };
