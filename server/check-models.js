@@ -1,22 +1,26 @@
-import Groq from 'groq-sdk';
-import dotenv from 'dotenv';
+// check-models.js
+import Groq from "groq-sdk";
+import dotenv from "dotenv";
 
 dotenv.config();
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
+  apiKey: process.env.GROQ_API_KEY,
 });
 
-async function listModels() {
+async function checkModels() {
   try {
+    console.log("🔍 Fetching available models from Groq...");
     const models = await groq.models.list();
-    console.log("✅ YOUR AVAILABLE GROQ MODELS:");
-    models.data.forEach(model => {
-      console.log(" - " + model.id);
+    
+    console.log("✅ Available models for your account:");
+    models.data.forEach((model) => {
+      console.log(`- ${model.id}`);
     });
+    
   } catch (error) {
-    console.error("Error fetching models:", error.message);
+    console.error("❌ Failed to fetch models:", error.message);
   }
 }
 
-listModels();
+checkModels();

@@ -318,61 +318,68 @@ CRITICAL: Output VALID JSON ONLY. No markdown or extra text.
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
-    } else if (mode === "podcast") {
-      const podcastLength = req.body?.length || "short";
+} else if (mode === "podcast") {
+  const podcastLength = req.body?.length || "short";
+  const podcastTone = req.body?.tone || "Funny";
+  const podcastLevel = req.body?.level || "Beginner";
 
-      if (!["short", "medium", "long"].includes(podcastLength)) {
-        throw httpError("Invalid podcast length.", 400);
-      }
+  if (!["short", "medium", "long"].includes(podcastLength)) {
+    throw httpError("Invalid podcast length.", 400);
+  }
 
-      const { exchangeCount, detailLevel, maxTokens } =
-        getPodcastInstructions(podcastLength);
+  const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
 
-      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast.
-
+  const podcastSystemPrompt = `You are a scriptwriter for a highly engaging, 100% accurate educational podcast.
 There are two hosts:
-1. "Leo" — a curious student. Casual, easily amazed, and energetic.
-2. "Dr. Nova" — an expert teacher. Smart, warm, practical, and never robotic.
+"Leo" — a curious student. Casual, easily amazed, and energetic.
+"Dr. Nova" — an expert teacher. Smart, warm, practical, and never robotic.
 
-The podcast must contain ${exchangeCount}.
-${detailLevel}
+USER PREFERENCES:
+- Tone: ${podcastTone}
+- Level: ${podcastLevel}
+- Length: ${exchangeCount} (${detailLevel})
 
-Rules:
-- Leo must open with a surprising but accurate fact.
-- Dr. Nova must naturally introduce the topic.
-- Include at least one historical misconception and correct it.
-- Leo must ask exactly: "Why do we actually need to know this?"
-- Dr. Nova must give a practical real-world answer.
-- Keep each line short: no more than 2 or 3 sentences.
-- Do not invent facts. Stay grounded in the user's notes.
-- Output VALID JSON ONLY. No markdown and no extra text.
+CRITICAL RULES:
+1. TRUSTWORTHINESS: Use ONLY information supported by the user's notes and well-established academic knowledge. Do NOT invent statistics, dates, names, or scientific claims. Prioritize accuracy over entertainment.
+2. Leo must open with a surprising but accurate fact.
+3. Dr. Nova must naturally introduce the topic.
+4. Include at least one historical misconception and correct it.
+5. Leo must ask exactly: "Why do we actually need to know this?"
+6. Dr. Nova must give a practical real-world answer.
+7. Keep each line short: no more than 2 or 3 sentences.
+8. Output VALID JSON ONLY. No markdown, no extra text.
 
-Return exactly:
+Return EXACTLY this JSON structure:
 {
   "title": "Catchy educational podcast title",
   "script": [
     { "speaker": "Leo", "text": "..." },
     { "speaker": "Dr. Nova", "text": "..." }
+  ],
+  "keyTakeaways": ["Takeaway 1", "Takeaway 2", "Takeaway 3"],
+  "quiz": [
+    {
+      "question": "Question text?",
+      "options": ["A", "B", "C", "D"],
+      "answer": "Correct option",
+      "explanation": "Short explanation"
+    }
   ]
 }`;
 
-      const generatedTextFull = await runGroq(
-        [
-          { role: "system", content: podcastSystemPrompt },
-          {
-            role: "user",
-            content: `Topic/Notes for the podcast:\n${cleanInput}`,
-          },
-        ],
-        { max_tokens: maxTokens },
-      );
+  const generatedTextFull = await runGroq(
+    [
+      { role: "system", content: podcastSystemPrompt },
+      { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` },
+    ],
+    { max_tokens: maxTokens }
+  );
 
-      const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
-      aiTitle = requestedTitle || parsedPodcast.title;
-
-      // Store clean JSON, not the model's raw response.
-      aiContent = JSON.stringify(parsedPodcast);
-    } else if (mode === "music") {
+  const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
+  aiTitle = requestedTitle || parsedPodcast.title;
+  // Store clean JSON
+  aiContent = JSON.stringify(parsedPodcast);
+} else if (mode === "music") {
       const musicSystemPrompt = `You are a professional educational Hip-Hop and Afrobeat lyricist.
 Turn the notes into an accurate study song.
 
