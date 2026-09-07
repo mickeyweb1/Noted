@@ -2,20 +2,17 @@ import { useState, useEffect } from "react";
 import { 
     Library as LibraryIcon, Search, Grid3x3, List, 
     FileText, Video, Music, Brain, FolderOpen, MoreHorizontal,
-    TrendingUp, Users, Star, Download, Eye, X, CheckCircle2
+    Users, Download, X, CheckCircle2, Play
 } from "lucide-react";
 import api from "../../utils/api";
 import AudioPlayer from "../../components/AudioPlayer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { htmlToText } from 'html-to-text';
 
-// ✅ NEW: Premium Skeleton Loader
 const Skeleton = ({ className }) => (
   <div className={`animate-pulse bg-muted rounded-md ${className}`} />
 );
 
-// ✅ NEW: Markdown Renderer Component
 const MarkdownContent = ({ content }) => {
   return (
     <div className="markdown-content prose prose-sm dark:prose-invert max-w-none">
@@ -24,18 +21,12 @@ const MarkdownContent = ({ content }) => {
         components={{
           h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-foreground mt-6 mb-4" {...props} />,
           h2: ({node, ...props}) => <h2 className="text-xl font-bold text-foreground mt-5 mb-3" {...props} />,
-          h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-foreground mt-4 mb-2" {...props} />,
           p: ({node, ...props}) => <p className="text-foreground leading-relaxed mb-3" {...props} />,
           ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1 ml-4 mb-3" {...props} />,
           ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1 ml-4 mb-3" {...props} />,
           li: ({node, ...props}) => <li className="text-foreground" {...props} />,
           strong: ({node, ...props}) => <strong className="font-bold text-foreground" {...props} />,
-          em: ({node, ...props}) => <em className="italic" {...props} />,
-          code: ({node, inline, ...props}) => 
-            inline ? 
-            <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props} /> :
-            <code className="block bg-muted p-3 rounded-lg text-sm font-mono overflow-x-auto" {...props} />,
-          blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-brand pl-4 italic my-3" {...props} />,
+          code: ({node, inline, ...props}) => inline ? <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props} /> : <code className="block bg-muted p-3 rounded-lg text-sm font-mono overflow-x-auto" {...props} />,
         }}
       >
         {content}
@@ -49,7 +40,6 @@ export default function StudentLibrary() {
     const [viewStyle, setViewStyle] = useState('grid');
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
-    
     const [myGenerations, setMyGenerations] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedItem, setSelectedItem] = useState(null);
@@ -67,6 +57,7 @@ export default function StudentLibrary() {
                         date: new Date(item.createdAt).toLocaleDateString(),
                         categoryLabel: item.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1) : 'Note',
                         generatedText: item.generatedText,
+                        mediaUrl: item.mediaUrl,
                         color: item.type === 'summary' ? 'brand' : item.type === 'video' ? 'electric' : item.type === 'music' ? 'flame' : 'brand',
                         icon: item.type === 'summary' ? FileText : item.type === 'video' ? Video : item.type === 'music' ? Music : Brain
                     }));
@@ -91,37 +82,14 @@ export default function StudentLibrary() {
 
     const filteredGenerations = myGenerations.filter(item => {
         const matchesFilter = activeFilter === 'all' || item.type === activeFilter;
-        const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              (item.subject && item.subject.toLowerCase().includes(searchTerm.toLowerCase()));
+        const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) || (item.subject && item.subject.toLowerCase().includes(searchTerm.toLowerCase()));
         return matchesFilter && matchesSearch;
     });
 
-    // ✅ IMPROVED: Download with proper formatting
     const handleDownload = () => {
         if (!selectedItem || !selectedItem.generatedText) return;
-        
-        // Remove markdown symbols for clean text download
-        const cleanText = selectedItem.generatedText
-            .replace(/\*\*(.*?)\*\*/g, '$1') // Remove **bold**
-            .replace(/\*(.*?)\*/g, '$1') // Remove *italic*
-            .replace(/^#\s+/gm, '') // Remove # headings
-            .replace(/^-\s+/gm, '• ') // Convert - to bullet points
-            .replace(/^\d+\.\s+/gm, '$& ') // Keep numbered lists
-            .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-            .trim();
-        
-        const content = `TITLE: ${selectedItem.title}
-TYPE: ${selectedItem.categoryLabel}
-DATE: ${selectedItem.date}
-SUBJECT: ${selectedItem.subject || 'General'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-${cleanText}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Generated by Noted AI - ${new Date().toLocaleDateString()}
-`;
+        const cleanText = selectedItem.generatedText.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').replace(/^#\s+/gm, '').replace(/^-\s+/gm, '• ').replace(/^\d+\.\s+/gm, '$& ').replace(/```[\s\S]*?```/g, '').trim();
+        const content = `TITLE: ${selectedItem.title}\nTYPE: ${selectedItem.categoryLabel}\nDATE: ${selectedItem.date}\nSUBJECT: ${selectedItem.subject || 'General'}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${cleanText}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nGenerated by Noted AI - ${new Date().toLocaleDateString()}`;
         const blob = new Blob([content], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -174,7 +142,6 @@ Generated by Noted AI - ${new Date().toLocaleDateString()}
                 {activeTab === 'my-library' && (
                     <div className={viewStyle === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-3"}>
                         {isLoading ? (
-                            // ✅ PREMIUM SKELETON GRID
                             <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                                     <div key={i} className="p-4 rounded-2xl bg-card border border-border shadow-sm space-y-3">
@@ -186,11 +153,7 @@ Generated by Noted AI - ${new Date().toLocaleDateString()}
                             </div>
                         ) : (
                             filteredGenerations.map((item) => (
-                                <div 
-                                    key={item.id} 
-                                    onClick={() => setSelectedItem(item)} 
-                                    className={`group relative p-4 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-brand/30 transition-all duration-300 cursor-pointer ${viewStyle === 'list' ? 'flex items-center gap-4 hover:translate-y-0' : ''}`}
-                                >
+                                <div key={item.id} onClick={() => setSelectedItem(item)} className={`group relative p-4 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-brand/30 transition-all duration-300 cursor-pointer ${viewStyle === 'list' ? 'flex items-center gap-4 hover:translate-y-0' : ''}`}>
                                     <div className={`flex items-center justify-center w-12 h-12 rounded-xl bg-${item.color}/10 text-${item.color} mb-3 group-hover:scale-110 transition-transform duration-300 ${viewStyle === 'list' ? 'mb-0 shrink-0' : ''}`}>
                                         <item.icon className="w-6 h-6" />
                                     </div>
@@ -206,9 +169,7 @@ Generated by Noted AI - ${new Date().toLocaleDateString()}
                         )}
                         {!isLoading && filteredGenerations.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center py-16 text-center animate-in fade-in zoom-in-95 duration-300">
-                                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                                    <FolderOpen className="w-8 h-8 text-muted-foreground" />
-                                </div>
+                                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4"><FolderOpen className="w-8 h-8 text-muted-foreground" /></div>
                                 <h3 className="text-lg font-semibold text-foreground">No items found</h3>
                                 <p className="text-sm text-muted-foreground mt-1 max-w-xs">Try adjusting your search or filters, or generate new notes!</p>
                             </div>
@@ -217,7 +178,7 @@ Generated by Noted AI - ${new Date().toLocaleDateString()}
                 )}
             </div>
 
-            {/* ✅ POLISHED MODAL WITH MARKDOWN RENDERING */}
+            {/* ✅ POLISHED MODAL WITH VIDEO RENDERING */}
             {selectedItem && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedItem(null)}>
                     <div className="bg-background rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col border border-border animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
@@ -233,49 +194,89 @@ Generated by Noted AI - ${new Date().toLocaleDateString()}
                         </div>
                         
                         <div className="p-6 overflow-y-auto custom-scrollbar">
-                            {selectedItem.generatedText && <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} />}
-
-                            <div className="mt-4">
-                                {(() => {
-                                    try {
-                                        const textToCheck = selectedItem.generatedText || selectedItem.title;
-                                        const cleanText = textToCheck.replace(/```json/g, '').replace(/```/g, '').trim();
-                                        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-                                        
-                                        if (jsonMatch) {
-                                            const quizData = JSON.parse(jsonMatch[0]);
-                                            if (quizData && quizData.questions && Array.isArray(quizData.questions)) {
-                                                return (
-                                                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                                                        <p className="text-sm text-muted-foreground mb-4">This is a generated quiz. Review the questions and correct answers below:</p>
-                                                        {quizData.questions.map((q, idx) => (
-                                                            <div key={idx} className="p-4 rounded-xl bg-muted/30 border border-border animate-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
-                                                                <p className="font-semibold text-foreground mb-3">{idx + 1}. {q.question}</p>
-                                                                <div className="space-y-2 ml-4">
-                                                                    {q.options.map((opt, optIdx) => (
-                                                                        <div key={optIdx} className={`flex items-center gap-2 text-sm ${opt === q.correctAnswer ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
-                                                                            <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">{String.fromCharCode(65 + optIdx)}</span>
-                                                                            {opt} {opt === q.correctAnswer && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                                <div className="mt-3 pt-3 border-t border-border/50">
-                                                                    <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Explanation:</span> {q.explanation}</p>
+                            {selectedItem.type === 'video' ? (
+                                <div className="space-y-4">
+                                    {(() => {
+                                        try {
+                                            const videoData = JSON.parse(selectedItem.generatedText);
+                                            const streamUrl = selectedItem.mediaUrl ? `http://localhost:5000/api/ai/video/stream/${selectedItem.mediaUrl.split(/[\\/]/).pop()}` : null;
+                                            
+                                            return (
+                                                <div className="space-y-4">
+                                                    {streamUrl && (
+                                                        <div className="rounded-xl overflow-hidden border border-border bg-black">
+                                                            <video src={streamUrl} controls className="w-full aspect-video" />
+                                                            <a href={streamUrl} download="NotedAI_Video.mp4" className="block w-full text-center py-2 bg-brand text-brand-foreground text-sm font-bold hover:bg-brand/90">
+                                                                Download Full Combined Video
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {videoData.scenes.map((scene, idx) => (
+                                                            <div key={idx} className="rounded-lg overflow-hidden border border-border bg-black aspect-video relative group">
+                                                                {scene.videoUrl ? (
+                                                                    <video src={scene.videoUrl} className="w-full h-full object-cover" muted />
+                                                                ) : scene.imageUrl ? (
+                                                                    <img src={scene.imageUrl} alt={`Scene ${scene.sceneNumber}`} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <div className="flex items-center justify-center h-full text-muted-foreground text-xs">Generating...</div>
+                                                                )}
+                                                                <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-2 text-xs text-white flex items-center gap-2">
+                                                                    <Play className="w-3 h-3" /> Scene {scene.sceneNumber}
                                                                 </div>
                                                             </div>
                                                         ))}
                                                     </div>
-                                                );
-                                            }
+                                                </div>
+                                            );
+                                        } catch (e) {
+                                            return <p className="text-sm text-red-500">Error parsing video data.</p>;
                                         }
-                                    } catch (e) {
-                                        console.log("Not a quiz JSON, rendering as markdown.");
-                                    }
-                                    
-                                    // ✅ RENDER AS MARKDOWN (removes ** and formats properly)
-                                    return <MarkdownContent content={selectedItem.generatedText} />;
-                                })()}
-                            </div>
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="mt-4">
+                                    {selectedItem.generatedText && <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} />}
+                                    <div className="mt-4">
+                                        {(() => {
+                                            try {
+                                                const textToCheck = selectedItem.generatedText || selectedItem.title;
+                                                const cleanText = textToCheck.replace(/```json/g, '').replace(/```/g, '').trim();
+                                                const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+                                                if (jsonMatch) {
+                                                    const quizData = JSON.parse(jsonMatch[0]);
+                                                    if (quizData && quizData.questions && Array.isArray(quizData.questions)) {
+                                                        return (
+                                                            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                                                                <p className="text-sm text-muted-foreground mb-4">This is a generated quiz. Review the questions and correct answers below:</p>
+                                                                {quizData.questions.map((q, idx) => (
+                                                                    <div key={idx} className="p-4 rounded-xl bg-muted/30 border border-border animate-in slide-in-from-bottom-2 duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
+                                                                        <p className="font-semibold text-foreground mb-3">{idx + 1}. {q.question}</p>
+                                                                        <div className="space-y-2 ml-4">
+                                                                            {q.options.map((opt, optIdx) => (
+                                                                                <div key={optIdx} className={`flex items-center gap-2 text-sm ${opt === q.answer ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
+                                                                                    <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">{String.fromCharCode(65 + optIdx)}</span>
+                                                                                    {opt} {opt === q.answer && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                        <div className="mt-3 pt-3 border-t border-border/50">
+                                                                            <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Explanation:</span> {q.explanation}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                console.log("Not a quiz JSON, rendering as markdown.");
+                                            }
+                                            return <MarkdownContent content={selectedItem.generatedText} />;
+                                        })()}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="p-4 border-t border-border bg-muted/30 flex items-center justify-between">

@@ -1,6 +1,13 @@
 import { generateWithGroq } from "../config/grok.js";
 import { Content } from "../models/Content.js";
 import { User } from "../models/User.js";
+import ffmpeg from "fluent-ffmpeg";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const ALLOWED_MODES = ["summary", "video", "music", "quiz", "tutor", "podcast"];
 const MAX_INPUT_LENGTH = 50000;
@@ -25,34 +32,22 @@ const ensureText = (value, message = "Please provide valid text.") => {
   return text;
 };
 
-// ✅ FIXED: Proper triple backticks regex
 const parseJsonObject = (rawText) => {
   if (typeof rawText !== "string" || !rawText.trim()) {
     console.error("❌ Raw text is empty or not a string:", rawText);
     throw httpError("The AI returned an empty response.", 502);
   }
-
-  const cleaned = rawText
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
+  const cleaned = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
   const firstBrace = cleaned.indexOf("{");
   const lastBrace = cleaned.lastIndexOf("}");
-
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
     console.error("❌ No JSON braces found. Cleaned text:", cleaned);
-    console.error("❌ Original raw text from AI:", rawText);
     throw httpError("The AI did not return valid JSON. Please try again.", 502);
   }
-
   try {
-    const jsonString = cleaned.slice(firstBrace, lastBrace + 1);
-    return JSON.parse(jsonString);
+    return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
   } catch (parseError) {
-    const jsonString = cleaned.slice(firstBrace, lastBrace + 1);
     console.error("❌ JSON parse error:", parseError.message);
-    console.error("❌ Malformed JSON snippet:", jsonString);
     throw httpError("The AI returned malformed JSON. Please try again.", 502);
   }
 };
@@ -149,7 +144,6 @@ export const generateContent = async (req, res, next) => {
         aiContent = generatedTextFull.trim();
       }
     } else if (mode === "video") {
-      // ✅ FIXED: Removed weird spaces in JSON keys
       const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard.
 CRITICAL: Output VALID JSON ONLY. No markdown or extra text.
 {
@@ -166,10 +160,6 @@ CRITICAL: Output VALID JSON ONLY. No markdown or extra text.
         [{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }],
         { max_tokens: 500 }
       );
-      
-      // ✅ DEBUG: Let's see exactly what the AI is returning
-      console.log("🔍 RAW AI RESPONSE FOR VIDEO:", generatedTextFull);
-
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
@@ -177,74 +167,28 @@ CRITICAL: Output VALID JSON ONLY. No markdown or extra text.
       const podcastLength = req.body?.length || "short";
       if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
       const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
-      
       const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast.
-There are two hosts:
-"Leo" — a curious student. Casual, easily amazed, and energetic.
-"Dr. Nova" — an expert teacher. Smart, warm, practical, and never robotic.
-The podcast must contain ${exchangeCount}.
-${detailLevel}
-Rules:
-1. Leo must open with a surprising but accurate fact.
-2. Dr. Nova must naturally introduce the topic.
-3. Include at least one historical misconception and correct it.
-4. Leo must ask exactly: "Why do we actually need to know this?"
-5. Dr. Nova must give a practical real-world answer.
-6. Keep each line short: no more than 2 or 3 sentences.
-7. Do not invent facts. Stay grounded in the user's notes.
-8. Output VALID JSON ONLY. No markdown and no extra text.
-
-Return exactly this structure:
-{
-  "title": "Catchy educational podcast title",
-  "script": [
-    { "speaker": "Leo", "text": "..." },
-    { "speaker": "Dr. Nova", "text": "..." }
-  ]
-}`;
+There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher).
+Length: ${exchangeCount}. ${detailLevel}
+Rules: 1. Leo opens with a surprising fact. 2. Dr. Nova introduces the topic. 3. Include a historical misconception. 4. Leo asks: "Why do we actually need to know this?" 5. Dr. Nova gives a practical answer. 6. Keep lines short. 7. Output VALID JSON ONLY.
+Return exactly: { "title": "Catchy title", "script": [ { "speaker": "Leo", "text": "..." }, { "speaker": "Dr. Nova", "text": "..." } ] }`;
       const generatedTextFull = await runGroq(
         [{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }],
         { max_tokens: maxTokens }
       );
-      
-      console.log("🔍 RAW AI RESPONSE FOR PODCAST:", generatedTextFull);
-
       const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedPodcast.title;
       aiContent = JSON.stringify(parsedPodcast);
     } else if (mode === "music") {
-      const musicSystemPrompt = `You are a professional educational Hip-Hop and Afrobeat lyricist. Turn the notes into an accurate study song.
-Use this structure:
-[Intro] 2 lines
-[Verse 1] 4-6 lines
-[Chorus] 4 lines
-[Verse 2] 4-6 lines
-[Outro] 2 lines
-Keep the content 85% educational and 15% hype. Use commas for breathing pauses. Keep lines to 6-10 words. Do not output markdown.`;
+      const musicSystemPrompt = `You are a professional educational Hip-Hop and Afrobeat lyricist. Turn the notes into an accurate study song. Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. Keep content 85% educational, 15% hype. Use commas for pauses. Keep lines to 6-10 words. Do not output markdown.`;
       aiContent = await runGroq(`${musicSystemPrompt}\n\nNotes:\n${cleanInput}`);
       aiTitle = requestedTitle || `${vibe || "Afrobeat"} Study Track`;
     } else if (mode === "quiz") {
       const parsedQuestionCount = Number(numQuestions || 5);
       const questionCount = Math.min(Math.max(Number.isFinite(parsedQuestionCount) ? parsedQuestionCount : 5, 3), 15);
       const difficultyLevel = typeof difficulty === "string" && difficulty.trim() ? difficulty.trim().slice(0, 30) : "Medium";
-      
-      // ✅ FIXED: Removed weird spaces in JSON keys
-      const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions. Difficulty: ${difficultyLevel}. Every question must be answerable from the notes. Output VALID JSON ONLY with this shape:
-{
-  "title": "Quiz title",
-  "questions": [
-    {
-      "question": "Question text",
-      "options": ["A", "B", "C", "D"],
-      "answer": "Correct option",
-      "explanation": "Short explanation"
-    }
-  ]
-}`;
+      const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions. Difficulty: ${difficultyLevel}. Every question must be answerable from the notes. Output VALID JSON ONLY: { "title": "Quiz title", "questions": [ { "question": "Question text", "options": ["A", "B", "C", "D"], "answer": "Correct option", "explanation": "Short explanation" } ] }`;
       const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }]);
-      
-      console.log("🔍 RAW AI RESPONSE FOR QUIZ:", generatedTextFull);
-
       const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedQuiz.title;
       aiContent = JSON.stringify(parsedQuiz);
@@ -275,15 +219,11 @@ Keep the content 85% educational and 15% hype. Use commas for breathing pauses. 
 };
 
 const prepareLyricsForSpeech = (text) => text.replace(/\[[^\]]*\]/g, " ").replace(/\n{2,}/g, "\n").trim();
-
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
+  try { return await fetch(url, { ...options, signal: controller.signal }); } 
+  finally { clearTimeout(timeout); }
 };
 
 export const generateSpeech = async (req, res, next) => {
@@ -292,26 +232,21 @@ export const generateSpeech = async (req, res, next) => {
     const { text, style } = req.body || {};
     const cleanText = ensureText(text, "Text is required.");
     if (cleanText.length > MAX_SPEECH_LENGTH) throw httpError("The audio text is too long.", 413);
-
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw httpError("Audio generation is not configured.", 503);
-
     const isRap = style === "rap";
     const speechText = isRap ? prepareLyricsForSpeech(cleanText) : cleanText;
     const voiceId = process.env.ELEVENLABS_VOICE_ID || "TxGEqnHWrfWFTfGW9XjX";
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
-
     const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: { Accept: "audio/mpeg", "Content-Type": "application/json", "xi-api-key": apiKey },
       body: JSON.stringify({ text: speechText, model_id: "eleven_turbo_v2_5", voice_settings: { stability: isRap ? 0.25 : 0.5, similarity_boost: isRap ? 0.9 : 0.75, style: isRap ? 0.75 : 0, use_speaker_boost: true } }),
     });
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw httpError(errorData?.detail?.message || "Audio generation failed.", 503);
     }
-
     const audioBuffer = await response.arrayBuffer();
     res.set("Content-Type", "audio/mpeg");
     res.set("Cache-Control", "private, no-store");
@@ -329,27 +264,21 @@ export const searchStockVideos = async (req, res, next) => {
     const cleanPrompt = ensureText(visualPrompt, "Visual prompt is required.").slice(0, 500);
     const apiKey = process.env.PEXELS_API_KEY;
     if (!apiKey) throw httpError("Stock media search is not configured.", 503);
-
     const keywords = cleanPrompt.replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, "").split(/[,\s]+/).map((word) => word.replace(/[^\w-]/g, "")).filter((word) => word.length > 2).slice(0, 5).join(" ");
     const searchQuery = encodeURIComponent(keywords || "educational animation");
     const url = `https://api.pexels.com/videos/search?query=${searchQuery}&per_page=5&orientation=landscape`;
-
     const response = await fetchWithTimeout(url, { headers: { Authorization: apiKey } });
     if (!response.ok) throw httpError("Stock video search failed.", 503);
-
     const data = await response.json();
     if (!Array.isArray(data.videos) || data.videos.length === 0) return searchStockImages(keywords, sceneNumber, res);
-
     const sortedVideos = data.videos.sort((a, b) => {
       const aHasHd = a.video_files?.some((file) => file.quality === "hd");
       const bHasHd = b.video_files?.some((file) => file.quality === "hd");
       return Number(bHasHd) - Number(aHasHd) || (b.duration || 0) - (a.duration || 0);
     });
-
     const bestVideo = sortedVideos[0];
     const videoFiles = bestVideo.video_files || [];
     const bestVideoFile = videoFiles.find((file) => file.quality === "hd" && file.width >= file.height && file.file_type === "video/mp4") || videoFiles.find((file) => file.width >= file.height && file.file_type === "video/mp4") || videoFiles[0];
-
     return res.status(200).json({
       success: true, message: `Stock video found for Scene ${sceneNumber ?? ""}`.trim(),
       data: { videoUrl: bestVideoFile?.link || null, sceneNumber: sceneNumber ?? null, thumbnail: bestVideo.image || null, duration: bestVideo.duration || 0, type: "video" },
@@ -368,12 +297,10 @@ const searchStockImages = async (keywords, sceneNumber, res) => {
     const url = `https://api.pexels.com/v1/search?query=${searchQuery}&per_page=3&orientation=landscape`;
     const response = await fetchWithTimeout(url, { headers: { Authorization: apiKey } });
     if (!response.ok) throw httpError("Stock image search failed.", 503);
-
     const data = await response.json();
     if (!Array.isArray(data.photos) || data.photos.length === 0) {
       return res.status(200).json({ success: true, message: `No media found for Scene ${sceneNumber ?? ""}`.trim(), data: { videoUrl: null, sceneNumber: sceneNumber ?? null, thumbnail: null, duration: 0, type: "none" } });
     }
-
     const bestPhoto = data.photos[0];
     const imageUrl = bestPhoto.src?.large2x || bestPhoto.src?.large || null;
     return res.status(200).json({
@@ -391,23 +318,18 @@ export const extractTextFromImage = async (req, res, next) => {
     requireUser(req);
     const imageUrl = ensureText(req.body?.imageUrl, "Image data is required.");
     if (imageUrl.length > MAX_IMAGE_PAYLOAD_LENGTH) throw httpError("The image is too large to process.", 413);
-
     const apiKey = process.env.OCR_SPACE_API_KEY;
     if (!apiKey) throw httpError("OCR is not configured.", 503);
-
     const formData = new URLSearchParams();
     formData.append("apikey", apiKey);
     formData.append("base64Image", imageUrl);
     formData.append("language", "eng");
     formData.append("isOverlayRequired", "false");
     formData.append("OCREngine", "2");
-
     const response = await fetchWithTimeout("https://api.ocr.space/parse/image", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Noted-App/1.0" }, body: formData.toString() }, 60000);
     const data = await response.json().catch(() => null);
-
     if (!response.ok || !data) throw httpError("OCR service failed.", 503);
     if (data.IsErroredOnProcessing) throw httpError(data.ErrorMessage?.[0] || "OCR could not process this image.", 422);
-
     const extractedText = data.ParsedResults?.[0]?.ParsedText || "";
     return res.status(200).json({ success: true, text: extractedText.trim(), message: extractedText.trim() ? "Text extracted." : "No text detected.", method: "ocr-space" });
   } catch (error) {
@@ -416,158 +338,285 @@ export const extractTextFromImage = async (req, res, next) => {
   }
 };
 
-// @desc Generate AI video using Replicate, with automatic FREE Pexels fallback
-// @route POST /ai/video/generate-scene
+// ==========================================
+// 🎬 ADVANCED VIDEO GENERATION (Background + FFmpeg)
+// ==========================================
+
+const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
+  const cleanPrompt = ensureText(visualPrompt, "Visual prompt is required.").slice(0, 500);
+  const replicateApiKey = process.env.REPLICATE_API_TOKEN;
+  
+  if (replicateApiKey) {
+    try {
+      const enhancedPrompt = `${cleanPrompt}, high quality educational animation, smooth motion, vibrant colors, 4k resolution, masterpiece`;
+      const response = await fetchWithTimeout("https://api.replicate.com/v1/models/minimax/video-01/predictions", {
+        method: "POST",
+        headers: { "Authorization": `Token ${replicateApiKey}`, "Content-Type": "application/json", "Prefer": "wait" },
+        body: JSON.stringify({ input: { prompt: enhancedPrompt, aspect_ratio: aspectRatio === "9:16" ? "9:16" : "16:9" } }),
+      }, 90000);
+
+      if (response.status === 402 || response.status === 403) throw new Error("REPLICATE_NEEDS_FUNDS");
+      if (!response.ok) throw new Error("REPLICATE_FAILED");
+
+      const data = await response.json();
+      const videoUrl = Array.isArray(data.output) ? data.output[0] : data.output;
+      if (!videoUrl) throw new Error("REPLICATE_NO_VIDEO");
+
+      return { videoUrl, type: "ai_video", duration: 5 };
+    } catch (e) {
+      if (e.message === "REPLICATE_NEEDS_FUNDS" || e.message === "REPLICATE_FAILED" || e.message === "REPLICATE_NO_VIDEO") {
+        console.log("🔄 Triggering FREE Pexels fallback...");
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  const pexelsApiKey = process.env.PEXELS_API_KEY;
+  if (!pexelsApiKey) throw httpError("No AI credits and Pexels is not configured.", 503);
+
+  const keywords = cleanPrompt.replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, "").split(/[,\s]+/).map((w) => w.replace(/[^\w-]/g, "")).filter((w) => w.length > 2).slice(0, 5).join(" ");
+  const searchQuery = encodeURIComponent(keywords || "educational animation");
+  
+  const videoResponse = await fetchWithTimeout(`https://api.pexels.com/videos/search?query=${searchQuery}&per_page=3&orientation=${aspectRatio === "9:16" ? "portrait" : "landscape"}`, { headers: { Authorization: pexelsApiKey } });
+  if (videoResponse.ok) {
+    const videoData = await videoResponse.json();
+    if (Array.isArray(videoData.videos) && videoData.videos.length > 0) {
+      const bestVideo = videoData.videos[0];
+      const bestVideoFile = bestVideo.video_files.find((f) => f.quality === "hd" && f.file_type === "video/mp4") || bestVideo.video_files[0];
+      return { videoUrl: bestVideoFile?.link, thumbnail: bestVideo.image, duration: bestVideo.duration || 5, type: "video" };
+    }
+  }
+
+  const imageResponse = await fetchWithTimeout(`https://api.pexels.com/v1/search?query=${searchQuery}&per_page=3&orientation=${aspectRatio === "9:16" ? "portrait" : "landscape"}`, { headers: { Authorization: pexelsApiKey } });
+  if (imageResponse.ok) {
+    const imageData = await imageResponse.json();
+    if (Array.isArray(imageData.photos) && imageData.photos.length > 0) {
+      const photoUrl = imageData.photos[0].src?.large2x || imageData.photos[0].src?.large;
+      return { videoUrl: null, thumbnail: photoUrl, imageUrl: photoUrl, duration: 5, type: "image" };
+    }
+  }
+  return { videoUrl: null, thumbnail: null, duration: 0, type: "none" };
+};
+
+const stitchVideos = async (videoUrls, outputMode) => {
+  if (outputMode !== "single") return null;
+  const tempDir = path.join(__dirname, "../../temp_videos");
+  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+  const inputFiles = [];
+  const listFile = path.join(tempDir, `list_${Date.now()}.txt`);
+  const outputFile = path.join(tempDir, `final_${Date.now()}.mp4`);
+
+  for (let i = 0; i < videoUrls.length; i++) {
+    const url = videoUrls[i];
+    if (!url) continue;
+    try {
+      const res = await fetch(url);
+      const buffer = await res.arrayBuffer();
+      const filePath = path.join(tempDir, `clip_${i}.mp4`);
+      fs.writeFileSync(filePath, Buffer.from(buffer));
+      inputFiles.push(filePath);
+      fs.appendFileSync(listFile, `file '${filePath}'\n`);
+    } catch (err) {
+      console.error(`Failed to download clip ${i}:`, err);
+    }
+  }
+
+  if (inputFiles.length === 0) return null;
+
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(listFile)
+      .inputOptions(['-f concat', '-safe 0'])
+      .outputOptions(['-c copy'])
+      .output(outputFile)
+      .on('end', () => {
+        inputFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
+        try { fs.unlinkSync(listFile); } catch(e){}
+        resolve(outputFile);
+      })
+      .on('error', (err) => {
+        console.error("FFmpeg error:", err);
+        reject(err);
+      })
+      .run();
+  });
+};
+
+export const generateVideoStoryboard = async (req, res, next) => {
+  try {
+    const userId = requireUser(req);
+    const { text, aspectRatio = "16:9", outputMode = "story" } = req.body || {};
+    const cleanInput = ensureText(text, "Please provide at least 5 characters.");
+
+    const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
+    const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 500 });
+    const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
+    
+    const newContent = await Content.create({
+      userId, title: parsedVideo.title, subject: "General", type: "video", rawText: cleanInput,
+      generatedText: JSON.stringify({ ...parsedVideo, aspectRatio, outputMode, scenes: parsedVideo.scenes.map(s => ({ ...s, status: "pending" })) }),
+      mediaUrl: null,
+    });
+
+    processVideoScenes(newContent._id.toString()).catch(err => console.error("Background video processing failed:", err));
+
+    return res.status(201).json({ success: true, message: "Storyboard created! Generating videos in the background...", data: newContent });
+  } catch (error) {
+    console.error("Storyboard generation error:", error.message);
+    return next(error);
+  }
+};
+
+const processVideoScenes = async (contentId) => {
+  try {
+    const content = await Content.findById(contentId);
+    if (!content) return;
+    let videoData = JSON.parse(content.generatedText);
+    const { scenes, aspectRatio, outputMode } = videoData;
+    const videoUrls = [];
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      try {
+        const visual = await generateSceneVisual(scene.visualPrompt, aspectRatio);
+        scenes[i] = { ...scene, ...visual, status: "completed" };
+        if (visual.videoUrl) videoUrls.push(visual.videoUrl);
+      } catch (err) {
+        scenes[i].status = "failed";
+      }
+      videoData.scenes = scenes;
+      await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData) });
+    }
+
+    if (outputMode === "single" && videoUrls.length > 0) {
+      try {
+        const finalVideoPath = await stitchVideos(videoUrls, outputMode);
+        if (finalVideoPath) {
+          videoData.stitchedPath = finalVideoPath; 
+          await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData), mediaUrl: finalVideoPath });
+        }
+      } catch (ffmpegErr) {
+        console.error("Stitching failed, falling back to story mode:", ffmpegErr);
+      }
+    }
+  } catch (error) {
+    console.error("Background processing error:", error.message);
+  }
+};
+
+export const checkVideoStatus = async (req, res, next) => {
+  try {
+    const content = await Content.findById(req.params.id);
+    if (!content) throw httpError("Video not found.", 404);
+    const videoData = JSON.parse(content.generatedText);
+    const totalScenes = videoData.scenes.length;
+    const completedScenes = videoData.scenes.filter(s => s.status === "completed").length;
+    const progress = Math.round((completedScenes / totalScenes) * 100);
+    const isFinished = completedScenes === totalScenes;
+
+    return res.status(200).json({
+      success: true,
+      data: { ...content.toObject(), videoData, progress, isFinished }
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const regenerateScene = async (req, res, next) => {
+  try {
+    requireUser(req);
+    const { contentId, sceneIndex } = req.body;
+    const content = await Content.findById(contentId);
+    if (!content) throw httpError("Video not found.", 404);
+    let videoData = JSON.parse(content.generatedText);
+    const scene = videoData.scenes[sceneIndex];
+    if (!scene) throw httpError("Scene not found.", 404);
+
+    const visual = await generateSceneVisual(scene.visualPrompt, videoData.aspectRatio);
+    videoData.scenes[sceneIndex] = { ...scene, ...visual, status: "completed" };
+    await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData) });
+    return res.status(200).json({ success: true, data: videoData.scenes[sceneIndex] });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const streamGeneratedVideo = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "");
+    const filePath = path.join(__dirname, "../../temp_videos", safeFilename);
+    
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Video file not found." });
+    
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Disposition", `inline; filename="${safeFilename}"`);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error("Video streaming error:", error.message);
+    res.status(500).json({ error: "Failed to stream video." });
+  }
+};
+
 export const generateAIVideoScene = async (req, res, next) => {
   try {
     requireUser(req);
     const { visualPrompt, sceneNumber } = req.body || {};
     const cleanPrompt = ensureText(visualPrompt, "Visual prompt is required.").slice(0, 500);
-    
     const replicateApiKey = process.env.REPLICATE_API_TOKEN;
     
-    // 1. Try Replicate first (if API key exists)
     if (replicateApiKey) {
       try {
         const enhancedPrompt = `${cleanPrompt}, high quality educational animation, smooth motion, vibrant colors, 4k resolution, masterpiece`;
-        console.log(`🎬 Attempting AI video generation for Scene ${sceneNumber} with Replicate...`);
-
-        // Using MiniMax Video-01 hosted on Replicate (Industry standard for quality)
         const response = await fetchWithTimeout("https://api.replicate.com/v1/models/minimax/video-01/predictions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Token ${replicateApiKey}`,
-            "Content-Type": "application/json",
-            "Prefer": "wait" // Tells Replicate to wait for the video to finish generating
-          },
-          body: JSON.stringify({
-            input: {
-              prompt: enhancedPrompt
-            }
-          }),
-        }, 90000); // 90 second timeout for video generation
+          method: "POST", headers: { "Authorization": `Token ${replicateApiKey}`, "Content-Type": "application/json", "Prefer": "wait" },
+          body: JSON.stringify({ input: { prompt: enhancedPrompt } }),
+        }, 90000);
 
-        // ✅ Catch 402 (Insufficient credit) or 403 (Account locked) and trigger FREE fallback
-        if (response.status === 402 || response.status === 403) {
-          console.log(`⚠️ Replicate out of credits or locked (${response.status}). Switching to FREE Pexels fallback...`);
-          throw new Error("REPLICATE_NEEDS_FUNDS");
-        }
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          console.error("Replicate failed:", response.status, errorData);
-          throw new Error("REPLICATE_FAILED");
-        }
+        if (response.status === 402 || response.status === 403) throw new Error("REPLICATE_NEEDS_FUNDS");
+        if (!response.ok) throw new Error("REPLICATE_FAILED");
 
         const data = await response.json();
-        // Replicate returns the video URL in data.output (usually an array or string)
         const videoUrl = Array.isArray(data.output) ? data.output[0] : data.output;
+        if (!videoUrl) throw new Error("REPLICATE_NO_VIDEO");
 
-        if (!videoUrl) {
-          console.error("Replicate response structure:", data);
-          throw new Error("REPLICATE_NO_VIDEO");
-        }
-
-        console.log(`✅ AI Video for Scene ${sceneNumber} generated successfully!`);
-        return res.status(200).json({
-          success: true, 
-          message: `AI video generated for Scene ${sceneNumber ?? ""}`.trim(),
-          data: { 
-            videoUrl: videoUrl, 
-            sceneNumber: sceneNumber ?? null, 
-            thumbnail: videoUrl,
-            duration: 5, 
-            type: "ai_video" 
-          },
-        });
-
+        return res.status(200).json({ success: true, message: `AI video generated for Scene ${sceneNumber ?? ""}`.trim(), data: { videoUrl, sceneNumber: sceneNumber ?? null, thumbnail: videoUrl, duration: 5, type: "ai_video" } });
       } catch (replicateError) {
-        // If it's a credit/funding error, fall through to the FREE Pexels fallback below
         if (replicateError.message === "REPLICATE_NEEDS_FUNDS" || replicateError.message === "REPLICATE_FAILED" || replicateError.message === "REPLICATE_NO_VIDEO") {
           console.log("🔄 Triggering FREE Pexels fallback...");
         } else {
-          throw replicateError; // If it's a different error, throw it
+          throw replicateError;
         }
       }
     }
 
-    // 2. FREE FALLBACK: Pexels Stock Media Search (100% Free, No Credit Card Needed)
-    console.log(`🔍 Searching FREE Pexels stock media for scene ${sceneNumber}...`);
     const pexelsApiKey = process.env.PEXELS_API_KEY;
-    if (!pexelsApiKey) {
-      throw httpError("No AI credits and Pexels is not configured.", 503);
-    }
-
-    const keywords = cleanPrompt
-      .replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, "")
-      .split(/[,\s]+/)
-      .map((word) => word.replace(/[^\w-]/g, ""))
-      .filter((word) => word.length > 2)
-      .slice(0, 5)
-      .join(" ");
-
-    // Try videos first
-    const videoSearchQuery = encodeURIComponent(keywords || "educational animation");
-    const videoUrl = `https://api.pexels.com/videos/search?query=${videoSearchQuery}&per_page=3&orientation=landscape`;
+    if (!pexelsApiKey) throw httpError("No AI credits and Pexels is not configured.", 503);
+    const keywords = cleanPrompt.replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, "").split(/[,\s]+/).map((w) => w.replace(/[^\w-]/g, "")).filter((w) => w.length > 2).slice(0, 5).join(" ");
+    const searchQuery = encodeURIComponent(keywords || "educational animation");
     
-    const videoResponse = await fetchWithTimeout(videoUrl, { headers: { Authorization: pexelsApiKey } });
-    
+    const videoResponse = await fetchWithTimeout(`https://api.pexels.com/videos/search?query=${searchQuery}&per_page=3&orientation=landscape`, { headers: { Authorization: pexelsApiKey } });
     if (videoResponse.ok) {
       const videoData = await videoResponse.json();
       if (Array.isArray(videoData.videos) && videoData.videos.length > 0) {
         const bestVideo = videoData.videos[0];
-        const videoFiles = bestVideo.video_files || [];
-        const bestVideoFile = videoFiles.find((f) => f.quality === "hd" && f.file_type === "video/mp4") || videoFiles[0];
-        
-        console.log(`✅ FREE Pexels Video found for Scene ${sceneNumber}!`);
-        return res.status(200).json({
-          success: true, 
-          message: `Free stock video found for Scene ${sceneNumber ?? ""}`.trim(),
-          data: { 
-            videoUrl: bestVideoFile?.link || null, 
-            sceneNumber: sceneNumber ?? null, 
-            thumbnail: bestVideo.image || null, 
-            duration: bestVideo.duration || 5, 
-            type: "video" 
-          },
-        });
+        const bestVideoFile = bestVideo.video_files.find((f) => f.quality === "hd" && f.file_type === "video/mp4") || bestVideo.video_files[0];
+        return res.status(200).json({ success: true, message: `Free stock video found for Scene ${sceneNumber ?? ""}`.trim(), data: { videoUrl: bestVideoFile?.link || null, sceneNumber: sceneNumber ?? null, thumbnail: bestVideo.image || null, duration: bestVideo.duration || 5, type: "video" } });
       }
     }
 
-    // Fallback to images if no videos found (Your frontend animates these with Ken Burns effect)
-    const imageSearchQuery = encodeURIComponent(keywords || "education");
-    const imageUrl = `https://api.pexels.com/v1/search?query=${imageSearchQuery}&per_page=3&orientation=landscape`;
-    const imageResponse = await fetchWithTimeout(imageUrl, { headers: { Authorization: pexelsApiKey } });
-
+    const imageResponse = await fetchWithTimeout(`https://api.pexels.com/v1/search?query=${searchQuery}&per_page=3&orientation=landscape`, { headers: { Authorization: pexelsApiKey } });
     if (imageResponse.ok) {
       const imageData = await imageResponse.json();
       if (Array.isArray(imageData.photos) && imageData.photos.length > 0) {
-        const bestPhoto = imageData.photos[0];
-        const photoUrl = bestPhoto.src?.large2x || bestPhoto.src?.large || null;
-        
-        console.log(`✅ FREE Pexels Image found for Scene ${sceneNumber}!`);
-        return res.status(200).json({
-          success: true, 
-          message: `Free stock image found for Scene ${sceneNumber ?? ""}`.trim(),
-          data: { 
-            videoUrl: null, 
-            sceneNumber: sceneNumber ?? null, 
-            thumbnail: photoUrl, 
-            imageUrl: photoUrl,
-            duration: 5, 
-            type: "image" 
-          },
-        });
+        const photoUrl = imageData.photos[0].src?.large2x || imageData.photos[0].src?.large;
+        return res.status(200).json({ success: true, message: `Free stock image found for Scene ${sceneNumber ?? ""}`.trim(), data: { videoUrl: null, sceneNumber: sceneNumber ?? null, thumbnail: photoUrl, imageUrl: photoUrl, duration: 5, type: "image" } });
       }
     }
-
-    // If absolutely nothing is found
-    return res.status(200).json({
-      success: true, 
-      message: `No media found for Scene ${sceneNumber ?? ""}`.trim(),
-      data: { videoUrl: null, sceneNumber: sceneNumber ?? null, thumbnail: null, duration: 0, type: "none" },
-    });
-
+    return res.status(200).json({ success: true, message: `No media found for Scene ${sceneNumber ?? ""}`.trim(), data: { videoUrl: null, sceneNumber: sceneNumber ?? null, thumbnail: null, duration: 0, type: "none" } });
   } catch (error) {
     console.error("Scene generation error:", error.message);
     return next(error);
