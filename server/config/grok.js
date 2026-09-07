@@ -7,20 +7,18 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// ✅ UPDATED: Using the most powerful model available on your specific account
-const BEST_MODEL = "openai/gpt-oss-120b"; 
+// ✅ Changed to a highly reliable model from your available list
+const BEST_MODEL = "qwen/qwen3.8-27b"; 
 
 const MAX_RETRIES = 2;
 
 export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
-  // Format the input into standard Groq messages
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
     : [{ role: "user", content: messagesOrPrompt }];
 
   let lastError;
 
-  // ✅ AUTOMATIC RETRY SYSTEM
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const completion = await groq.chat.completions.create({
@@ -33,13 +31,20 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
 
       let rawText = completion.choices[0]?.message?.content || "";
       
+      // ✅ DEBUG: Let's see exactly what Groq returns BEFORE we clean it
+      console.log("🔍 RAW RESPONSE FROM GROQ (before cleaning):", rawText);
+
       // Clean up common AI formatting artifacts
       let cleanText = rawText
         .replace(/<think>[\s\S]*?<\/think>/gi, "")
         .replace(/<think>[\s\S]*/gi, "")
-        .replace(/```json/g, "")
+        .replace(/```json/gi, "")
         .replace(/```/g, "")
         .trim();
+
+      if (!cleanText) {
+        console.warn("⚠️ Groq returned empty content after cleaning. Raw text was:", rawText);
+      }
 
       return cleanText;
 

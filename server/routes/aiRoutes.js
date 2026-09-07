@@ -8,12 +8,17 @@ import {
   generateChallengeLink, acceptBattle, resolveBattle,
   checkBattleStatus, startBattle 
 } from '../controllers/battleController.js';
-import { generateContent, generateSpeech, searchStockVideos,  extractTextFromImage } from '../controllers/aiController.js';
-
+import { 
+  generateContent, 
+  generateSpeech, 
+  searchStockVideos,  
+  extractTextFromImage,
+  generateAIVideoScene // ✅ Added here
+} from '../controllers/aiController.js';
 
 const router = express.Router();
 
-// Existing AI Routes
+// AI Routes
 router.get('/library', protect, getUserLibrary);
 router.get('/:id', protect, getSingleContent);
 router.delete('/:id', protect, deleteContent);
@@ -23,8 +28,10 @@ router.post('/focus-complete', protect, completeFocusSession);
 router.post('/attempt', protect, saveQuizAttempt);
 router.get('/attempt/:id', protect, getQuizAttempt);
 router.post('/video/search-stock', protect, searchStockVideos);
+router.post("/video/generate-scene", protect, generateAIVideoScene); // ✅ New Replicate Route
+router.post('/ocr/extract-text', protect, extractTextFromImage);
 
-// ✅ Battle Routes (Updated to match new controller)
+// Battle Routes
 router.get('/battle/classmates', protect, getClassmates);
 router.post('/battle/challenge', protect, challengeClassmate);
 router.get('/battle/pending', protect, getMyBattles);
@@ -33,6 +40,5 @@ router.post('/battle/accept', protect, acceptBattle);
 router.get('/battle/status', protect, checkBattleStatus);
 router.post('/battle/start', protect, startBattle);
 router.post('/battle/resolve', protect, resolveBattle);
-router.post('/ocr/extract-text', protect, extractTextFromImage);
 
 export default router;
