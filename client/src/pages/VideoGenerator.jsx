@@ -43,7 +43,7 @@ export default function VideoGenerator() {
     }
   };
 
-  const handleGenerateSceneVideo = async (scene, index) => {
+  const handleGenerateSceneVisual = async (scene, index) => {
     setSearchingScene(index);
     
     try {
@@ -59,13 +59,13 @@ export default function VideoGenerator() {
             url: res.data.data.videoUrl,
             thumbnail: res.data.data.thumbnail,
             duration: res.data.data.duration,
-            type: res.data.data.type // Will be "ai_video"
+            type: res.data.data.type
           }
         }));
       }
     } catch (error) {
-      alert(`Failed to generate video for Scene ${scene.sceneNumber}. ${error.response?.data?.message || ''}`);
-      console.error("AI video generation error:", error);
+      alert(`Failed to generate visual for Scene ${scene.sceneNumber}. ${error.response?.data?.message || ''}`);
+      console.error("Visual generation error:", error);
     } finally {
       setSearchingScene(null);
     }
@@ -80,7 +80,7 @@ export default function VideoGenerator() {
         </div>
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">AI Video Studio</h1>
-          <p className="text-sm text-muted-foreground">Turn your notes into real AI-generated animated videos!</p>
+          <p className="text-sm text-muted-foreground">Turn your notes into animated educational videos!</p>
         </div>
       </div>
 
@@ -121,23 +121,21 @@ export default function VideoGenerator() {
                     Scene {scene.sceneNumber}
                   </h3>
                   
-                  {/* ✅ UPDATED: Generate AI Video Button */}
                   <button 
-                    onClick={() => handleGenerateSceneVideo(scene, index)}
+                    onClick={() => handleGenerateSceneVisual(scene, index)}
                     disabled={searchingScene === index || foundVideos[index]}
                     className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {searchingScene === index ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Rendering Video (~30s)...</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating (~30s)...</>
                     ) : foundVideos[index] ? (
-                      <><Check className="w-4 h-4" /> Video Ready</>
+                      <><Check className="w-4 h-4" /> Visual Ready</>
                     ) : (
-                      <><Video className="w-4 h-4" /> Generate AI Video</>
+                      <><Video className="w-4 h-4" /> Generate Visual</>
                     )}
                   </button>
                 </div>
 
-                {/* Narration */}
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
                     <Type className="w-3 h-3" /> Voiceover Narration
@@ -147,7 +145,6 @@ export default function VideoGenerator() {
                   </p>
                 </div>
 
-                {/* Visual Prompt */}
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
                     <Image className="w-3 h-3" /> AI Visual Prompt
@@ -157,26 +154,38 @@ export default function VideoGenerator() {
                   </p>
                 </div>
 
-                {/* ✅ UPDATED: Real Video Player Display */}
                 {foundVideos[index] && (
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
                       <Play className="w-3 h-3" /> 
-                      AI Generated Video
+                      {foundVideos[index].type === 'ai_video' ? 'AI Generated Video' : foundVideos[index].type === 'video' ? 'Stock Video' : 'Animated Stock Image'}
                     </p>
                     <div className="relative rounded-lg overflow-hidden border border-border bg-black">
-                      <video 
-                        src={foundVideos[index].url} 
-                        controls 
-                        autoPlay 
-                        loop 
-                        muted
-                        className="w-full aspect-video object-cover"
-                        poster={foundVideos[index].thumbnail}
-                      />
+                      {foundVideos[index].type === 'ai_video' || foundVideos[index].type === 'video' ? (
+                        <video 
+                          src={foundVideos[index].url} 
+                          controls 
+                          autoPlay 
+                          loop 
+                          muted
+                          className="w-full aspect-video object-cover"
+                          poster={foundVideos[index].thumbnail}
+                        />
+                      ) : (
+                        <div className="relative w-full aspect-video">
+                          <img 
+                            src={foundVideos[index].imageUrl || foundVideos[index].thumbnail} 
+                            alt={`Scene ${scene.sceneNumber}`}
+                            className="w-full h-full object-cover animate-ken-burns"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <Play className="w-12 h-12 text-white/70" />
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Duration: {foundVideos[index].duration}s (AI Generated MP4)
+                      Duration: {foundVideos[index].duration}s
                     </p>
                   </div>
                 )}

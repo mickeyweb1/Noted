@@ -416,7 +416,7 @@ export const extractTextFromImage = async (req, res, next) => {
   }
 };
 
-// @desc Generate real AI video for a scene using Fal.ai (MiniMax/LTX)
+// @desc Generate AI video using Replicate, with automatic FREE Pexels fallback
 // @route POST /ai/video/generate-scene
 export const generateAIVideoScene = async (req, res, next) => {
   try {
@@ -424,66 +424,152 @@ export const generateAIVideoScene = async (req, res, next) => {
     const { visualPrompt, sceneNumber } = req.body || {};
     const cleanPrompt = ensureText(visualPrompt, "Visual prompt is required.").slice(0, 500);
     
-    const falApiKey = process.env.FAL_API_KEY;
-    if (!falApiKey) {
-      throw httpError("Fal.ai video generation is not configured.", 503);
-    }
-
-    // Enhance prompt for better educational animation results
-    const enhancedPrompt = `${cleanPrompt}, high quality educational animation, smooth motion, vibrant colors, 4k resolution, masterpiece`;
+    const replicateApiKey = process.env.REPLICATE_API_TOKEN;
     
-    console.log(`🎬 Generating AI video for Scene ${sceneNumber} with Fal.ai...`);
+    // 1. Try Replicate first (if API key exists)
+    if (replicateApiKey) {
+      try {
+        const enhancedPrompt = `${cleanPrompt}, high quality educational animation, smooth motion, vibrant colors, 4k resolution, masterpiece`;
+        console.log(`🎬 Attempting AI video generation for Scene ${sceneNumber} with Replicate...`);
 
-    // Using Fal.ai's MiniMax Video model (High quality, fast)
-    const response = await fetchWithTimeout("https://fal.run/fal-ai/minimax/video-01", {
-      method: "POST",
-      headers: {
-        "Authorization": `Key ${falApiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        prompt: enhancedPrompt,
-        // Optional: You can add aspect_ratio or duration if the model supports it
-      }),
-    }, 90000); // ✅ 90 second timeout for video generation
+        // Using MiniMax Video-01 hosted on Replicate (Industry standard for quality)
+        const response = await fetchWithTimeout("https://api.replicate.com/v1/models/minimax/video-01/predictions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Token ${replicateApiKey}`,
+            "Content-Type": "application/json",
+            "Prefer": "wait" // Tells Replicate to wait for the video to finish generating
+          },
+          body: JSON.stringify({
+            input: {
+              prompt: enhancedPrompt
+            }
+          }),
+        }, 90000); // 90 second timeout for video generation
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      console.error("Fal.ai failed:", response.status, errorData);
-      
-      // Check if free trial ran out
-      if (response.status === 402 || (errorData && errorData.detail && errorData.detail.includes("credit"))) {
-        throw httpError("Fal.ai free trial credits have run out. Please add funds to your Fal.ai account.", 402);
+        // ✅ Catch 402 (Insufficient credit) or 403 (Account locked) and trigger FREE fallback
+        if (response.status === 402 || response.status === 403) {
+          console.log(`⚠️ Replicate out of credits or locked (${response.status}). Switching to FREE Pexels fallback...`);
+          throw new Error("REPLICATE_NEEDS_FUNDS");
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error("Replicate failed:", response.status, errorData);
+          throw new Error("REPLICATE_FAILED");
+        }
+
+        const data = await response.json();
+        // Replicate returns the video URL in data.output (usually an array or string)
+        const videoUrl = Array.isArray(data.output) ? data.output[0] : data.output;
+
+        if (!videoUrl) {
+          console.error("Replicate response structure:", data);
+          throw new Error("REPLICATE_NO_VIDEO");
+        }
+
+        console.log(`✅ AI Video for Scene ${sceneNumber} generated successfully!`);
+        return res.status(200).json({
+          success: true, 
+          message: `AI video generated for Scene ${sceneNumber ?? ""}`.trim(),
+          data: { 
+            videoUrl: videoUrl, 
+            sceneNumber: sceneNumber ?? null, 
+            thumbnail: videoUrl,
+            duration: 5, 
+            type: "ai_video" 
+          },
+        });
+
+      } catch (replicateError) {
+        // If it's a credit/funding error, fall through to the FREE Pexels fallback below
+        if (replicateError.message === "REPLICATE_NEEDS_FUNDS" || replicateError.message === "REPLICATE_FAILED" || replicateError.message === "REPLICATE_NO_VIDEO") {
+          console.log("🔄 Triggering FREE Pexels fallback...");
+        } else {
+          throw replicateError; // If it's a different error, throw it
+        }
       }
-      throw httpError("AI video generation failed.", 503);
     }
 
-    const data = await response.json();
-    
-    // Fal.ai returns the video URL in data.video.url
-    const videoUrl = data.video?.url || data.url || null;
-
-    if (!videoUrl) {
-      console.error("Fal.ai response structure:", data);
-      throw httpError("AI generation returned no video URL.", 502);
+    // 2. FREE FALLBACK: Pexels Stock Media Search (100% Free, No Credit Card Needed)
+    console.log(`🔍 Searching FREE Pexels stock media for scene ${sceneNumber}...`);
+    const pexelsApiKey = process.env.PEXELS_API_KEY;
+    if (!pexelsApiKey) {
+      throw httpError("No AI credits and Pexels is not configured.", 503);
     }
 
-    console.log(`✅ AI Video for Scene ${sceneNumber} generated successfully!`);
+    const keywords = cleanPrompt
+      .replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, "")
+      .split(/[,\s]+/)
+      .map((word) => word.replace(/[^\w-]/g, ""))
+      .filter((word) => word.length > 2)
+      .slice(0, 5)
+      .join(" ");
+
+    // Try videos first
+    const videoSearchQuery = encodeURIComponent(keywords || "educational animation");
+    const videoUrl = `https://api.pexels.com/videos/search?query=${videoSearchQuery}&per_page=3&orientation=landscape`;
     
+    const videoResponse = await fetchWithTimeout(videoUrl, { headers: { Authorization: pexelsApiKey } });
+    
+    if (videoResponse.ok) {
+      const videoData = await videoResponse.json();
+      if (Array.isArray(videoData.videos) && videoData.videos.length > 0) {
+        const bestVideo = videoData.videos[0];
+        const videoFiles = bestVideo.video_files || [];
+        const bestVideoFile = videoFiles.find((f) => f.quality === "hd" && f.file_type === "video/mp4") || videoFiles[0];
+        
+        console.log(`✅ FREE Pexels Video found for Scene ${sceneNumber}!`);
+        return res.status(200).json({
+          success: true, 
+          message: `Free stock video found for Scene ${sceneNumber ?? ""}`.trim(),
+          data: { 
+            videoUrl: bestVideoFile?.link || null, 
+            sceneNumber: sceneNumber ?? null, 
+            thumbnail: bestVideo.image || null, 
+            duration: bestVideo.duration || 5, 
+            type: "video" 
+          },
+        });
+      }
+    }
+
+    // Fallback to images if no videos found (Your frontend animates these with Ken Burns effect)
+    const imageSearchQuery = encodeURIComponent(keywords || "education");
+    const imageUrl = `https://api.pexels.com/v1/search?query=${imageSearchQuery}&per_page=3&orientation=landscape`;
+    const imageResponse = await fetchWithTimeout(imageUrl, { headers: { Authorization: pexelsApiKey } });
+
+    if (imageResponse.ok) {
+      const imageData = await imageResponse.json();
+      if (Array.isArray(imageData.photos) && imageData.photos.length > 0) {
+        const bestPhoto = imageData.photos[0];
+        const photoUrl = bestPhoto.src?.large2x || bestPhoto.src?.large || null;
+        
+        console.log(`✅ FREE Pexels Image found for Scene ${sceneNumber}!`);
+        return res.status(200).json({
+          success: true, 
+          message: `Free stock image found for Scene ${sceneNumber ?? ""}`.trim(),
+          data: { 
+            videoUrl: null, 
+            sceneNumber: sceneNumber ?? null, 
+            thumbnail: photoUrl, 
+            imageUrl: photoUrl,
+            duration: 5, 
+            type: "image" 
+          },
+        });
+      }
+    }
+
+    // If absolutely nothing is found
     return res.status(200).json({
       success: true, 
-      message: `AI video generated for Scene ${sceneNumber ?? ""}`.trim(),
-      data: { 
-        videoUrl: videoUrl, 
-        sceneNumber: sceneNumber ?? null, 
-        thumbnail: videoUrl, // Use video as thumbnail too
-        duration: 5, 
-        type: "ai_video" 
-      },
+      message: `No media found for Scene ${sceneNumber ?? ""}`.trim(),
+      data: { videoUrl: null, sceneNumber: sceneNumber ?? null, thumbnail: null, duration: 0, type: "none" },
     });
 
   } catch (error) {
-    console.error("AI video generation error:", error.message);
+    console.error("Scene generation error:", error.message);
     return next(error);
   }
 };
