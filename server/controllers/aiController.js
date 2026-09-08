@@ -144,22 +144,8 @@ export const generateContent = async (req, res, next) => {
         aiContent = generatedTextFull.trim();
       }
     } else if (mode === "video") {
-      const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard.
-CRITICAL: Output VALID JSON ONLY. No markdown or extra text.
-{
-  "title": "Topic Name",
-  "scenes": [
-    {
-      "sceneNumber": 1,
-      "narration": "Maximum 10 words.",
-      "visualPrompt": "Maximum 10 words."
-    }
-  ]
-}`;
-      const generatedTextFull = await runGroq(
-        [{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }],
-        { max_tokens: 500 }
-      );
+      const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
+      const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 500 });
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
@@ -167,15 +153,8 @@ CRITICAL: Output VALID JSON ONLY. No markdown or extra text.
       const podcastLength = req.body?.length || "short";
       if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
       const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
-      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast.
-There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher).
-Length: ${exchangeCount}. ${detailLevel}
-Rules: 1. Leo opens with a surprising fact. 2. Dr. Nova introduces the topic. 3. Include a historical misconception. 4. Leo asks: "Why do we actually need to know this?" 5. Dr. Nova gives a practical answer. 6. Keep lines short. 7. Output VALID JSON ONLY.
-Return exactly: { "title": "Catchy title", "script": [ { "speaker": "Leo", "text": "..." }, { "speaker": "Dr. Nova", "text": "..." } ] }`;
-      const generatedTextFull = await runGroq(
-        [{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }],
-        { max_tokens: maxTokens }
-      );
+      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). Length: ${exchangeCount}. ${detailLevel}. Rules: 1. Leo opens with a surprising fact. 2. Dr. Nova introduces the topic. 3. Include a historical misconception. 4. Leo asks: "Why do we actually need to know this?" 5. Dr. Nova gives a practical answer. 6. Keep lines short. 7. Output VALID JSON ONLY. Return exactly: { "title": "Catchy title", "script": [ { "speaker": "Leo", "text": "..." }, { "speaker": "Dr. Nova", "text": "..." } ] }`;
+      const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
       const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedPodcast.title;
       aiContent = JSON.stringify(parsedPodcast);
@@ -219,6 +198,7 @@ Return exactly: { "title": "Catchy title", "script": [ { "speaker": "Leo", "text
 };
 
 const prepareLyricsForSpeech = (text) => text.replace(/\[[^\]]*\]/g, " ").replace(/\n{2,}/g, "\n").trim();
+
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -364,42 +344,48 @@ const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
 
       return { videoUrl, type: "ai_video", duration: 5 };
     } catch (e) {
-      if (e.message === "REPLICATE_NEEDS_FUNDS" || e.message === "REPLICATE_FAILED" || e.message === "REPLICATE_NO_VIDEO") {
-        console.log("🔄 Triggering FREE Pexels fallback...");
+      if (e.message === "REPLICATE_NEEDS_FUNDS") {
+        console.log("⚠️ Replicate is out of funds. Switching to FREE Pexels fallback...");
       } else {
-        throw e;
+        console.log("⚠️ Replicate failed. Switching to FREE Pexels fallback...");
       }
     }
   }
 
+  // FREE FALLBACK: Pexels
   const pexelsApiKey = process.env.PEXELS_API_KEY;
   if (!pexelsApiKey) throw httpError("No AI credits and Pexels is not configured.", 503);
 
   const keywords = cleanPrompt.replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, "").split(/[,\s]+/).map((w) => w.replace(/[^\w-]/g, "")).filter((w) => w.length > 2).slice(0, 5).join(" ");
   const searchQuery = encodeURIComponent(keywords || "educational animation");
   
+  // Try to find a video first
   const videoResponse = await fetchWithTimeout(`https://api.pexels.com/videos/search?query=${searchQuery}&per_page=3&orientation=${aspectRatio === "9:16" ? "portrait" : "landscape"}`, { headers: { Authorization: pexelsApiKey } });
   if (videoResponse.ok) {
     const videoData = await videoResponse.json();
     if (Array.isArray(videoData.videos) && videoData.videos.length > 0) {
       const bestVideo = videoData.videos[0];
       const bestVideoFile = bestVideo.video_files.find((f) => f.quality === "hd" && f.file_type === "video/mp4") || bestVideo.video_files[0];
+      console.log(`✅ Pexels Video found for scene.`);
       return { videoUrl: bestVideoFile?.link, thumbnail: bestVideo.image, duration: bestVideo.duration || 5, type: "video" };
     }
   }
 
+  // Fallback to image if no video is found
   const imageResponse = await fetchWithTimeout(`https://api.pexels.com/v1/search?query=${searchQuery}&per_page=3&orientation=${aspectRatio === "9:16" ? "portrait" : "landscape"}`, { headers: { Authorization: pexelsApiKey } });
   if (imageResponse.ok) {
     const imageData = await imageResponse.json();
     if (Array.isArray(imageData.photos) && imageData.photos.length > 0) {
       const photoUrl = imageData.photos[0].src?.large2x || imageData.photos[0].src?.large;
+      console.log(`✅ Pexels Image found for scene (will be converted to video).`);
       return { videoUrl: null, thumbnail: photoUrl, imageUrl: photoUrl, duration: 5, type: "image" };
     }
   }
   return { videoUrl: null, thumbnail: null, duration: 0, type: "none" };
 };
 
-const stitchVideos = async (videoUrls, outputMode) => {
+// ✅ UPGRADED: Now converts Images into 5-second video clips automatically!
+const stitchVideos = async (scenesData, outputMode) => {
   if (outputMode !== "single") return null;
   const tempDir = path.join(__dirname, "../../temp_videos");
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -408,23 +394,48 @@ const stitchVideos = async (videoUrls, outputMode) => {
   const listFile = path.join(tempDir, `list_${Date.now()}.txt`);
   const outputFile = path.join(tempDir, `final_${Date.now()}.mp4`);
 
-  for (let i = 0; i < videoUrls.length; i++) {
-    const url = videoUrls[i];
+  for (let i = 0; i < scenesData.length; i++) {
+    const scene = scenesData[i];
+    const url = scene.videoUrl || scene.imageUrl;
     if (!url) continue;
+    
     try {
       const res = await fetch(url);
       const buffer = await res.arrayBuffer();
-      const filePath = path.join(tempDir, `clip_${i}.mp4`);
+      const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?$/i);
+      const filePath = path.join(tempDir, `clip_${i}${isImage ? '.jpg' : '.mp4'}`);
       fs.writeFileSync(filePath, Buffer.from(buffer));
-      inputFiles.push(filePath);
-      fs.appendFileSync(listFile, `file '${filePath}'\n`);
+      
+      if (isImage) {
+        // Convert image to a 5-second video clip with a slow zoom (Ken Burns effect)
+        const videoFilePath = path.join(tempDir, `clip_${i}_video.mp4`);
+        console.log(`🎬 Converting image ${i} to video clip...`);
+        await new Promise((resolve, reject) => {
+          ffmpeg(filePath)
+            .loop(5)
+            .videoFilters('zoompan=z=1.1:d=150:x=\'iw/2-(iw/zoom/2)\':y=\'ih/2-(ih/zoom/2)\':s=1280x720')
+            .duration(5)
+            .outputOptions('-c:v libx264', '-pix_fmt yuv420p', '-r 30')
+            .output(videoFilePath)
+            .on('end', resolve)
+            .on('error', reject)
+            .run();
+        });
+        inputFiles.push(videoFilePath);
+        fs.appendFileSync(listFile, `file '${videoFilePath}'\n`);
+        fs.unlinkSync(filePath); // Clean up temp jpg
+      } else {
+        inputFiles.push(filePath);
+        fs.appendFileSync(listFile, `file '${filePath}'\n`);
+      }
     } catch (err) {
-      console.error(`Failed to download clip ${i}:`, err);
+      console.error(`Failed to process clip ${i}:`, err);
     }
   }
 
   if (inputFiles.length === 0) return null;
 
+  console.log(`🔗 Stitching ${inputFiles.length} clips together...`);
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(listFile)
@@ -475,14 +486,16 @@ const processVideoScenes = async (contentId) => {
     if (!content) return;
     let videoData = JSON.parse(content.generatedText);
     const { scenes, aspectRatio, outputMode } = videoData;
-    const videoUrls = [];
+    const scenesForStitching = [];
 
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
       try {
         const visual = await generateSceneVisual(scene.visualPrompt, aspectRatio);
         scenes[i] = { ...scene, ...visual, status: "completed" };
-        if (visual.videoUrl) videoUrls.push(visual.videoUrl);
+        if (visual.videoUrl || visual.imageUrl) {
+          scenesForStitching.push({ videoUrl: visual.videoUrl, imageUrl: visual.imageUrl });
+        }
       } catch (err) {
         scenes[i].status = "failed";
       }
@@ -490,9 +503,9 @@ const processVideoScenes = async (contentId) => {
       await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData) });
     }
 
-    if (outputMode === "single" && videoUrls.length > 0) {
+    if (outputMode === "single" && scenesForStitching.length > 0) {
       try {
-        const finalVideoPath = await stitchVideos(videoUrls, outputMode);
+        const finalVideoPath = await stitchVideos(scenesForStitching, outputMode);
         if (finalVideoPath) {
           videoData.stitchedPath = finalVideoPath; 
           await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData), mediaUrl: finalVideoPath });
