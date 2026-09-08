@@ -384,13 +384,72 @@ const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
   return { videoUrl: null, thumbnail: null, duration: 0, type: "none" };
 };
 
-// ✅ UPGRADED: Re-encodes the final video to guarantee it works, preventing silent FFmpeg hangs
+// ==========================================
+// ️ HELPER: Generate Audio for a Scene (IMPROVED)
+// ==========================================
+const getSceneAudio = async (narration, tempDir, index) => {
+  if (!narration || !narration.trim()) {
+    console.log(`⚠️ Scene ${index} has no narration, skipping audio`);
+    return null;
+  }
+
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    console.warn("⚠️ ELEVENLABS_API_KEY not found. Videos will be silent.");
+    return null;
+  }
+
+  const voiceId = process.env.ELEVENLABS_VOICE_ID || "TxGEqnHWrfWFTfGW9XjX";
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+
+  try {
+    console.log(`️ Generating ElevenLabs audio for Scene ${index + 1}: "${narration.substring(0, 30)}..."`);
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        text: narration,
+        model_id: "eleven_turbo_v2_5",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+          style: 0.0,
+          use_speaker_boost: true,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ ElevenLabs API error for scene ${index}:`, response.status, errorText);
+      throw new Error(`ElevenLabs API returned ${response.status}`);
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    const audioPath = path.join(tempDir, `audio_${index}.mp3`);
+    fs.writeFileSync(audioPath, Buffer.from(audioBuffer));
+    console.log(`✅ Audio generated for Scene ${index + 1} (${audioBuffer.byteLength} bytes)`);
+    return audioPath;
+  } catch (error) {
+    console.error(`❌ Failed to generate audio for scene ${index}:`, error.message);
+    return null;
+  }
+};
+
+// ==========================================
+// 🎬 UPGRADED: Stitch Videos WITH Voiceovers
+// ==========================================
 const stitchVideos = async (scenesData, outputMode) => {
   if (outputMode !== "single") return null;
   const tempDir = path.join(__dirname, "../../temp_videos");
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-  const normalizedFiles = [];
+  const mergedFiles = [];
   const listFile = path.join(tempDir, `list_${Date.now()}.txt`);
   const outputFile = path.join(tempDir, `final_${Date.now()}.mp4`);
 
@@ -400,18 +459,30 @@ const stitchVideos = async (scenesData, outputMode) => {
     if (!url) continue;
 
     try {
+      // 1. Download the video or image
       const res = await fetch(url);
       const buffer = await res.arrayBuffer();
       const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?$/i);
       const rawPath = path.join(tempDir, `raw_${i}${isImage ? '.jpg' : '.mp4'}`);
       fs.writeFileSync(rawPath, Buffer.from(buffer));
 
-      const normalizedPath = path.join(tempDir, `norm_${i}.mp4`);
-      console.log(`🎬 Normalizing clip ${i} to standard format...`);
+      // 2. Generate Voiceover for this scene's narration
+      console.log(`🎙️ Generating voiceover for Scene ${i + 1}...`);
+      const audioPath = await getSceneAudio(scene.narration, tempDir, i);
 
-      // Normalize EVERY clip to 1280x720, 30fps, H.264
+      const mergedPath = path.join(tempDir, `merged_${i}.mp4`);
+      console.log(`🎬 Merging video and audio for Scene ${i + 1}...`);
+
+      // 3. Merge Video and Audio using FFmpeg
       await new Promise((resolve, reject) => {
-        ffmpeg(rawPath)
+        const ffmpegCmd = ffmpeg(rawPath);
+        
+        // If we have audio, add it as a second input
+        if (audioPath) {
+          ffmpegCmd.input(audioPath);
+        }
+
+        ffmpegCmd
           .outputOptions([
             '-c:v libx264',
             '-preset fast',
@@ -419,46 +490,53 @@ const stitchVideos = async (scenesData, outputMode) => {
             '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
             '-r 30',
             '-pix_fmt yuv420p',
-            '-an' // Remove audio to prevent sync issues
+            '-movflags +faststart',
+            '-shortest' // Ensures the video stops when the shortest stream (video or audio) ends
           ])
-          .output(normalizedPath)
-          .on('end', resolve)
+          // Map video from first input, audio from second input (if it exists)
+          .outputOptions(audioPath ? ['-map 0:v:0', '-map 1:a:0', '-c:a aac'] : ['-an'])
+          .output(mergedPath)
+          .on('end', () => {
+            // Clean up raw files
+            try { fs.unlinkSync(rawPath); } catch(e) {}
+            if (audioPath) { try { fs.unlinkSync(audioPath); } catch(e) {} }
+            resolve();
+          })
           .on('error', (err) => {
-            console.error(`❌ FFmpeg normalization error on clip ${i}:`, err.message);
+            console.error(`❌ FFmpeg merge error on clip ${i}:`, err.message);
             reject(err);
           })
           .run();
       });
 
-      normalizedFiles.push(normalizedPath);
-      fs.appendFileSync(listFile, `file '${normalizedPath}'\n`);
+      mergedFiles.push(mergedPath);
+      fs.appendFileSync(listFile, `file '${mergedPath}'\n`);
       
-      try { fs.unlinkSync(rawPath); } catch(e) {}
     } catch (err) {
       console.error(`Failed to process clip ${i}:`, err);
     }
   }
 
-  if (normalizedFiles.length === 0) return null;
+  if (mergedFiles.length === 0) return null;
 
-  console.log(`🔗 Stitching ${normalizedFiles.length} clips together (Re-encoding for reliability)...`);
+  console.log(`🔗 Stitching ${mergedFiles.length} audio-video clips together...`);
   
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(listFile)
       .inputOptions(['-f concat', '-safe 0'])
-      // ✅ Re-encode the final output to guarantee codec compatibility
       .outputOptions([
         '-c:v libx264',
+        '-c:a aac',
         '-preset fast',
         '-crf 23',
         '-pix_fmt yuv420p',
-        '-movflags +faststart' // Optimizes for web playback
+        '-movflags +faststart'
       ])
       .output(outputFile)
       .on('end', () => {
-        console.log("✅ FFmpeg stitching completed successfully!");
-        normalizedFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
+        console.log("✅ FFmpeg stitching with audio completed successfully!");
+        mergedFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
         try { fs.unlinkSync(listFile); } catch(e){}
         resolve(outputFile);
       })
