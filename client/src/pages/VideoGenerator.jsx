@@ -17,6 +17,7 @@ export default function VideoGenerator() {
   const [isFinished, setIsFinished] = useState(false);
   const [regeneratingScene, setRegeneratingScene] = useState(null);
   const [stitchedVideoUrl, setStitchedVideoUrl] = useState("");
+   const [statusMessage, setStatusMessage] = useState("Generating scenes..."); 
   
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
@@ -38,7 +39,6 @@ export default function VideoGenerator() {
     }
   }, []);
 
-  // ✅ RESUME POLLING IF USER NAVIGATED AWAY AND CAME BACK
   useEffect(() => {
     if (videoId && !isFinished) {
       localStorage.setItem("activeVideoId", videoId);
@@ -46,17 +46,26 @@ export default function VideoGenerator() {
         try {
           const res = await api.get(`/ai/video/status/${videoId}`);
           if (res.data.success) {
-            const { videoData, progress: newProgress, isFinished: done } = res.data.data;
+            const { videoData, progress: newProgress, isFinished: done, mediaUrl, outputMode: dbOutputMode, statusMessage: newStatusMessage } = res.data.data;
+            
             setScenes(videoData.scenes);
             setVideoTitle(videoData.title);
             setProgress(newProgress);
+            setStatusMessage(newStatusMessage || "Generating scenes...");
             
-            if (videoData.mediaUrl) {
-              const filename = videoData.mediaUrl.split(/[\\/]/).pop();
-              setStitchedVideoUrl(`http://localhost:5000/api/ai/video/stream/${filename}`);
+            if (dbOutputMode) {
+              setOutputMode(dbOutputMode);
+            }
+
+            if (mediaUrl) {
+              const filename = mediaUrl.split(/[\\/]/).pop();
+              const url = `http://localhost:5000/api/ai/video/stream/${filename}`;
+              console.log("✅ Setting stitchedVideoUrl to:", url); // DEBUG LOG
+              setStitchedVideoUrl(url);
             }
 
             if (done) {
+              console.log("🎉 Generation DONE! isFinished: true, outputMode:", dbOutputMode); // DEBUG LOG
               setIsFinished(true);
               localStorage.removeItem("activeVideoId");
               clearInterval(pollIntervalRef.current);
@@ -65,11 +74,13 @@ export default function VideoGenerator() {
               }
             }
           }
-        } catch (err) { console.error("Polling error:", err); }
-      }, 3000);
+        } catch (err) { 
+          console.error("Polling error:", err); 
+        }
+      }, 2000);
     }
     return () => clearInterval(pollIntervalRef.current);
-  }, [videoId, isFinished]);
+  }, [videoId, isFinished, videoTitle]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -199,18 +210,21 @@ export default function VideoGenerator() {
         </button>
       </div>
 
-      {videoId && !isFinished && (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-foreground">Generating Videos...</h3>
-            <span className="text-sm font-medium text-brand">{progress}%</span>
-          </div>
-          <div className="w-full bg-muted rounded-full h-2.5">
-            <div className="bg-brand h-2.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
-          </div>
-          <p className="text-xs text-muted-foreground">You can navigate away! We will notify you when it's done.</p>
-        </div>
-      )}
+{videoId && !isFinished && (
+  <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+    <div className="flex justify-between items-center">
+      <h3 className="font-bold text-foreground">{statusMessage}</h3> {/* ✅ UPDATED */}
+      <span className="text-sm font-medium text-brand">{progress}%</span>
+    </div>
+    <div className="w-full bg-muted rounded-full h-2.5">
+      <div 
+        className="bg-brand h-2.5 rounded-full transition-all duration-500 ease-out" 
+        style={{ width: `${progress}%` }}
+      ></div>
+    </div>
+    <p className="text-xs text-muted-foreground">You can navigate away! We will notify you when it's done.</p>
+  </div>
+)}
 
       {scenes.length > 0 && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -218,16 +232,49 @@ export default function VideoGenerator() {
             <Film className="w-5 h-5 text-blue-500" /> {videoTitle}
           </h2>
 
-          {/* ✅ SHOW COMBINED VIDEO IF OUTPUT MODE IS SINGLE AND IT'S READY */}
-          {isFinished && outputMode === "single" && stitchedVideoUrl && (
-            <div className="rounded-2xl border-2 border-brand bg-brand/5 p-4 space-y-3">
-              <h3 className="font-bold text-brand flex items-center gap-2"><Check className="w-5 h-5"/> Full Combined Video Ready</h3>
-              <video src={stitchedVideoUrl} controls autoPlay loop muted className="w-full rounded-xl shadow-lg" />
-              <a href={stitchedVideoUrl} download="NotedAI_Video.mp4" className="inline-block w-full text-center py-2 bg-brand text-brand-foreground rounded-lg font-bold text-sm hover:bg-brand/90">
-                Download Full MP4
-              </a>
-            </div>
-          )}
+{/* ✅ SHOW COMBINED VIDEO IF OUTPUT MODE IS SINGLE AND IT'S READY */}
+{/* ✅ SHOW COMBINED VIDEO IF OUTPUT MODE IS SINGLE AND IT'S READY */}
+{isFinished && outputMode === "single" && stitchedVideoUrl && (
+  <div className="rounded-2xl border-2 border-brand bg-brand/5 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-500">
+    <h3 className="font-bold text-brand flex items-center gap-2">
+      <Check className="w-5 h-5"/> Full Combined Video Ready
+    </h3>
+    
+    {/* ✅ Force reload by using key and adding poster */}
+    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
+      <video 
+        key={stitchedVideoUrl}
+        controls
+        preload="auto"
+        poster="" // Optional: add a thumbnail URL here
+        className="w-full h-full"
+        onLoadedData={() => console.log("✅ Video loaded successfully!")}
+        onError={(e) => console.error("❌ Video error:", e)}
+      >
+        <source src={stitchedVideoUrl} type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    </div>
+    
+    <div className="flex gap-2">
+      <a 
+        href={stitchedVideoUrl} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        download="NotedAI_Video.mp4" 
+        className="flex-1 text-center py-2 bg-brand text-brand-foreground rounded-lg font-bold text-sm hover:bg-brand/90 transition-all"
+      >
+        Download MP4
+      </a>
+      <button
+        onClick={() => window.open(stitchedVideoUrl, '_blank')}
+        className="flex-1 py-2 bg-background border border-border rounded-lg font-bold text-sm hover:bg-accent transition-all"
+      >
+        Open in New Tab
+      </button>
+    </div>
+  </div>
+)}
 
           <div className="space-y-4">
             {scenes.map((scene, index) => (

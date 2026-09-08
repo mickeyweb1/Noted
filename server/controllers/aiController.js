@@ -384,13 +384,13 @@ const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
   return { videoUrl: null, thumbnail: null, duration: 0, type: "none" };
 };
 
-// ✅ UPGRADED: Now converts Images into 5-second video clips automatically!
+// ✅ UPGRADED: Re-encodes the final video to guarantee it works, preventing silent FFmpeg hangs
 const stitchVideos = async (scenesData, outputMode) => {
   if (outputMode !== "single") return null;
   const tempDir = path.join(__dirname, "../../temp_videos");
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-  const inputFiles = [];
+  const normalizedFiles = [];
   const listFile = path.join(tempDir, `list_${Date.now()}.txt`);
   const outputFile = path.join(tempDir, `final_${Date.now()}.mp4`);
 
@@ -398,57 +398,72 @@ const stitchVideos = async (scenesData, outputMode) => {
     const scene = scenesData[i];
     const url = scene.videoUrl || scene.imageUrl;
     if (!url) continue;
-    
+
     try {
       const res = await fetch(url);
       const buffer = await res.arrayBuffer();
       const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?$/i);
-      const filePath = path.join(tempDir, `clip_${i}${isImage ? '.jpg' : '.mp4'}`);
-      fs.writeFileSync(filePath, Buffer.from(buffer));
+      const rawPath = path.join(tempDir, `raw_${i}${isImage ? '.jpg' : '.mp4'}`);
+      fs.writeFileSync(rawPath, Buffer.from(buffer));
+
+      const normalizedPath = path.join(tempDir, `norm_${i}.mp4`);
+      console.log(`🎬 Normalizing clip ${i} to standard format...`);
+
+      // Normalize EVERY clip to 1280x720, 30fps, H.264
+      await new Promise((resolve, reject) => {
+        ffmpeg(rawPath)
+          .outputOptions([
+            '-c:v libx264',
+            '-preset fast',
+            '-crf 23',
+            '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
+            '-r 30',
+            '-pix_fmt yuv420p',
+            '-an' // Remove audio to prevent sync issues
+          ])
+          .output(normalizedPath)
+          .on('end', resolve)
+          .on('error', (err) => {
+            console.error(`❌ FFmpeg normalization error on clip ${i}:`, err.message);
+            reject(err);
+          })
+          .run();
+      });
+
+      normalizedFiles.push(normalizedPath);
+      fs.appendFileSync(listFile, `file '${normalizedPath}'\n`);
       
-      if (isImage) {
-        // Convert image to a 5-second video clip with a slow zoom (Ken Burns effect)
-        const videoFilePath = path.join(tempDir, `clip_${i}_video.mp4`);
-        console.log(`🎬 Converting image ${i} to video clip...`);
-        await new Promise((resolve, reject) => {
-          ffmpeg(filePath)
-            .loop(5)
-            .videoFilters('zoompan=z=1.1:d=150:x=\'iw/2-(iw/zoom/2)\':y=\'ih/2-(ih/zoom/2)\':s=1280x720')
-            .duration(5)
-            .outputOptions('-c:v libx264', '-pix_fmt yuv420p', '-r 30')
-            .output(videoFilePath)
-            .on('end', resolve)
-            .on('error', reject)
-            .run();
-        });
-        inputFiles.push(videoFilePath);
-        fs.appendFileSync(listFile, `file '${videoFilePath}'\n`);
-        fs.unlinkSync(filePath); // Clean up temp jpg
-      } else {
-        inputFiles.push(filePath);
-        fs.appendFileSync(listFile, `file '${filePath}'\n`);
-      }
+      try { fs.unlinkSync(rawPath); } catch(e) {}
     } catch (err) {
       console.error(`Failed to process clip ${i}:`, err);
     }
   }
 
-  if (inputFiles.length === 0) return null;
+  if (normalizedFiles.length === 0) return null;
 
-  console.log(`🔗 Stitching ${inputFiles.length} clips together...`);
+  console.log(`🔗 Stitching ${normalizedFiles.length} clips together (Re-encoding for reliability)...`);
+  
   return new Promise((resolve, reject) => {
     ffmpeg()
       .input(listFile)
       .inputOptions(['-f concat', '-safe 0'])
-      .outputOptions(['-c copy'])
+      // ✅ Re-encode the final output to guarantee codec compatibility
+      .outputOptions([
+        '-c:v libx264',
+        '-preset fast',
+        '-crf 23',
+        '-pix_fmt yuv420p',
+        '-movflags +faststart' // Optimizes for web playback
+      ])
       .output(outputFile)
       .on('end', () => {
-        inputFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
+        console.log("✅ FFmpeg stitching completed successfully!");
+        normalizedFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
         try { fs.unlinkSync(listFile); } catch(e){}
         resolve(outputFile);
       })
       .on('error', (err) => {
-        console.error("FFmpeg error:", err);
+        console.error("❌ FFmpeg stitching error:", err.message);
         reject(err);
       })
       .run();
@@ -523,15 +538,36 @@ export const checkVideoStatus = async (req, res, next) => {
   try {
     const content = await Content.findById(req.params.id);
     if (!content) throw httpError("Video not found.", 404);
+    
     const videoData = JSON.parse(content.generatedText);
     const totalScenes = videoData.scenes.length;
     const completedScenes = videoData.scenes.filter(s => s.status === "completed").length;
-    const progress = Math.round((completedScenes / totalScenes) * 100);
-    const isFinished = completedScenes === totalScenes;
+    
+    let progress = Math.round((completedScenes / totalScenes) * 100);
+    let statusMessage = "Generating scenes...";
+
+    // ✅ CRITICAL FIX: Accurate progress during the FFmpeg stitching phase
+    if (completedScenes === totalScenes) {
+      if (videoData.outputMode === "single" && !content.mediaUrl) {
+        progress = 95;
+        statusMessage = "Stitching final video...";
+      } else {
+        progress = 100;
+        statusMessage = "Complete!";
+      }
+    }
+
+    const isFinished = completedScenes === totalScenes && (videoData.outputMode !== "single" || content.mediaUrl);
 
     return res.status(200).json({
       success: true,
-      data: { ...content.toObject(), videoData, progress, isFinished }
+      data: { 
+        ...content.toObject(), 
+        videoData, 
+        progress, 
+        statusMessage, // Send this to the frontend
+        isFinished 
+      }
     });
   } catch (error) {
     return next(error);
