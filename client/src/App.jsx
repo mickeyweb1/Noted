@@ -8,7 +8,7 @@ import SchoolPage from "./pages/marketing/SchoolPage";
 import StudentPage from "./pages/marketing/StudentPage";
 import PersonalPage from "./pages/marketing/PersonalPage";
 import ContactPage from "./pages/marketing/ContactPage";
-
+import StudioHub from "./pages/StudioHub";
 // Auth Pages
 import LoginPage from "./auth/LoginPage";
 import RoleSelectionPage from "./auth/RoleSelectionPage";
@@ -87,6 +87,7 @@ function App() {
         <Route path="/aiGenerator" element={<StudentAiGenerator />} />
         <Route path="/myLibrary" element={<StudentLibrary />} />
         <Route path="/quiz" element={<StudentQuiz />} />
+<Route path="/ai" element={<StudioHub />} /> 
         <Route path="/podcast" element={<PodcastGenerator />} />
         <Route path="/focusTime" element={<FocusTime />} />
         <Route path="/reminder" element={<StudentSchedule />} />

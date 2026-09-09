@@ -347,7 +347,8 @@ export default function StudentLibrary() {
                             {!['video', 'podcast', 'quiz'].includes(selectedItem.type) && (
                                 <div className="mt-4">
                                     {selectedItem.type === 'music' && selectedItem.generatedText && (
-                                        <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} />
+                                        // ✅ CHANGE THIS LINE: Add style="rap"
+                                        <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} style="rap" />
                                     )}
                                     <div className="mt-4">
                                         <MarkdownContent content={selectedItem.generatedText} />

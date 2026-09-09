@@ -53,7 +53,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
 
   const allNavItems = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/aiGenerator", icon: Stars, label: "AI Generator" },
+    { to: "/ai", icon: Stars, label: "AI Generator" },
     { to: "/myLibrary", icon: Library, label: "My Library" },
     { to: "/quiz", icon: BookOpen, label: "Quiz Mode" },
     { to: "/focusTime", icon: Timer, label: "Focus Time" },

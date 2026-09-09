@@ -1,87 +1,64 @@
-import {
-  FileText,
-  Video,
-  Music,
-  Sparkles,
-  Wand2,
-  Clock,
-  Play,
-  Loader2,
-  Copy,
-  Check,
-} from "lucide-react";
-import { useState } from "react";
+import { FileText, Sparkles, Wand2, Loader2, Copy, Check, MessageCircle, Camera } from "lucide-react";
+import { useState, useEffect } from "react";
 import api from "../../utils/api";
 import NoteScanner from "../../components/NoteScanner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 export default function StudentAiGenerator() {
-  const [activeMode, setActiveMode] = useState("summary");
+  const [inputMethod, setInputMethod] = useState("type");
   const [notesText, setNotesText] = useState("");
   const [generatedResult, setGeneratedResult] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  
+  // Library state
+  const [libraryNotes, setLibraryNotes] = useState([]);
+  const [selectedNoteId, setSelectedNoteId] = useState("");
 
-  const modes = [
-    {
-      id: "summary",
-      label: "Note Summary",
-      desc: "Audio + bulleted recap",
-      icon: FileText,
-      cardActive: "border-brand bg-brand/5",
-      iconActive: "bg-brand/10 text-brand",
-      btnBg: "bg-brand text-brand-foreground shadow-brand/20",
-    },
-    {
-      id: "video",
-      label: "Animated Video",
-      desc: "4K Animated Scenes",
-      icon: Video,
-      cardActive: "border-electric bg-electric/5",
-      iconActive: "bg-electric/10 text-electric",
-      btnBg: "bg-electric text-electric-foreground shadow-electric/20",
-    },
-    {
-      id: "music",
-      label: "Study Music",
-      desc: "Lyrics that stick",
-      icon: Music,
-      cardActive: "border-flame bg-flame/5",
-      iconActive: "bg-flame/10 text-flame",
-      btnBg: "bg-flame text-flame-foreground shadow-flame/20",
-    },
-  ];
+  useEffect(() => {
+    const fetchLibrary = async () => {
+      try {
+        const response = await api.get("/ai/library");
+        if (response.data.success) {
+          setLibraryNotes(response.data.data.filter(item => item.type === "summary" || item.type === "tutor"));
+        }
+      } catch (err) {
+        console.error("Failed to fetch library:", err);
+      }
+    };
+    fetchLibrary();
+  }, []);
 
-  const currentMode = modes.find((m) => m.id === activeMode);
+  const handleLibrarySelect = (e) => {
+    const noteId = e.target.value;
+    setSelectedNoteId(noteId);
+    const note = libraryNotes.find((item) => item._id === noteId);
+    if (note) {
+      setNotesText(note.generatedText || note.title);
+      setInputMethod("type"); // Switch to type view so they can edit it
+    }
+  };
 
   const handleGenerate = async () => {
     if (!notesText.trim()) return;
-
     setIsGenerating(true);
     setError("");
     setGeneratedResult(null);
 
     try {
-      const smartTitle =
-        notesText.split("\n")[0].substring(0, 40).trim() ||
-        `${activeMode} Notes`;
-
+      const smartTitle = notesText.split("\n")[0].substring(0, 40).trim() || "AI Summary";
       const response = await api.post("/ai/generate", {
         text: notesText,
-        mode: activeMode,
-        vibe: "Enthusiastic Teacher",
+        mode: "summary",
         title: smartTitle,
         subject: "General",
       });
-
       setGeneratedResult(response.data.data.generatedText);
     } catch (err) {
       console.error("Generation failed:", err);
-      setError(
-        err.response?.data?.message || "Failed to generate content. Please try again."
-      );
+      setError(err.response?.data?.message || "Failed to generate content. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -97,120 +74,86 @@ export default function StudentAiGenerator() {
 
   return (
     <div className="min-h-screen w-full bg-muted dark:bg-background transition-colors duration-300">
-      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
+      <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
         
         {/* Header */}
-        <div>
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground tracking-tight flex items-center gap-3">
-            <Wand2 className="w-8 h-8 text-brand" /> AI Generator
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand/10 text-brand text-sm font-semibold border border-brand/20">
+            <Sparkles className="w-4 h-4" /> AI Note Summarizer
+          </div>
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground tracking-tight">
+            Turn messy notes into clean summaries
           </h1>
-          <p className="text-muted-foreground mt-2 text-base md:text-lg">
-            Drop in messy notes and get audio, visuals, and a clean summary back.
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Paste your notes, scan a photo, or pick from your library. We'll structure it perfectly for studying.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           
-          {/* LEFT COLUMN: INPUT & SETTINGS */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* 1. Output Selection */}
-            <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm space-y-4">
-              <div>
-                <h2 className="text-lg font-display font-semibold text-foreground">
-                  What should the AI make?
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Pick an output, paste your notes, and let it do the boring part.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {modes.map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => setActiveMode(mode.id)}
-                    className={`flex flex-col items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
-                      activeMode === mode.id
-                        ? `${mode.cardActive} shadow-md`
-                        : "border-border bg-background hover:bg-accent/50"
-                    }`}
-                  >
-                    <div className={`p-2 rounded-lg transition-colors ${activeMode === mode.id ? mode.iconActive : "bg-muted text-muted-foreground"}`}>
-                      <mode.icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm text-foreground">{mode.label}</h3>
-                      <p className="text-xs text-muted-foreground mt-1">{mode.desc}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. Notes Input */}
-            <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm space-y-4">
-              <label className="text-sm font-medium text-foreground">
-                Your Messy Notes
-              </label>
+          {/* LEFT COLUMN: INPUT */}
+          <div className="lg:col-span-3 space-y-6">
+            <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-5">
               
-              <NoteScanner onScanComplete={(text) => setNotesText(text)} />
-
-              <textarea
-                value={notesText}
-                onChange={(e) => setNotesText(e.target.value)}
-                rows={8}
-                maxLength={5000}
-                placeholder="Paste your messy notes here, or use the scanner above to snap a photo..."
-                className="flex w-full rounded-lg border border-input bg-background p-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none min-h-[200px]"
-              />
-              <div className="flex justify-end mt-1">
-                <span className={`text-xs ${notesText.length > 4500 ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
-                  {notesText.length} / 5000 characters
-                </span>
-              </div>
-            </div>
-
-            {/* 3. Customization Options & Generate */}
-            <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm space-y-5">
-              <h2 className="text-lg font-display font-semibold text-foreground">Customize Output</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Voice Vibe</label>
-                  <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option>Enthusiastic Teacher</option>
-                    <option>Chill Storyteller</option>
-                    <option>Hype Rap</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Animation Style</label>
-                  <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option>Cartoon Explainer</option>
-                    <option>Whiteboard Doodle</option>
-                    <option>Anime Lecture</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Genre</label>
-                  <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option>Lo-fi Study Beat</option>
-                    <option>Catchy Pop Hook</option>
-                    <option>Memory Trap Anthem</option>
-                  </select>
-                </div>
+              {/* Input Method Tabs */}
+              <div className="flex p-1 bg-muted rounded-lg w-fit mx-auto md:mx-0">
+                <button onClick={() => setInputMethod("type")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inputMethod === "type" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  <FileText className="w-4 h-4 inline mr-2" /> Type
+                </button>
+                <button onClick={() => setInputMethod("scan")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inputMethod === "scan" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  <Camera className="w-4 h-4 inline mr-2" /> Scan
+                </button>
+                <button onClick={() => setInputMethod("library")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inputMethod === "library" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  <MessageCircle className="w-4 h-4 inline mr-2" /> Library
+                </button>
               </div>
 
+              {/* Library Dropdown */}
+              {inputMethod === "library" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Select a saved note</label>
+                  <select value={selectedNoteId} onChange={handleLibrarySelect} className="flex w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+                    <option value="">Choose a note...</option>
+                    {libraryNotes.map((note) => (
+                      <option key={note._id} value={note._id}>{note.title} ({new Date(note.createdAt).toLocaleDateString()})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Scanner */}
+              {inputMethod === "scan" && (
+                <NoteScanner onScanComplete={(text) => { setNotesText(text); setInputMethod("type"); }} />
+              )}
+
+              {/* Text Area */}
+              {(inputMethod === "type" || inputMethod === "library") && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Your Notes</label>
+                  <textarea
+                    value={notesText}
+                    onChange={(e) => setNotesText(e.target.value)}
+                    rows={10}
+                    maxLength={50000}
+                    placeholder="Paste your messy notes here..."
+                    className="flex w-full rounded-lg border border-input bg-background p-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand resize-none"
+                  />
+                  <div className="flex justify-end text-xs text-muted-foreground">
+                    {notesText.length.toLocaleString()} / 50,000
+                  </div>
+                </div>
+              )}
+
+              {/* Generate Button */}
               <button
                 onClick={handleGenerate}
                 disabled={!notesText.trim() || isGenerating}
-                className={`w-full flex items-center justify-center gap-2 h-12 rounded-xl font-semibold text-base shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${currentMode.btnBg}`}
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-brand text-brand-foreground font-semibold text-base shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGenerating ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> AI is thinking...</>
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Summarizing...</>
                 ) : (
-                  <><Sparkles className="w-5 h-5" /> Generate {currentMode.label}</>
+                  <><Sparkles className="w-5 h-5" /> Generate Summary</>
                 )}
               </button>
 
@@ -222,19 +165,19 @@ export default function StudentAiGenerator() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: OUTPUT PREVIEW */}
-          <div className="space-y-6">
-            <div className="p-5 md:p-6 rounded-2xl bg-card border border-border shadow-sm min-h-[300px] flex flex-col">
+          {/* RIGHT COLUMN: OUTPUT */}
+          <div className="lg:col-span-2">
+            <div className="p-6 rounded-2xl bg-card border border-border shadow-sm min-h-[400px] flex flex-col sticky top-6">
               {isGenerating ? (
                 <div className="flex-1 flex flex-col items-center justify-center space-y-4 text-muted-foreground">
                   <Loader2 className="w-8 h-8 animate-spin text-brand" />
-                  <p className="text-sm font-medium">Generating your {currentMode.label}...</p>
+                  <p className="text-sm font-medium">AI is structuring your notes...</p>
                 </div>
               ) : generatedResult ? (
-                <div className="space-y-4 flex-1">
+                <div className="space-y-4 flex-1 flex flex-col">
                   <div className="flex items-center justify-between border-b border-border pb-3">
                     <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-brand" /> AI Output
+                      <Sparkles className="w-4 h-4 text-brand" /> Clean Summary
                     </h3>
                     <button onClick={handleCopy} className="text-xs text-brand hover:underline flex items-center gap-1 transition-colors">
                       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -242,24 +185,19 @@ export default function StudentAiGenerator() {
                     </button>
                   </div>
                   
-                  {/* ✅ NEW: Professional Markdown Rendering (Replaces the old messy .split logic) */}
-                  <div className="text-sm leading-relaxed overflow-y-auto max-h-[500px] pr-2 custom-scrollbar markdown-content prose prose-sm dark:prose-invert max-w-none">
+                  <div className="text-sm leading-relaxed overflow-y-auto max-h-[600px] pr-2 custom-scrollbar markdown-content prose prose-sm dark:prose-invert max-w-none flex-1">
                     <ReactMarkdown 
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-foreground mt-6 mb-4" {...props} />,
-                        h2: ({node, ...props}) => <h2 className="text-xl font-bold text-foreground mt-5 mb-3" {...props} />,
-                        h3: ({node, ...props}) => <h3 className="text-lg font-semibold text-foreground mt-4 mb-2" {...props} />,
+                        h1: ({node, ...props}) => <h1 className="text-xl font-bold text-foreground mt-4 mb-2" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-lg font-bold text-foreground mt-3 mb-2" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-base font-semibold text-foreground mt-2 mb-1" {...props} />,
                         p: ({node, ...props}) => <p className="text-foreground leading-relaxed mb-3" {...props} />,
-                        ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1 ml-4 mb-3" {...props} />,
-                        ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1 ml-4 mb-3" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1 ml-2 mb-3" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1 ml-2 mb-3" {...props} />,
                         li: ({node, ...props}) => <li className="text-foreground" {...props} />,
                         strong: ({node, ...props}) => <strong className="font-bold text-foreground" {...props} />,
-                        em: ({node, ...props}) => <em className="italic" {...props} />,
-                        code: ({node, inline, ...props}) => 
-                          inline ? 
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props} /> :
-                          <code className="block bg-muted p-3 rounded-lg text-sm font-mono overflow-x-auto" {...props} />,
+                        code: ({node, inline, ...props}) => inline ? <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono" {...props} /> : <code className="block bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto" {...props} />,
                       }}
                     >
                       {generatedResult}
@@ -267,15 +205,13 @@ export default function StudentAiGenerator() {
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className={`p-4 rounded-full transition-colors ${currentMode.iconActive}`}>
-                    <currentMode.icon className="w-8 h-8" />
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 text-muted-foreground">
+                  <div className="p-4 rounded-full bg-muted">
+                    <FileText className="w-8 h-8" />
                   </div>
                   <div>
                     <h3 className="text-lg font-display font-semibold text-foreground">Nothing generated yet</h3>
-                    <p className="text-sm text-muted-foreground mt-1 max-w-[250px] mx-auto">
-                      Your {currentMode.label.toLowerCase()} will show up right here.
-                    </p>
+                    <p className="text-sm mt-1 max-w-[250px] mx-auto">Your clean summary will show up right here.</p>
                   </div>
                 </div>
               )}

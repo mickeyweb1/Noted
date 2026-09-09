@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Play, Pause, Square, Volume2, Loader2 } from "lucide-react";
 import api from "../utils/api";
 
-export default function AudioPlayer({ text, title }) {
+// ✅ FIX: Added 'style' prop, defaulting to "podcast"
+export default function AudioPlayer({ text, title, style = "podcast" }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
@@ -30,7 +31,6 @@ export default function AudioPlayer({ text, title }) {
 
   const handlePlayPause = async () => {
     if (isPlaying) {
-      // Pause logic
       if (useFallback) {
         window.speechSynthesis.pause();
       } else {
@@ -38,7 +38,6 @@ export default function AudioPlayer({ text, title }) {
       }
       setIsPlaying(false);
     } else {
-      // Play logic
       setIsLoading(true);
       
       if (useFallback) {
@@ -46,7 +45,8 @@ export default function AudioPlayer({ text, title }) {
         setIsLoading(false);
       } else {
         try {
-          const response = await api.post('/ai/text-to-speech', { text }, { responseType: 'blob' });
+          // ✅ FIX: Pass the 'style' prop to the backend so it knows to strip [Intro] tags for music
+          const response = await api.post('/ai/text-to-speech', { text, style }, { responseType: 'blob' });
           const audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
           const audioUrl = URL.createObjectURL(audioBlob);
           
@@ -58,7 +58,7 @@ export default function AudioPlayer({ text, title }) {
         } catch (error) {
           console.warn("ElevenLabs failed, switching to browser voice...", error);
           setUseFallback(true);
-          playFallback(); // ✅ Fix #16: Directly call fallback instead of handlePlayPause
+          playFallback();
         } finally {
           setIsLoading(false);
         }
@@ -118,7 +118,6 @@ export default function AudioPlayer({ text, title }) {
           ref={audioRef} 
           onEnded={() => setIsPlaying(false)} 
           onError={() => { 
-            // ✅ Fix #16: Reset state before triggering fallback to avoid pause bug
             setIsPlaying(false); 
             setUseFallback(true); 
             setTimeout(playFallback, 50); 

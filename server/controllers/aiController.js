@@ -184,13 +184,14 @@ export const generateContent = async (req, res, next) => {
       aiTitle = requestedTitle || parsedPodcast.title;
       aiContent = JSON.stringify(parsedPodcast);
     } else if (mode === "music") {
-      const musicSystemPrompt = `You are a professional educational Hip-Hop and Afrobeat lyricist. Turn the notes into an accurate study song. 
+      const musicVibe = vibe || "Hip-Hop and Afrobeat";
+      const musicSystemPrompt = `You are a professional educational ${musicVibe} lyricist. Turn the notes into an accurate study song. 
       Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. 
       Keep content 85% educational, 15% hype. 
       CRITICAL: Use commas (,) and ellipses (...) frequently to create natural breathing pauses for the text-to-speech engine. Keep lines to 6-10 words. Do not output markdown.`;
       aiContent = await runGroq(`${musicSystemPrompt}\n\nNotes:\n${cleanInput}`);
-      aiTitle = requestedTitle || `${vibe || "Afrobeat"} Study Track`;
-    } else if (mode === "quiz") {
+      aiTitle = requestedTitle || `${musicVibe} Study Track`;
+    }else if (mode === "quiz") {
       const parsedQuestionCount = Number(numQuestions || 5);
       const questionCount = Math.min(Math.max(Number.isFinite(parsedQuestionCount) ? parsedQuestionCount : 5, 3), 15);
       const difficultyLevel = typeof difficulty === "string" && difficulty.trim() ? difficulty.trim().slice(0, 30) : "Medium";
@@ -225,7 +226,13 @@ export const generateContent = async (req, res, next) => {
   }
 };
 
-const prepareLyricsForSpeech = (text) => text.replace(/\[[^\]]*\]/g, " ").replace(/\n{2,}/g, "\n").trim();
+const prepareLyricsForSpeech = (text) => {
+  return text
+    // Replace [Chorus], [Verse], etc. with a pause (ellipsis + newlines) instead of a space
+    .replace(/\[.*?\]/g, "... \n\n") 
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
 
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
   const controller = new AbortController();
@@ -508,35 +515,43 @@ const stitchVideos = async (scenesData, outputMode) => {
       console.log(`🎬 Merging video and audio for Scene ${i + 1}...`);
 
       // 3. Merge Video and Audio using FFmpeg
+      // 3. Merge Video and Audio using FFmpeg
       await new Promise((resolve, reject) => {
         const ffmpegCmd = ffmpeg(rawPath);
         
-        // Fix #9: If it's an image, loop it indefinitely so it doesn't flash
+        // Fix #9a: If it's an image, loop it indefinitely
         if (isImage) {
           ffmpegCmd.inputOptions(['-loop 1']);
+          // Fix #9b: If there's NO audio, force it to stop at 5 seconds so it doesn't hang
+          if (!audioPath) {
+            ffmpegCmd.duration(5);
+          }
         }
 
-        // If we have audio, add it as a second input
         if (audioPath) {
           ffmpegCmd.input(audioPath);
         }
 
+        const outputOpts = [
+          '-c:v libx264',
+          '-preset fast',
+          '-crf 23',
+          '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
+          '-r 30',
+          '-pix_fmt yuv420p',
+          '-movflags +faststart'
+        ];
+
+        // Fix #10: ONLY use -shortest if we have an infinite image loop AND audio to bound it
+        if (isImage && audioPath) {
+          outputOpts.push('-shortest');
+        }
+
         ffmpegCmd
-          .outputOptions([
-            '-c:v libx264',
-            '-preset fast',
-            '-crf 23',
-            '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
-            '-r 30',
-            '-pix_fmt yuv420p',
-            '-movflags +faststart'
-            // Fix #10: REMOVED '-shortest' so long voiceovers don't get cut off mid-sentence!
-          ])
-          // Map video from first input, audio from second input (if it exists)
+          .outputOptions(outputOpts)
           .outputOptions(audioPath ? ['-map 0:v:0', '-map 1:a:0', '-c:a aac'] : ['-an'])
           .output(mergedPath)
           .on('end', () => {
-            // Clean up raw files
             try { fs.unlinkSync(rawPath); } catch(e) {}
             if (audioPath) { try { fs.unlinkSync(audioPath); } catch(e) {} }
             resolve();
@@ -682,8 +697,9 @@ export const checkVideoStatus = async (req, res, next) => {
         ...content.toObject(), 
         videoData, 
         progress, 
-        statusMessage, // Send this to the frontend
-        isFinished 
+        statusMessage, // Send this to the frontendoutputMode: videoData.outputMode
+        isFinished ,
+outputMode: videoData.outputMode
       }
     });
   } catch (error) {

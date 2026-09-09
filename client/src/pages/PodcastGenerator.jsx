@@ -126,9 +126,17 @@ export default function PodcastGenerator() {
 
   const chooseVoices = () => {
     const allVoices = window.speechSynthesis.getVoices();
-    // ✅ Fix #13: Simpler, more reliable voice selection
-    const leoVoice = allVoices.find((v) => /Daniel|Alex|Google US English/i.test(v.name)) || allVoices[0];
-    const novaVoice = allVoices.find((v) => /Samantha|Karen|Google UK English Female/i.test(v.name) && v !== leoVoice) || allVoices.find((v) => v !== leoVoice) || allVoices[0];
+    
+    // ✅ FIX: Strict priority via separate .find() calls
+    const leoVoice = allVoices.find(v => /Daniel|Alex/i.test(v.name)) 
+                  || allVoices.find(v => /Google US English/i.test(v.name)) 
+                  || allVoices[0];
+                  
+    const novaVoice = allVoices.find(v => /Samantha|Karen/i.test(v.name)) 
+                   || allVoices.find(v => /Google UK English Female/i.test(v.name) && v !== leoVoice) 
+                   || allVoices.find(v => v !== leoVoice) 
+                   || allVoices[0];
+                   
     return { leoVoice, novaVoice };
   };
 
