@@ -47,13 +47,13 @@ export default function StudentSetting() {
 
         try {
             // Try to save to backend first
-            await api.put("/user/profile", {
-                firstName,
-                lastName,
-                fullName: newFullName,
-                email,
-                phone
-            });
+await api.put("/auth/profile", {
+    firstName,
+    lastName,
+    fullName: newFullName,
+    email,
+    phone
+});
             
             // Update local context
             updateUser({ firstName, lastName, fullName: newFullName, email, phone });

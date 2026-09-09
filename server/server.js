@@ -7,9 +7,7 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
-import { errorHandler } from './middleware/errorHandler.js'; // ✅ ADDED
-// At the top of server.js with other imports
-import ocrRoutes from './routes/aiRoutes.js';
+import { errorHandler } from './middleware/errorHandler.js'; // ✅ ADDE
 
 dotenv.config();
 
@@ -62,7 +60,6 @@ const claimLimiter = rateLimit({
 // Apply them (Add these lines where your other app.use statements are)
 app.use('/api/auth/register', registrationLimiter);
 app.use('/api/auth/claim', claimLimiter);
-app.use('/api/ocr', ocrRoutes); 
 
 // 4. Routes
 app.use('/api/auth/login', loginLimiter);
