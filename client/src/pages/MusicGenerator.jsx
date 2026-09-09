@@ -3,15 +3,19 @@ import { Music, Mic, Loader2, Sparkles, Volume2, Play, Pause } from "lucide-reac
 import api from "../utils/api";
 import NoteScanner from "../components/NoteScanner";
 
+// ✅ FIX #18: Removed the "Reliable Test Track" debug leftover
 const FREE_BEATS = [
   { id: "beat_1", name: "Upbeat Hip-Hop Loop", url: "https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3" },
   { id: "beat_2", name: "Chill Lo-Fi Study", url: "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3" },
-  { id: "beat_3", name: "Reliable Test Track", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" }
+  { id: "beat_3", name: "Afrobeat Groove", url: "https://cdn.pixabay.com/download/audio/2022/03/24/audio_07b2a04be3.mp3" } // Replaced with a real Pixabay track
 ];
+
+const VIBES = ["Afrobeat Rap", "Chill Lo-Fi", "Upbeat Pop", "Epic Orchestral"];
 
 export default function MusicGenerator() {
   const [notes, setNotes] = useState("");
   const [selectedBeatId, setSelectedBeatId] = useState("beat_1");
+  const [selectedVibe, setSelectedVibe] = useState("Afrobeat Rap"); // Default value
   const [lyrics, setLyrics] = useState("");
   const [audioUrl, setAudioUrl] = useState(null);
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
@@ -32,13 +36,17 @@ export default function MusicGenerator() {
     if (!notes.trim()) return alert("Please enter or scan some notes first!");
     setIsGeneratingLyrics(true);
     try {
-      const res = await api.post("/ai/generate", {
+      // ✅ FIX: Changed 'res' to 'response' to match the variable name
+      const response = await api.post("/ai/generate", {
         text: notes,
         mode: "music",
-        vibe: "Afrobeat Rap",
+        vibe: selectedVibe, // ✅ FIX #19: Sends the user's actual choice!
         title: "AI Study Track"
       });
-      if (res.data.success) setLyrics(res.data.data.generatedText);
+      
+      if (response.data.success) {
+        setLyrics(response.data.data.generatedText);
+      }
     } catch (error) {
       alert("Failed to generate lyrics. Please try again.");
     } finally {
@@ -127,7 +135,7 @@ export default function MusicGenerator() {
         </div>
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">AI Music Studio</h1>
-          <p className="text-sm text-muted-foreground">Turn your notes into a hard-hitting Rap or Afrobeat song!</p>
+          <p className="text-sm text-muted-foreground">Turn your notes into a hard-hitting study song!</p>
         </div>
       </div>
 
@@ -135,7 +143,6 @@ export default function MusicGenerator() {
         <div className="space-y-4">
           <label className="text-sm font-medium text-foreground">Your Notes</label>
           
-          {/* ✅ NOTE SCANNER PLACED RIGHT HERE */}
           <NoteScanner onScanComplete={(text) => setNotes(text)} />
 
           <textarea
@@ -144,13 +151,35 @@ export default function MusicGenerator() {
             placeholder="Paste your notes here, or use the scanner above to snap a photo..."
             className="w-full h-48 rounded-xl border border-border bg-card p-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand resize-none"
           />
+          
+          {/* ✅ FIX: Added UI so the user can actually change the vibe! */}
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-foreground">Music Vibe / Genre</span>
+            <div className="flex flex-wrap gap-2">
+              {VIBES.map((vibe) => (
+                <button 
+                  key={vibe} 
+                  type="button" 
+                  onClick={() => setSelectedVibe(vibe)} 
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                    selectedVibe === vibe 
+                      ? "border-purple-500 bg-purple-500 text-white" 
+                      : "border-border bg-background text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  {vibe}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={handleGenerateLyrics}
             disabled={isGeneratingLyrics || !notes.trim()}
             className="w-full py-3 rounded-xl bg-brand text-brand-foreground font-bold hover:bg-brand/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isGeneratingLyrics ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-            {isGeneratingLyrics ? "Writing Lyrics..." : "Generate Rap Lyrics"}
+            {isGeneratingLyrics ? "Writing Lyrics..." : "Generate Lyrics"}
           </button>
         </div>
 
@@ -165,7 +194,7 @@ export default function MusicGenerator() {
             className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isGeneratingAudio ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mic className="w-5 h-5" />}
-            {isGeneratingAudio ? "Recording Vocals..." : "Generate Rap Vocals"}
+            {isGeneratingAudio ? "Recording Vocals..." : "Generate Vocals"}
           </button>
         </div>
       </div>

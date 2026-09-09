@@ -53,19 +53,22 @@ export default function VideoGenerator() {
             setProgress(newProgress);
             setStatusMessage(newStatusMessage || "Generating scenes...");
             
+            // Fix #11: Ensure outputMode is restored if the user refreshes the page
             if (dbOutputMode) {
               setOutputMode(dbOutputMode);
             }
 
             if (mediaUrl) {
               const filename = mediaUrl.split(/[\\/]/).pop();
-              const url = `http://localhost:5000/api/ai/video/stream/${filename}`;
-              console.log("✅ Setting stitchedVideoUrl to:", url); // DEBUG LOG
+              // Fix #8: Use environment variable for API URL, fallback to localhost for dev
+              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+              const url = `${apiUrl}/api/ai/video/stream/${filename}`;
+              console.log("✅ Setting stitchedVideoUrl to:", url);
               setStitchedVideoUrl(url);
             }
 
             if (done) {
-              console.log("🎉 Generation DONE! isFinished: true, outputMode:", dbOutputMode); // DEBUG LOG
+              console.log("🎉 Generation DONE! isFinished: true, outputMode:", dbOutputMode);
               setIsFinished(true);
               localStorage.removeItem("activeVideoId");
               clearInterval(pollIntervalRef.current);
@@ -81,7 +84,7 @@ export default function VideoGenerator() {
     }
     return () => clearInterval(pollIntervalRef.current);
   }, [videoId, isFinished, videoTitle]);
-
+  
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;

@@ -75,11 +75,19 @@ const validatePodcast = (parsed) => {
     }
     return { speaker: normalizedSpeaker === "leo" ? "Leo" : "Dr. Nova", text: line.text.trim().slice(0, 1200) };
   });
+  
+  // Check for required structure
   const hasRequiredQuestion = script.some((line) => line.text.toLowerCase().includes("why do we actually need to know this"));
   if (script[0].speaker !== "Leo" || script[1].speaker !== "Dr. Nova" || !hasRequiredQuestion) {
     throw httpError("The AI returned an incomplete podcast structure.", 502);
   }
-  return { title: parsed.title.trim().slice(0, 160), script };
+
+  return { 
+    title: parsed.title.trim().slice(0, 160), 
+    script,
+    keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [],
+    quiz: Array.isArray(parsed.quiz) ? parsed.quiz : []
+  };
 };
 
 const validateQuiz = (parsed) => {
@@ -149,17 +157,37 @@ export const generateContent = async (req, res, next) => {
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
-    } else if (mode === "podcast") {
+} else if (mode === "podcast") {
       const podcastLength = req.body?.length || "short";
+      const tone = req.body?.tone || "engaging"; // Fix #2: Read tone
+      const level = req.body?.level || "beginner"; // Fix #2: Read level
+      
       if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
       const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
-      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). Length: ${exchangeCount}. ${detailLevel}. Rules: 1. Leo opens with a surprising fact. 2. Dr. Nova introduces the topic. 3. Include a historical misconception. 4. Leo asks: "Why do we actually need to know this?" 5. Dr. Nova gives a practical answer. 6. Keep lines short. 7. Output VALID JSON ONLY. Return exactly: { "title": "Catchy title", "script": [ { "speaker": "Leo", "text": "..." }, { "speaker": "Dr. Nova", "text": "..." } ] }`;
+      
+      // Fix #1: Updated prompt to ask for keyTakeaways and quiz
+      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
+      Tone: ${tone}. Difficulty Level: ${level}.
+      There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
+      Length: ${exchangeCount}. ${detailLevel}. 
+      Rules: 1. Leo opens with a surprising fact. 2. Dr. Nova introduces the topic. 3. Include a historical misconception. 4. Leo asks: "Why do we actually need to know this?" 5. Dr. Nova gives a practical answer. 6. Keep lines short. 
+      7. Output VALID JSON ONLY. 
+      Return exactly: { 
+        "title": "Catchy title", 
+        "script": [ { "speaker": "Leo", "text": "..." }, { "speaker": "Dr. Nova", "text": "..." } ],
+        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
+        "quiz": [ { "question": "Q?", "options": ["A","B","C","D"], "answer": "A" } ]
+      }`;
+      
       const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
       const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedPodcast.title;
       aiContent = JSON.stringify(parsedPodcast);
     } else if (mode === "music") {
-      const musicSystemPrompt = `You are a professional educational Hip-Hop and Afrobeat lyricist. Turn the notes into an accurate study song. Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. Keep content 85% educational, 15% hype. Use commas for pauses. Keep lines to 6-10 words. Do not output markdown.`;
+      const musicSystemPrompt = `You are a professional educational Hip-Hop and Afrobeat lyricist. Turn the notes into an accurate study song. 
+      Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. 
+      Keep content 85% educational, 15% hype. 
+      CRITICAL: Use commas (,) and ellipses (...) frequently to create natural breathing pauses for the text-to-speech engine. Keep lines to 6-10 words. Do not output markdown.`;
       aiContent = await runGroq(`${musicSystemPrompt}\n\nNotes:\n${cleanInput}`);
       aiTitle = requestedTitle || `${vibe || "Afrobeat"} Study Track`;
     } else if (mode === "quiz") {
@@ -210,7 +238,13 @@ export const generateSpeech = async (req, res, next) => {
   try {
     requireUser(req);
     const { text, style } = req.body || {};
-    const cleanText = ensureText(text, "Text is required.");
+    let cleanText = ensureText(text, "Text is required.");
+    
+    // Fix #4: Strip speaker labels so AI doesn't say "Leo colon..."
+    if (cleanText.includes("Leo:") || cleanText.includes("Dr. Nova:")) {
+      cleanText = cleanText.replace(/^(Leo|Dr\. Nova):\s*/gm, "");
+    }
+
     if (cleanText.length > MAX_SPEECH_LENGTH) throw httpError("The audio text is too long.", 413);
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw httpError("Audio generation is not configured.", 503);
@@ -442,7 +476,7 @@ const getSceneAudio = async (narration, tempDir, index) => {
 };
 
 // ==========================================
-// 🎬 UPGRADED: Stitch Videos WITH Voiceovers
+// 🎬 UPGRADED: Stitch Videos WITH Voiceovers (Fixed Duration & Cutoff)
 // ==========================================
 const stitchVideos = async (scenesData, outputMode) => {
   if (outputMode !== "single") return null;
@@ -477,6 +511,11 @@ const stitchVideos = async (scenesData, outputMode) => {
       await new Promise((resolve, reject) => {
         const ffmpegCmd = ffmpeg(rawPath);
         
+        // Fix #9: If it's an image, loop it indefinitely so it doesn't flash
+        if (isImage) {
+          ffmpegCmd.inputOptions(['-loop 1']);
+        }
+
         // If we have audio, add it as a second input
         if (audioPath) {
           ffmpegCmd.input(audioPath);
@@ -490,8 +529,8 @@ const stitchVideos = async (scenesData, outputMode) => {
             '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
             '-r 30',
             '-pix_fmt yuv420p',
-            '-movflags +faststart',
-            '-shortest' // Ensures the video stops when the shortest stream (video or audio) ends
+            '-movflags +faststart'
+            // Fix #10: REMOVED '-shortest' so long voiceovers don't get cut off mid-sentence!
           ])
           // Map video from first input, audio from second input (if it exists)
           .outputOptions(audioPath ? ['-map 0:v:0', '-map 1:a:0', '-c:a aac'] : ['-an'])

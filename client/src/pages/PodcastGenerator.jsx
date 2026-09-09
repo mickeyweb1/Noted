@@ -125,10 +125,12 @@ export default function PodcastGenerator() {
   }, [studioAudioUrl]);
 
   const chooseVoices = () => {
-    const leoVoice = voices.find((voice) => /Google US English|Daniel|Microsoft David|Alex/i.test(voice.name)) || voices[0];
-    const novaVoice = voices.find((voice) => /Google UK English Female|Samantha|Microsoft Zira|Karen/i.test(voice.name)) || voices.find((voice) => voice !== leoVoice) || voices[0];
+    const allVoices = window.speechSynthesis.getVoices();
+    // ✅ Fix #13: Simpler, more reliable voice selection
+    const leoVoice = allVoices.find((v) => /Daniel|Alex|Google US English/i.test(v.name)) || allVoices[0];
+    const novaVoice = allVoices.find((v) => /Samantha|Karen|Google UK English Female/i.test(v.name) && v !== leoVoice) || allVoices.find((v) => v !== leoVoice) || allVoices[0];
     return { leoVoice, novaVoice };
-    };
+  };
 
   const speakCurrentLine = useCallback((runId) => {
     const activeScript = scriptRef.current;
@@ -150,7 +152,8 @@ export default function PodcastGenerator() {
     utterance.onend = () => {
       if (runId !== speechRunId.current) return;
       currentIndexRef.current += 1;
-      speakCurrentLine(runId);
+      // ✅ Fix #13: Tiny delay prevents Chrome speech synthesis halting bug
+      setTimeout(() => speakCurrentLine(runId), 100);
     };
     utterance.onerror = () => {
       if (runId !== speechRunId.current) return;
@@ -282,7 +285,7 @@ export default function PodcastGenerator() {
     setIsAudioLoading(true);
     setError("");
     try {
-      const response = await api.post("/ai/speech", { text: transcriptText, style: "podcast" }, { responseType: "blob" });
+      const response = await api.post("/ai/text-to-speech", { text: transcriptText, style: "podcast" }, { responseType: "blob" });
       const nextAudioUrl = URL.createObjectURL(response.data);
       setStudioAudioUrl((previousUrl) => {
         if (previousUrl) URL.revokeObjectURL(previousUrl);

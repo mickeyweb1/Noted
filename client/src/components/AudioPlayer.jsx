@@ -7,18 +7,26 @@ export default function AudioPlayer({ text, title }) {
   const [isLoading, setIsLoading] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const audioRef = useRef(null);
-  const utteranceRef = useRef(null);
 
-  // Cleanup audio when component unmounts
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
+        if (audioRef.current.src) URL.revokeObjectURL(audioRef.current.src);
       }
       window.speechSynthesis.cancel();
     };
   }, []);
+
+  const playFallback = () => {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+    window.speechSynthesis.speak(utterance);
+    setIsPlaying(true);
+  };
 
   const handlePlayPause = async () => {
     if (isPlaying) {
@@ -34,41 +42,23 @@ export default function AudioPlayer({ text, title }) {
       setIsLoading(true);
       
       if (useFallback) {
-        // BROWSER NATIVE FALLBACK
-        window.speechSynthesis.cancel(); // Stop any previous speech
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        utterance.onend = () => setIsPlaying(false);
-        utterance.onerror = () => setIsPlaying(false);
-        
-        utteranceRef.current = utterance;
-        window.speechSynthesis.speak(utterance);
-        setIsPlaying(true);
+        playFallback();
         setIsLoading(false);
       } else {
-        // ELEVENLABS API CALL
         try {
           const response = await api.post('/ai/text-to-speech', { text }, { responseType: 'blob' });
-          
           const audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
           const audioUrl = URL.createObjectURL(audioBlob);
           
           if (audioRef.current) {
             audioRef.current.src = audioUrl;
-            audioRef.current.play();
+            await audioRef.current.play();
             setIsPlaying(true);
           }
         } catch (error) {
-          // ✅ BULLETPROOF FALLBACK TRIGGER
           console.warn("ElevenLabs failed, switching to browser voice...", error);
           setUseFallback(true);
-          // Automatically retry with browser voice
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.onend = () => setIsPlaying(false);
-          window.speechSynthesis.speak(utterance);
-          setIsPlaying(true);
+          playFallback(); // ✅ Fix #16: Directly call fallback instead of handlePlayPause
         } finally {
           setIsLoading(false);
         }
@@ -124,11 +114,15 @@ export default function AudioPlayer({ text, title }) {
           </button>
         )}
         
-        {/* Hidden HTML5 Audio Element for ElevenLabs */}
         <audio 
           ref={audioRef} 
           onEnded={() => setIsPlaying(false)} 
-          onError={() => { setUseFallback(true); handlePlayPause(); }} 
+          onError={() => { 
+            // ✅ Fix #16: Reset state before triggering fallback to avoid pause bug
+            setIsPlaying(false); 
+            setUseFallback(true); 
+            setTimeout(playFallback, 50); 
+          }} 
           className="hidden" 
         />
       </div>
