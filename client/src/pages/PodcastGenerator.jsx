@@ -337,7 +337,13 @@ export default function PodcastGenerator() {
             </button>
           </div>
 
-          {inputMethod === "scan" && <NoteScanner onScanComplete={(text) => setTopic(text)} />}
+          {inputMethod === "scan" && <NoteScanner 
+  onScanComplete={(text) => { 
+    // ✅ Appends new scan to existing notes with a page break
+    setNotesText(prev => prev ? prev + "\n\n--- 📄 New Page ---\n\n" + text : text); 
+    setInputMethod("type"); 
+  }} 
+/>}
           
           {inputMethod === "library" && (
             <div className="space-y-2">

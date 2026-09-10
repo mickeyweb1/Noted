@@ -198,7 +198,13 @@ export default function MusicGenerator() {
             </select>
           )}
 
-          {inputMethod === "scan" && <NoteScanner onScanComplete={(text) => { setNotes(text); setInputMethod("type"); }} />}
+          {inputMethod === "scan" && <NoteScanner 
+  onScanComplete={(text) => { 
+    // ✅ Appends new scan to existing notes with a page break
+    setNotesText(prev => prev ? prev + "\n\n--- 📄 New Page ---\n\n" + text : text); 
+    setInputMethod("type"); 
+  }} 
+/>}
 
           {(inputMethod === "type" || inputMethod === "library") && (
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={8} placeholder="Paste your notes here..." className="w-full rounded-xl border border-border bg-card p-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand resize-none" />

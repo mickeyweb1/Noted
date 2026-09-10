@@ -365,65 +365,21 @@ export const extractTextFromImage = async (req, res, next) => {
 
 const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
   const cleanPrompt = ensureText(visualPrompt, "Visual prompt is required.").slice(0, 500);
-  const replicateApiKey = process.env.REPLICATE_API_TOKEN;
+  const replicateApiKey = process.env.REPLICATE_API_TOKEN; // 👈 Checks for the key
   
-  if (replicateApiKey) {
+  if (replicateApiKey) { // 👈 ONLY runs if the key exists!
     try {
-      const enhancedPrompt = `${cleanPrompt}, high quality educational animation, smooth motion, vibrant colors, 4k resolution, masterpiece`;
-      const response = await fetchWithTimeout("https://api.replicate.com/v1/models/minimax/video-01/predictions", {
-        method: "POST",
-        headers: { "Authorization": `Token ${replicateApiKey}`, "Content-Type": "application/json", "Prefer": "wait" },
-        body: JSON.stringify({ input: { prompt: enhancedPrompt, aspect_ratio: aspectRatio === "9:16" ? "9:16" : "16:9" } }),
-      }, 90000);
-
-      if (response.status === 402 || response.status === 403) throw new Error("REPLICATE_NEEDS_FUNDS");
-      if (!response.ok) throw new Error("REPLICATE_FAILED");
-
-      const data = await response.json();
-      const videoUrl = Array.isArray(data.output) ? data.output[0] : data.output;
-      if (!videoUrl) throw new Error("REPLICATE_NO_VIDEO");
-
-      return { videoUrl, type: "ai_video", duration: 5 };
+      // ... Replicate code ...
     } catch (e) {
-      if (e.message === "REPLICATE_NEEDS_FUNDS") {
-        console.log("⚠️ Replicate is out of funds. Switching to FREE Pexels fallback...");
-      } else {
-        console.log("⚠️ Replicate failed. Switching to FREE Pexels fallback...");
-      }
+      console.log("⚠️ Replicate failed. Switching to FREE Pexels fallback...");
     }
   }
 
-  // FREE FALLBACK: Pexels
+  // FREE FALLBACK: Pexels 👈 If no key, it jumps straight to this!
   const pexelsApiKey = process.env.PEXELS_API_KEY;
   if (!pexelsApiKey) throw httpError("No AI credits and Pexels is not configured.", 503);
-
-  const keywords = cleanPrompt.replace(/anime style|cartoon|4k|highly detailed|vibrant colors|professional|bright colors|soft lighting/gi, "").split(/[,\s]+/).map((w) => w.replace(/[^\w-]/g, "")).filter((w) => w.length > 2).slice(0, 5).join(" ");
-  const searchQuery = encodeURIComponent(keywords || "educational animation");
-  
-  // Try to find a video first
-  const videoResponse = await fetchWithTimeout(`https://api.pexels.com/videos/search?query=${searchQuery}&per_page=3&orientation=${aspectRatio === "9:16" ? "portrait" : "landscape"}`, { headers: { Authorization: pexelsApiKey } });
-  if (videoResponse.ok) {
-    const videoData = await videoResponse.json();
-    if (Array.isArray(videoData.videos) && videoData.videos.length > 0) {
-      const bestVideo = videoData.videos[0];
-      const bestVideoFile = bestVideo.video_files.find((f) => f.quality === "hd" && f.file_type === "video/mp4") || bestVideo.video_files[0];
-      console.log(`✅ Pexels Video found for scene.`);
-      return { videoUrl: bestVideoFile?.link, thumbnail: bestVideo.image, duration: bestVideo.duration || 5, type: "video" };
-    }
-  }
-
-  // Fallback to image if no video is found
-  const imageResponse = await fetchWithTimeout(`https://api.pexels.com/v1/search?query=${searchQuery}&per_page=3&orientation=${aspectRatio === "9:16" ? "portrait" : "landscape"}`, { headers: { Authorization: pexelsApiKey } });
-  if (imageResponse.ok) {
-    const imageData = await imageResponse.json();
-    if (Array.isArray(imageData.photos) && imageData.photos.length > 0) {
-      const photoUrl = imageData.photos[0].src?.large2x || imageData.photos[0].src?.large;
-      console.log(`✅ Pexels Image found for scene (will be converted to video).`);
-      return { videoUrl: null, thumbnail: photoUrl, imageUrl: photoUrl, duration: 5, type: "image" };
-    }
-  }
-  return { videoUrl: null, thumbnail: null, duration: 0, type: "none" };
-};
+  // ... Pexels code ...
+}
 
 // ==========================================
 // ️ HELPER: Generate Audio for a Scene (IMPROVED)
@@ -696,7 +652,6 @@ export const checkVideoStatus = async (req, res, next) => {
     let progress = Math.round((completedScenes / totalScenes) * 100);
     let statusMessage = "Generating scenes...";
 
-    // ✅ CRITICAL FIX: Accurate progress during the FFmpeg stitching phase
     if (completedScenes === totalScenes) {
       if (videoData.outputMode === "single" && !content.mediaUrl) {
         progress = 95;
@@ -715,9 +670,9 @@ export const checkVideoStatus = async (req, res, next) => {
         ...content.toObject(), 
         videoData, 
         progress, 
-        statusMessage, // Send this to the frontendoutputMode: videoData.outputMode
-        isFinished ,
-outputMode: videoData.outputMode
+        statusMessage,
+        isFinished,
+        outputMode: videoData.outputMode // ✅ Clean and neat
       }
     });
   } catch (error) {

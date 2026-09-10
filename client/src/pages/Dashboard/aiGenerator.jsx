@@ -123,8 +123,13 @@ export default function StudentAiGenerator() {
 
               {/* Scanner */}
               {inputMethod === "scan" && (
-                <NoteScanner onScanComplete={(text) => { setNotesText(text); setInputMethod("type"); }} />
-              )}
+                <NoteScanner 
+  onScanComplete={(text) => { 
+    // ✅ Appends new scan to existing notes with a page break
+    setNotesText(prev => prev ? prev + "\n\n--- 📄 New Page ---\n\n" + text : text); 
+    setInputMethod("type"); 
+  }} 
+/>              )}
 
               {/* Text Area */}
               {(inputMethod === "type" || inputMethod === "library") && (
