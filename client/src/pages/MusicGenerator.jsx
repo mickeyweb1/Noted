@@ -22,17 +22,18 @@ export default function MusicGenerator() {
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [beatVolume, setBeatVolume] = useState(0.4);
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
+  
+  // ✅ Use global music context
   const { isPlaying: isBeatPlaying, currentBeat, setCurrentBeat, toggle: toggleBeat, setVolume: setGlobalVolume } = useMusic();
-const [localVolume, setLocalVolume] = useState(0.4);
+  const [localVolume, setLocalVolume] = useState(0.4);
 
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
 
   const vocalsRef = useRef(null);
-  const beatRef = useRef(null);
 
+  // ✅ Clean up audio URLs to prevent memory leaks
   useEffect(() => {
     window.speechSynthesis.getVoices();
     const fetchLibrary = async () => {
@@ -44,11 +45,19 @@ const [localVolume, setLocalVolume] = useState(0.4);
       } catch (err) { console.error("Failed to fetch library:", err); }
     };
     fetchLibrary();
-  }, []);
+    
+    return () => {
+      // ✅ Clean up audio URL on unmount
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
 
+  // ✅ Sync volume with global context
   useEffect(() => {
-  setGlobalVolume(localVolume);
-}, [localVolume, setGlobalVolume]);
+    setGlobalVolume(localVolume);
+  }, [localVolume, setGlobalVolume]);
 
   const handleLibrarySelect = (e) => {
     const noteId = e.target.value;
@@ -84,6 +93,12 @@ const [localVolume, setLocalVolume] = useState(0.4);
     setIsGeneratingAudio(true);
     try {
       const res = await api.post("/ai/text-to-speech", { text: lyrics, style: "rap" }, { responseType: 'blob' });
+      
+      // ✅ Clean up old URL before creating new one
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      
       const url = URL.createObjectURL(res.data);
       setAudioUrl(url);
       setUseBrowserTTS(false);
@@ -97,17 +112,34 @@ const [localVolume, setLocalVolume] = useState(0.4);
   };
 
   const stopPlayback = () => {
-    if (vocalsRef.current) { vocalsRef.current.pause(); vocalsRef.current.currentTime = 0; }
-    if (beatRef.current) { beatRef.current.pause(); beatRef.current.currentTime = 0; }
+    if (vocalsRef.current) { 
+      vocalsRef.current.pause(); 
+      vocalsRef.current.currentTime = 0; 
+    }
+    // ✅ Stop global beat instead of local
+    if (isBeatPlaying) {
+      toggleBeat();
+    }
     window.speechSynthesis.cancel();
     setIsPlaying(false);
   };
 
   const handlePlayFullTrack = async () => {
-    if (isPlaying) { stopPlayback(); return; }
-    const beat = beatRef.current;
-    if (beat) { beat.currentTime = 0; beat.loop = true; beat.volume = beatVolume; beat.play().catch(console.error); }
+    if (isPlaying) { 
+      stopPlayback(); 
+      return; 
+    }
 
+    // ✅ Set global beat based on selection
+    const beat = FREE_BEATS.find(b => b.id === selectedBeatId);
+    if (beat) {
+      setCurrentBeat(beat);
+      if (!isBeatPlaying) {
+        toggleBeat(); // Start the beat
+      }
+    }
+
+    // Play vocals
     if (useBrowserTTS) {
       window.speechSynthesis.cancel();
       const cleanLyrics = lyrics.replace(/\[.*?\]/g, "");
@@ -116,11 +148,19 @@ const [localVolume, setLocalVolume] = useState(0.4);
       const rapVoice = voices.find(v => v.lang.includes('en-NG') || v.lang.includes('en-US') || v.name.includes('Google US English'));
       if (rapVoice) utterance.voice = rapVoice;
       utterance.rate = 1.15;
-      utterance.onend = () => stopPlayback();
+      utterance.onend = () => {
+        stopPlayback();
+        if (isBeatPlaying) toggleBeat(); // Stop beat when vocals end
+      };
       window.speechSynthesis.speak(utterance);
     } else if (vocalsRef.current) {
+      vocalsRef.current.onended = () => {
+        stopPlayback();
+        if (isBeatPlaying) toggleBeat(); // Stop beat when vocals end
+      };
       vocalsRef.current.play().catch(console.error);
     }
+    
     setIsPlaying(true);
   };
 
@@ -202,18 +242,34 @@ const [localVolume, setLocalVolume] = useState(0.4);
               </button>
 
               {audioUrl && <audio ref={vocalsRef} src={audioUrl} className="hidden" />}
-              <audio ref={beatRef} src={FREE_BEATS.find(b => b.id === selectedBeatId)?.url} className="hidden" crossOrigin="anonymous" preload="auto" />
 
               <div className="space-y-3 pt-3 border-t border-purple-500/20">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-muted-foreground uppercase">Background Beat</p>
-                  <select value={selectedBeatId} onChange={(e) => { setSelectedBeatId(e.target.value); if (isPlaying) stopPlayback(); }} className="text-xs bg-card border border-border rounded px-2 py-1">
+                  <select 
+                    value={selectedBeatId} 
+                    onChange={(e) => { 
+                      setSelectedBeatId(e.target.value); 
+                      const beat = FREE_BEATS.find(b => b.id === e.target.value);
+                      setCurrentBeat(beat);
+                      if (isPlaying) stopPlayback(); 
+                    }} 
+                    className="text-xs bg-card border border-border rounded px-2 py-1"
+                  >
                     {FREE_BEATS.map(beat => (<option key={beat.id} value={beat.id}>{beat.name}</option>))}
                   </select>
                 </div>
                 <div className="flex items-center gap-3">
                   <Volume2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <input type="range" min="0" max="1" step="0.05" value={beatVolume} onChange={(e) => { setBeatVolume(Number(e.target.value)); if (beatRef.current) beatRef.current.volume = Number(e.target.value); }} className="w-full accent-purple-600" />
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="1" 
+                    step="0.05" 
+                    value={localVolume} 
+                    onChange={(e) => setLocalVolume(Number(e.target.value))} 
+                    className="w-full accent-purple-600" 
+                  />
                 </div>
               </div>
             </div>

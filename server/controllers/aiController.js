@@ -484,6 +484,10 @@ const getSceneAudio = async (narration, tempDir, index) => {
 
 const stitchVideos = async (scenesData, outputMode) => {
   if (outputMode !== "single") return null;
+  
+  // ✅ Track active FFmpeg processes to prevent memory leaks
+  const activeFfmpegProcesses = [];
+  
   const tempDir = path.join(__dirname, "../../temp_videos");
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
@@ -497,11 +501,9 @@ const stitchVideos = async (scenesData, outputMode) => {
     if (!url) continue;
 
     try {
-      // 1. Download the video or image
       const res = await fetch(url);
       const buffer = await res.arrayBuffer();
       
-      // ✅ FIX: Prevent saving HTML error pages (like 403/404 blocks)
       if (buffer.byteLength < 5000) {
         console.warn(`⚠️ Skipping scene ${i + 1}: Downloaded file is too small (likely an error page). Size: ${buffer.byteLength} bytes`);
         continue; 
@@ -511,16 +513,15 @@ const stitchVideos = async (scenesData, outputMode) => {
       const rawPath = path.join(tempDir, `raw_${i}${isImage ? '.jpg' : '.mp4'}`);
       fs.writeFileSync(rawPath, Buffer.from(buffer));
 
-      // 2. Generate Voiceover for this scene's narration
       console.log(`🎙️ Generating voiceover for Scene ${i + 1}...`);
       const audioPath = await getSceneAudio(scene.narration, tempDir, i);
 
       const mergedPath = path.join(tempDir, `merged_${i}.mp4`);
       console.log(`🎬 Merging video and audio for Scene ${i + 1}...`);
 
-      // 3. Merge Video and Audio using FFmpeg
       await new Promise((resolve, reject) => {
         const ffmpegCmd = ffmpeg(rawPath);
+        activeFfmpegProcesses.push(ffmpegCmd); // ✅ Track process
         
         if (isImage) {
           ffmpegCmd.inputOptions(['-loop 1']);
@@ -534,13 +535,9 @@ const stitchVideos = async (scenesData, outputMode) => {
         }
 
         const outputOpts = [
-          '-c:v libx264',
-          '-preset fast',
-          '-crf 23',
+          '-c:v libx264', '-preset fast', '-crf 23',
           '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
-          '-r 30',
-          '-pix_fmt yuv420p',
-          '-movflags +faststart'
+          '-r 30', '-pix_fmt yuv420p', '-movflags +faststart'
         ];
 
         if (isImage && audioPath) {
@@ -552,11 +549,20 @@ const stitchVideos = async (scenesData, outputMode) => {
           .outputOptions(audioPath ? ['-map 0:v:0', '-map 1:a:0', '-c:a aac'] : ['-an'])
           .output(mergedPath)
           .on('end', () => {
+            // ✅ Clean up tracking array
+            const idx = activeFfmpegProcesses.indexOf(ffmpegCmd);
+            if (idx > -1) activeFfmpegProcesses.splice(idx, 1);
+            
             try { fs.unlinkSync(rawPath); } catch(e) {}
             if (audioPath) { try { fs.unlinkSync(audioPath); } catch(e) {} }
             resolve();
           })
           .on('error', (err) => {
+            // ✅ Force kill the process on error to free RAM
+            ffmpegCmd.kill('SIGKILL');
+            const idx = activeFfmpegProcesses.indexOf(ffmpegCmd);
+            if (idx > -1) activeFfmpegProcesses.splice(idx, 1);
+            
             console.error(`❌ FFmpeg merge error on clip ${i}:`, err.message);
             reject(err);
           })
@@ -577,35 +583,36 @@ const stitchVideos = async (scenesData, outputMode) => {
   }
 
   console.log(`🔗 Stitching ${mergedFiles.length} audio-video clips together...`);
-  console.log(`📂 List file contents:\n${fs.readFileSync(listFile, 'utf8')}`); // ✅ DEBUG: See exactly what FFmpeg is trying to read
   
   return new Promise((resolve, reject) => {
-    ffmpeg()
+    const finalFfmpegCmd = ffmpeg()
       .input(listFile)
       .inputOptions(['-f concat', '-safe 0'])
-      .outputOptions([
-        '-c:v libx264',
-        '-c:a aac',
-        '-preset fast',
-        '-crf 23',
-        '-pix_fmt yuv420p',
-        '-movflags +faststart'
-      ])
-      .output(outputFile)
-      // ✅ FIX: Add stderr listener to catch exactly why FFmpeg might be hanging
+      .outputOptions(['-c:v libx264', '-c:a aac', '-preset fast', '-crf 23', '-pix_fmt yuv420p', '-movflags +faststart'])
+      .output(outputFile);
+      
+    activeFfmpegProcesses.push(finalFfmpegCmd); // ✅ Track final process
+
+    finalFfmpegCmd
       .on('stderr', (stderrLine) => {
-        // Only log warnings/errors, not every single frame, to keep console clean
         if (stderrLine.includes('Error') || stderrLine.includes('Warning')) {
           console.log('FFmpeg Warning:', stderrLine);
         }
       })
       .on('end', () => {
+        const idx = activeFfmpegProcesses.indexOf(finalFfmpegCmd);
+        if (idx > -1) activeFfmpegProcesses.splice(idx, 1);
+        
         console.log("✅ FFmpeg stitching with audio completed successfully!");
         mergedFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
         try { fs.unlinkSync(listFile); } catch(e){}
         resolve(outputFile);
       })
       .on('error', (err) => {
+        finalFfmpegCmd.kill('SIGKILL'); // ✅ Force kill on final error
+        const idx = activeFfmpegProcesses.indexOf(finalFfmpegCmd);
+        if (idx > -1) activeFfmpegProcesses.splice(idx, 1);
+        
         console.error("❌ FFmpeg stitching error:", err.message);
         reject(err);
       })
