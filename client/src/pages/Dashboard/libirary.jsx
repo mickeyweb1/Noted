@@ -343,18 +343,43 @@ export default function StudentLibrary() {
                                 </div>
                             )}
 
-                            {/* DEFAULT (Summary/Music/Text) */}
-                            {!['video', 'podcast', 'quiz'].includes(selectedItem.type) && (
-                                <div className="mt-4">
-                                    {selectedItem.type === 'music' && selectedItem.generatedText && (
-                                        // ✅ CHANGE THIS LINE: Add style="rap"
-                                        <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} style="rap" />
-                                    )}
-                                    <div className="mt-4">
-                                        <MarkdownContent content={selectedItem.generatedText} />
-                                    </div>
-                                </div>
-                            )}
+{/* DEFAULT (Summary/Music/Text) */}
+{!['video', 'podcast', 'quiz'].includes(selectedItem.type) && (
+    <div className="mt-4 space-y-4">
+        {selectedItem.type === 'music' && (
+            <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
+                <h3 className="font-bold text-foreground flex items-center gap-2"><Music className="w-4 h-4 text-purple-500" /> Background Beat</h3>
+                <div className="flex items-center gap-3">
+                    <select 
+                        value={currentBeat?.id || ""} 
+                        onChange={(e) => {
+                            const beat = BEATS.find(b => b.id === e.target.value);
+                            setCurrentBeat(beat);
+                        }}
+                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                    >
+                        <option value="">Select a beat...</option>
+                        {BEATS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    <button 
+                        onClick={toggleBeat}
+                        disabled={!currentBeat}
+                        className={`p-3 rounded-full transition-colors ${isBeatPlaying ? 'bg-purple-500 text-white' : 'bg-muted text-muted-foreground hover:bg-purple-500/10 hover:text-purple-500'} disabled:opacity-50`}
+                    >
+                        {isBeatPlaying ? <Pause className="w-5 h-5" fill="currentColor" /> : <Play className="w-5 h-5" fill="currentColor" />}
+                    </button>
+                </div>
+            </div>
+        )}
+        
+        {selectedItem.type === 'music' && selectedItem.generatedText && (
+            <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} style="rap" />
+        )}
+        <div className="mt-4">
+            <MarkdownContent content={selectedItem.generatedText} />
+        </div>
+    </div>
+)}
                         </div>
 
                         <div className="p-4 border-t border-border bg-muted/30 flex items-center justify-between">

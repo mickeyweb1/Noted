@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Music, Mic, Loader2, Sparkles, Volume2, Play, Pause, FileText, Camera, MessageCircle } from "lucide-react";
 import api from "../utils/api";
 import NoteScanner from "../components/NoteScanner";
+import { useMusic } from "../context/MusicContext";
 
 const FREE_BEATS = [
   { id: "beat_1", name: "Upbeat Hip-Hop Loop", url: "https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3" },
@@ -23,6 +24,8 @@ export default function MusicGenerator() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [beatVolume, setBeatVolume] = useState(0.4);
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
+  const { isPlaying: isBeatPlaying, currentBeat, setCurrentBeat, toggle: toggleBeat, setVolume: setGlobalVolume } = useMusic();
+const [localVolume, setLocalVolume] = useState(0.4);
 
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
@@ -42,6 +45,10 @@ export default function MusicGenerator() {
     };
     fetchLibrary();
   }, []);
+
+  useEffect(() => {
+  setGlobalVolume(localVolume);
+}, [localVolume, setGlobalVolume]);
 
   const handleLibrarySelect = (e) => {
     const noteId = e.target.value;
