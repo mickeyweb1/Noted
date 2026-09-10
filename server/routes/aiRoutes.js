@@ -13,14 +13,12 @@ import {
   generateSpeech, 
   searchStockVideos,  
   extractTextFromImage,
-  generateAIVideoScene // ✅ Added here
-} from '../controllers/aiController.js';
-import { 
+  generateAIVideoScene,
   generateVideoStoryboard, 
   checkVideoStatus, 
-  regenerateScene 
+  regenerateScene,
+  streamGeneratedVideo
 } from '../controllers/aiController.js';
-import { streamGeneratedVideo } from '../controllers/aiController.js';
 
 const router = express.Router();
 
@@ -29,17 +27,24 @@ router.get('/library', protect, getUserLibrary);
 router.get('/:id', protect, getSingleContent);
 router.delete('/:id', protect, deleteContent);
 router.post('/generate', protect, generateContent);
+
+// ✅ FIXED: Removed the extra "/ai/" so it correctly maps to /api/ai/text-to-speech
 router.post('/text-to-speech', protect, generateSpeech); 
+
 router.post('/focus-complete', protect, completeFocusSession);
 router.post('/attempt', protect, saveQuizAttempt);
 router.get('/attempt/:id', protect, getQuizAttempt);
+
+// Video Routes
 router.post("/video/generate-storyboard", protect, generateVideoStoryboard);
 router.get("/video/status/:id", protect, checkVideoStatus);
 router.post("/video/regenerate-scene", protect, regenerateScene);
 router.post('/video/search-stock', protect, searchStockVideos);
-router.post("/video/generate-scene", protect, generateAIVideoScene); // ✅ New Replicate Route
+router.post("/video/generate-scene", protect, generateAIVideoScene);
+router.get("/video/stream/:filename", protect, streamGeneratedVideo);
+
+// OCR Route
 router.post('/ocr/extract-text', protect, extractTextFromImage);
-router.get("/video/stream/:filename", streamGeneratedVideo);
 
 // Battle Routes
 router.get('/battle/classmates', protect, getClassmates);

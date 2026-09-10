@@ -20,40 +20,67 @@ export const MusicProvider = ({ children }) => {
     }
   }, [volume]);
 
-  useEffect(() => {
-    if (currentBeat && audioRef.current) {
-      audioRef.current.src = currentBeat.url;
-      audioRef.current.loop = true;
-      if (isPlaying) {
-        audioRef.current.play().catch(err => console.error("Beat play error:", err));
-      }
-    }
-  }, [currentBeat]);
-
-  const play = () => {
-    if (audioRef.current && currentBeat) {
-      audioRef.current.play().catch(err => console.error("Beat play error:", err));
+  const playBeat = async (beat) => {
+    if (!audioRef.current || !beat?.url) return false;
+    const audio = audioRef.current;
+    audio.pause();
+    audio.src = beat.url;
+    audio.loop = true;
+    audio.load();
+    try {
+      await audio.play();
+      setCurrentBeat(beat);
       setIsPlaying(true);
+      return true;
+    } catch (error) {
+      console.error("Beat play error:", error);
+      setIsPlaying(false);
+      return false;
     }
   };
 
-  const pause = () => {
+  const pauseBeat = () => {
     if (audioRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
     }
   };
 
-  const toggle = () => {
-    if (isPlaying) pause();
-    else play();
+  const resumeBeat = async () => {
+    if (audioRef.current && currentBeat) {
+      try {
+        await audioRef.current.play();
+        setIsPlaying(true);
+      } catch (error) {
+        console.error("Beat resume error:", error);
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  const stopBeat = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+    }
   };
 
   return (
-    <MusicContext.Provider value={{ isPlaying, currentBeat, volume, setVolume, setCurrentBeat, play, pause, toggle }}>
+    <MusicContext.Provider value={{ 
+      isPlaying, 
+      currentBeat, 
+      volume, 
+      setVolume, 
+      setCurrentBeat, 
+      playBeat, 
+      pauseBeat, 
+      resumeBeat, 
+      stopBeat 
+    }}>
       {children}
-      {/* Global hidden audio element that never unmounts */}
-      <audio ref={audioRef} className="hidden" crossOrigin="anonymous" preload="auto" />
+      {/* Removed crossOrigin to prevent CDN loading issues */}
+      <audio ref={audioRef} className="hidden" preload="auto" />
     </MusicContext.Provider>
   );
 };

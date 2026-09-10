@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Music, Mic, Loader2, Sparkles, Volume2, Play, Pause, FileText, Camera, MessageCircle } from "lucide-react";
+import { Music, Mic, Loader2, Sparkles, Volume2, Play, Pause, Square, FileText, Camera, MessageCircle } from "lucide-react";
 import api from "../utils/api";
 import NoteScanner from "../components/NoteScanner";
 import { useMusic } from "../context/MusicContext";
@@ -24,8 +24,7 @@ export default function MusicGenerator() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   
-  // ✅ Use global music context
-  const { isPlaying: isBeatPlaying, currentBeat, setCurrentBeat, toggle: toggleBeat, setVolume: setGlobalVolume } = useMusic();
+  const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat, resumeBeat, stopBeat } = useMusic();
   const [localVolume, setLocalVolume] = useState(0.4);
 
   const [libraryNotes, setLibraryNotes] = useState([]);
@@ -33,9 +32,8 @@ export default function MusicGenerator() {
 
   const vocalsRef = useRef(null);
 
-  // ✅ Clean up audio URLs to prevent memory leaks
+  // ✅ FIX 6: Split useEffects so library isn't re-fetched on audio change
   useEffect(() => {
-    window.speechSynthesis.getVoices();
     const fetchLibrary = async () => {
       try {
         const response = await api.get("/ai/library");
@@ -45,19 +43,20 @@ export default function MusicGenerator() {
       } catch (err) { console.error("Failed to fetch library:", err); }
     };
     fetchLibrary();
-    
+  }, []);
+
+  useEffect(() => {
     return () => {
-      // ✅ Clean up audio URL on unmount
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);
 
-  // ✅ Sync volume with global context
+  // ✅ FIX 10: Sync vocal volume with the slider
   useEffect(() => {
-    setGlobalVolume(localVolume);
-  }, [localVolume, setGlobalVolume]);
+    if (vocalsRef.current) {
+      vocalsRef.current.volume = localVolume;
+    }
+  }, [localVolume]);
 
   const handleLibrarySelect = (e) => {
     const noteId = e.target.value;
@@ -69,8 +68,18 @@ export default function MusicGenerator() {
     }
   };
 
+  // ✅ FIX 7: Stop old song and clean up before generating new lyrics
   const handleGenerateLyrics = async () => {
     if (!notes.trim()) return alert("Please enter or scan some notes first!");
+    
+    stopPlayback();
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+    }
+    setUseBrowserTTS(false);
+    setLyrics("");
+    
     setIsGeneratingLyrics(true);
     try {
       const response = await api.post("/ai/generate", {
@@ -93,11 +102,7 @@ export default function MusicGenerator() {
     setIsGeneratingAudio(true);
     try {
       const res = await api.post("/ai/text-to-speech", { text: lyrics, style: "rap" }, { responseType: 'blob' });
-      
-      // ✅ Clean up old URL before creating new one
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
       
       const url = URL.createObjectURL(res.data);
       setAudioUrl(url);
@@ -111,35 +116,48 @@ export default function MusicGenerator() {
     }
   };
 
+  // ✅ FIX 4: Separate Pause and Stop behavior
+  const pausePlayback = () => {
+    if (vocalsRef.current) vocalsRef.current.pause();
+    window.speechSynthesis.pause();
+    pauseBeat();
+    setIsPlaying(false);
+  };
+
   const stopPlayback = () => {
     if (vocalsRef.current) { 
       vocalsRef.current.pause(); 
       vocalsRef.current.currentTime = 0; 
     }
-    // ✅ Stop global beat instead of local
-    if (isBeatPlaying) {
-      toggleBeat();
-    }
+    stopBeat(); // ✅ FIX 3: Use dedicated stop function to prevent double-toggle
     window.speechSynthesis.cancel();
     setIsPlaying(false);
   };
 
+  const resumePlayback = async () => {
+    if (useBrowserTTS) {
+      window.speechSynthesis.resume();
+    } else {
+      await vocalsRef.current?.play();
+    }
+    if (currentBeat) {
+      await resumeBeat();
+    }
+    setIsPlaying(true);
+  };
+
   const handlePlayFullTrack = async () => {
     if (isPlaying) { 
-      stopPlayback(); 
+      pausePlayback(); // ✅ Now it actually pauses instead of resetting
       return; 
     }
 
-    // ✅ Set global beat based on selection
+    // ✅ FIX 2: Use playBeat to ensure state updates correctly
     const beat = FREE_BEATS.find(b => b.id === selectedBeatId);
     if (beat) {
-      setCurrentBeat(beat);
-      if (!isBeatPlaying) {
-        toggleBeat(); // Start the beat
-      }
+      await playBeat(beat);
     }
 
-    // Play vocals
     if (useBrowserTTS) {
       window.speechSynthesis.cancel();
       const cleanLyrics = lyrics.replace(/\[.*?\]/g, "");
@@ -148,20 +166,26 @@ export default function MusicGenerator() {
       const rapVoice = voices.find(v => v.lang.includes('en-NG') || v.lang.includes('en-US') || v.name.includes('Google US English'));
       if (rapVoice) utterance.voice = rapVoice;
       utterance.rate = 1.15;
-      utterance.onend = () => {
-        stopPlayback();
-        if (isBeatPlaying) toggleBeat(); // Stop beat when vocals end
-      };
+      
+      // ✅ FIX 3: Removed extra toggleBeat() here
+      utterance.onend = () => stopPlayback();
+      
       window.speechSynthesis.speak(utterance);
+      setIsPlaying(true);
     } else if (vocalsRef.current) {
-      vocalsRef.current.onended = () => {
-        stopPlayback();
-        if (isBeatPlaying) toggleBeat(); // Stop beat when vocals end
-      };
-      vocalsRef.current.play().catch(console.error);
+      // ✅ FIX 3: Removed extra toggleBeat() here
+      vocalsRef.current.onended = () => stopPlayback();
+      
+      // ✅ FIX 5: Properly await play() and catch errors
+      try {
+        await vocalsRef.current.play();
+        setIsPlaying(true);
+      } catch (error) {
+        console.error("Vocal playback error:", error);
+        setIsPlaying(false);
+        stopBeat();
+      }
     }
-    
-    setIsPlaying(true);
   };
 
   return (
@@ -177,7 +201,6 @@ export default function MusicGenerator() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* LEFT: INPUT */}
         <div className="space-y-4">
           <div className="flex p-1 bg-muted rounded-lg w-fit">
             <button onClick={() => setInputMethod("type")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inputMethod === "type" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
@@ -198,13 +221,15 @@ export default function MusicGenerator() {
             </select>
           )}
 
-          {inputMethod === "scan" && <NoteScanner 
-  onScanComplete={(text) => { 
-    // ✅ Appends new scan to existing notes with a page break
-    setNotesText(prev => prev ? prev + "\n\n--- 📄 New Page ---\n\n" + text : text); 
-    setInputMethod("type"); 
-  }} 
-/>}
+          {/* ✅ FIX 1: Changed setNotesText to setNotes */}
+          {inputMethod === "scan" && (
+            <NoteScanner 
+              onScanComplete={(text) => { 
+                setNotes(prev => prev ? `${prev}\n\n--- 📄 New Page ---\n\n${text}` : text); 
+                setInputMethod("type"); 
+              }} 
+            />
+          )}
 
           {(inputMethod === "type" || inputMethod === "library") && (
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={8} placeholder="Paste your notes here..." className="w-full rounded-xl border border-border bg-card p-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand resize-none" />
@@ -227,7 +252,6 @@ export default function MusicGenerator() {
           </button>
         </div>
 
-        {/* RIGHT: OUTPUT */}
         <div className="space-y-4">
           <label className="text-sm font-medium text-foreground">Generated Lyrics</label>
           <div className="w-full h-64 rounded-xl border border-border bg-card p-4 text-sm overflow-y-auto whitespace-pre-wrap font-mono">
@@ -243,9 +267,18 @@ export default function MusicGenerator() {
               <h3 className="font-display font-bold text-foreground flex items-center gap-2">
                 <Music className="w-5 h-5 text-purple-500" /> Your Track is Ready!
               </h3>
-              <button onClick={handlePlayFullTrack} className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${isPlaying ? "bg-red-500 text-white hover:bg-red-600" : "bg-purple-600 text-white hover:bg-purple-700"}`}>
-                {isPlaying ? <><Pause className="w-5 h-5" /> Pause Track</> : <><Play className="w-5 h-5" /> Play Full Track</>}
-              </button>
+              
+              {/* ✅ FIX 4: Separate Pause and Stop buttons */}
+              <div className="flex gap-3">
+                <button onClick={isPlaying ? pausePlayback : handlePlayFullTrack} className="flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-purple-600 text-white hover:bg-purple-700">
+                  {isPlaying ? <><Pause className="w-5 h-5" /> Pause</> : <><Play className="w-5 h-5" /> Play Full Track</>}
+                </button>
+                {isPlaying && (
+                  <button onClick={stopPlayback} className="px-4 py-3 rounded-xl font-bold transition-all bg-red-500 text-white hover:bg-red-600">
+                    <Square className="w-5 h-5" fill="currentColor" />
+                  </button>
+                )}
+              </div>
 
               {audioUrl && <audio ref={vocalsRef} src={audioUrl} className="hidden" />}
 
@@ -256,8 +289,6 @@ export default function MusicGenerator() {
                     value={selectedBeatId} 
                     onChange={(e) => { 
                       setSelectedBeatId(e.target.value); 
-                      const beat = FREE_BEATS.find(b => b.id === e.target.value);
-                      setCurrentBeat(beat);
                       if (isPlaying) stopPlayback(); 
                     }} 
                     className="text-xs bg-card border border-border rounded px-2 py-1"
