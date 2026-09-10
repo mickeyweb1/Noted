@@ -482,9 +482,6 @@ const getSceneAudio = async (narration, tempDir, index) => {
   }
 };
 
-// ==========================================
-// 🎬 UPGRADED: Stitch Videos WITH Voiceovers (Fixed Duration & Cutoff)
-// ==========================================
 const stitchVideos = async (scenesData, outputMode) => {
   if (outputMode !== "single") return null;
   const tempDir = path.join(__dirname, "../../temp_videos");
@@ -503,6 +500,13 @@ const stitchVideos = async (scenesData, outputMode) => {
       // 1. Download the video or image
       const res = await fetch(url);
       const buffer = await res.arrayBuffer();
+      
+      // ✅ FIX: Prevent saving HTML error pages (like 403/404 blocks)
+      if (buffer.byteLength < 5000) {
+        console.warn(`⚠️ Skipping scene ${i + 1}: Downloaded file is too small (likely an error page). Size: ${buffer.byteLength} bytes`);
+        continue; 
+      }
+
       const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?$/i);
       const rawPath = path.join(tempDir, `raw_${i}${isImage ? '.jpg' : '.mp4'}`);
       fs.writeFileSync(rawPath, Buffer.from(buffer));
@@ -515,14 +519,11 @@ const stitchVideos = async (scenesData, outputMode) => {
       console.log(`🎬 Merging video and audio for Scene ${i + 1}...`);
 
       // 3. Merge Video and Audio using FFmpeg
-      // 3. Merge Video and Audio using FFmpeg
       await new Promise((resolve, reject) => {
         const ffmpegCmd = ffmpeg(rawPath);
         
-        // Fix #9a: If it's an image, loop it indefinitely
         if (isImage) {
           ffmpegCmd.inputOptions(['-loop 1']);
-          // Fix #9b: If there's NO audio, force it to stop at 5 seconds so it doesn't hang
           if (!audioPath) {
             ffmpegCmd.duration(5);
           }
@@ -542,7 +543,6 @@ const stitchVideos = async (scenesData, outputMode) => {
           '-movflags +faststart'
         ];
 
-        // Fix #10: ONLY use -shortest if we have an infinite image loop AND audio to bound it
         if (isImage && audioPath) {
           outputOpts.push('-shortest');
         }
@@ -571,9 +571,13 @@ const stitchVideos = async (scenesData, outputMode) => {
     }
   }
 
-  if (mergedFiles.length === 0) return null;
+  if (mergedFiles.length === 0) {
+    console.error("❌ No valid clips to stitch. Aborting.");
+    return null;
+  }
 
   console.log(`🔗 Stitching ${mergedFiles.length} audio-video clips together...`);
+  console.log(`📂 List file contents:\n${fs.readFileSync(listFile, 'utf8')}`); // ✅ DEBUG: See exactly what FFmpeg is trying to read
   
   return new Promise((resolve, reject) => {
     ffmpeg()
@@ -588,6 +592,13 @@ const stitchVideos = async (scenesData, outputMode) => {
         '-movflags +faststart'
       ])
       .output(outputFile)
+      // ✅ FIX: Add stderr listener to catch exactly why FFmpeg might be hanging
+      .on('stderr', (stderrLine) => {
+        // Only log warnings/errors, not every single frame, to keep console clean
+        if (stderrLine.includes('Error') || stderrLine.includes('Warning')) {
+          console.log('FFmpeg Warning:', stderrLine);
+        }
+      })
       .on('end', () => {
         console.log("✅ FFmpeg stitching with audio completed successfully!");
         mergedFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e){} });
