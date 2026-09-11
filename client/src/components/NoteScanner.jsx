@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Camera, CheckCircle, AlertTriangle, XCircle, Loader2 } from "lucide-react"; // ✅ New icons
+import { Camera, CheckCircle, AlertTriangle, XCircle, Loader2 } from "lucide-react";
 import api from "../utils/api";
+import * as Tesseract from "tesseract.js"; // ✅ Import Tesseract for fallback
 
 export default function NoteScanner({ onScanComplete }) {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState(null); // 'success', 'warning', 'error'
   const [message, setMessage] = useState("");
+  const [progress, setProgress] = useState(0);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -14,30 +16,53 @@ export default function NoteScanner({ onScanComplete }) {
     setIsScanning(true);
     setStatus(null);
     setMessage("");
+    setProgress(0);
 
     const reader = new FileReader();
     reader.onloadend = async () => {
       try {
+        // 1. Try the backend API first (OCR.space)
         const response = await api.post("/ai/ocr/extract-text", { imageUrl: reader.result });
         
-        if (response.data.success) {
-          if (!response.data.text || response.data.text.trim() === "") {
-            setStatus("warning");
-            setMessage("No text detected in this image. Please try a clearer photo.");
-          } else {
-            setStatus("success");
-            setMessage("Text extracted successfully!");
-            onScanComplete(response.data.text);
-          }
+        if (response.data.success && response.data.text && response.data.text.trim() !== "") {
+          setStatus("success");
+          setMessage("Text extracted successfully via API!");
+          onScanComplete(response.data.text);
         } else {
-          setStatus("error");
-          setMessage(response.data.message || "OCR failed.");
+          throw new Error("API returned no text");
         }
       } catch (error) {
-        setStatus("error");
-        setMessage("Failed to connect to OCR service. Please try again.");
+        // 2. ✅ FALLBACK: Use local Tesseract engine if API fails (503, network error, etc.)
+        console.warn("API OCR failed, falling back to local Tesseract engine:", error);
+        setStatus("warning");
+        setMessage("API unavailable. Using local engine (this may take a moment)...");
+        
+        try {
+          const result = await Tesseract.recognize(reader.result, "eng", {
+            logger: (m) => {
+              if (m.status === "recognizing text") {
+                setProgress(Math.round(m.progress * 100));
+              }
+            },
+          });
+          
+          const extractedText = result.data.text.trim();
+          if (extractedText) {
+            setStatus("success");
+            setMessage("Text extracted successfully via local engine!");
+            onScanComplete(extractedText);
+          } else {
+            setStatus("warning");
+            setMessage("No text detected. Please try a clearer image.");
+          }
+        } catch (tesseractError) {
+          console.error("Tesseract fallback also failed:", tesseractError);
+          setStatus("error");
+          setMessage("Failed to extract text. Please try a clearer image or type manually.");
+        }
       } finally {
         setIsScanning(false);
+        setProgress(0);
       }
     };
     reader.readAsDataURL(file);
@@ -53,15 +78,14 @@ export default function NoteScanner({ onScanComplete }) {
             ) : (
               <Camera className="w-8 h-8 text-muted-foreground mb-2" />
             )}
-            <p className="text-sm text-muted-foreground">
-              {isScanning ? "Scanning..." : "Click to upload an image of your notes"}
+            <p className="text-sm text-muted-foreground text-center px-4">
+              {isScanning ? (progress > 0 ? `Processing locally... ${progress}%` : "Scanning...") : "Click to upload an image of your notes"}
             </p>
             <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={isScanning} />
           </div>
         </label>
       </div>
 
-      {/* ✅ FIX: Distinct icons for each status */}
       {status && (
         <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
           status === "success" ? "bg-green-500/10 text-green-600 border border-green-500/20" :
