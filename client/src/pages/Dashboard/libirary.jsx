@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { 
     Library as LibraryIcon, Search, Grid3x3, List, 
     FileText, Video, Music, Brain, FolderOpen, MoreHorizontal,
-    Users, Download, X, CheckCircle2, Play, Mic, Headphones
+    Users, Download, X, CheckCircle2, Play, Pause, Mic, Headphones
 } from "lucide-react";
 import api from "../../utils/api";
 import AudioPlayer from "../../components/AudioPlayer";
