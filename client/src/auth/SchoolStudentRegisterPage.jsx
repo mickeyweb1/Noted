@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { ArrowLeft, CheckCircle2, AlertCircle, Lock, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "./authLayout"; // Adjust path if needed
+import AuthLayout from "./authLayout"; 
 import api from "../utils/api";
 
 export default function SchoolStudentRegisterPage() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ 
-    fullName: "", // ✅ ADDED: Required by database
     uniqueInviteCode: "", 
     email: "", 
     password: "" 
@@ -20,24 +19,17 @@ export default function SchoolStudentRegisterPage() {
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const validateCode = async (code) => {
-    console.log("🔍 Attempting to validate code:", code); // <-- NEW: See what code is being sent
-    
-    // Temporarily commented out to force the request no matter the length
-    // if (code.length < 5) { setCodeStatus("idle"); return; } 
+    if (code.length < 5) { setCodeStatus("idle"); return; } 
     
     setCodeStatus("checking");
     try {
-      console.log("📡 Sending request to backend..."); // <-- NEW
       const response = await api.post("/auth/validate-code", { code });
-      console.log("✅ Backend responded:", response.data); // <-- NEW
-      
       if (response.data.success) {
         setCodeStatus("valid");
         setSchoolName(response.data.data.schoolName);
         setError("");
       }
     } catch (err) {
-      console.error("❌ Validation failed:", err.response?.data || err); // <-- NEW
       setCodeStatus("invalid");
       setSchoolName("");
     }
@@ -56,7 +48,6 @@ export default function SchoolStudentRegisterPage() {
     
     try {
       const response = await api.post("/auth/claim", {
-        fullName: formData.fullName, // ✅ ADDED: Send fullName to satisfy database requirement
         uniqueInviteCode: formData.uniqueInviteCode,
         email: formData.email,
         password: formData.password,
@@ -64,7 +55,7 @@ export default function SchoolStudentRegisterPage() {
       
       if (response.data.success) {
         localStorage.setItem("userToken", response.data.token);
-        localStorage.setItem("userInfo", JSON.stringify(response.data.user || response.data));
+        localStorage.setItem("userInfo", JSON.stringify(response.data.user));
         navigate("/dashboard", { replace: true });
       }
     } catch (err) {
@@ -87,7 +78,7 @@ export default function SchoolStudentRegisterPage() {
                 <Lock className="w-6 h-6" />
               </div>
               <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Activate Your Account</h1>
-              <p className="text-sm text-muted-foreground">Enter the unique code and email your administrator gave you to set your password.</p>
+              <p className="text-sm text-muted-foreground">Enter the unique code your administrator gave you to set your password.</p>
             </div>
             
             {error && (
@@ -97,20 +88,6 @@ export default function SchoolStudentRegisterPage() {
             )}
             
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* ✅ NEW: Full Name Input */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Full Name <span className="text-red-500">*</span></label>
-                <input 
-                  type="text" 
-                  name="fullName" 
-                  value={formData.fullName} 
-                  onChange={handleChange} 
-                  placeholder="e.g., Adebayo Johnson" 
-                  required 
-                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" 
-                />
-              </div>
-
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Your Unique Invite Code <span className="text-red-500">*</span></label>
                 <div className="relative">
@@ -122,7 +99,7 @@ export default function SchoolStudentRegisterPage() {
                     onBlur={handleCodeBlur} 
                     placeholder="e.g., STU-A3K7-X9M2" 
                     required
-                    className={`flex h-11 w-full rounded-md border px-3 py-2 text-sm font-mono tracking-wider focus-visible:outline-none focus-visible:ring-2 transition-all ${
+                    className={`flex h-11 w-full rounded-md border px-3 py-2 text-sm font-mono tracking-wider uppercase focus-visible:outline-none focus-visible:ring-2 transition-all ${
                       codeStatus === "valid" ? "border-green-500 bg-green-500/5" : 
                       codeStatus === "invalid" ? "border-red-500 bg-red-500/5" : 
                       "border-brand bg-brand/5"
@@ -136,7 +113,7 @@ export default function SchoolStudentRegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Your Email <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium text-foreground">Your Email Address <span className="text-red-500">*</span></label>
                 <input 
                   type="email" 
                   name="email" 
@@ -149,7 +126,7 @@ export default function SchoolStudentRegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Create Password <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium text-foreground">Create New Password <span className="text-red-500">*</span></label>
                 <input 
                   type="password" 
                   name="password" 

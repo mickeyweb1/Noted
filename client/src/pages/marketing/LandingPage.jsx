@@ -17,33 +17,31 @@ import {
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
 
+// ✅ UPDATED: Changed "School + parent visibility" to "Student progress tracking"
 const features = [
   {
     icon: BrainCircuit,
     title: "AI study notes",
-    description:
-      "Turn messy class recordings, slides, and summaries into crisp, easy-to-understand learning material in minutes.",
+    description: "Turn messy class recordings, slides, and summaries into crisp, easy-to-understand learning material in minutes.",
   },
   {
     icon: Clock3,
     title: "Focus-first workflows",
-    description:
-      "Build smart study blocks, reminders, and revision plans that match your real academic rhythm and reduce burnout.",
+    description: "Build smart study blocks, reminders, and revision plans that match your real academic rhythm and reduce burnout.",
   },
   {
     icon: Library,
     title: "Organized library",
-    description:
-      "Keep lessons, notes, flashcards, and readings in one clean, searchable workspace accessible from any device.",
+    description: "Keep lessons, notes, flashcards, and readings in one clean, searchable workspace accessible from any device.",
   },
   {
     icon: Users,
-    title: "School + parent visibility",
-    description:
-      "Bring families and institutions into the same performance and progress loop without friction or extra paperwork.",
+    title: "Student progress tracking", // ✅ UPDATED
+    description: "Empower students with clear insights into their study habits, revision patterns, and daily activity to boost confidence.", // ✅ UPDATED
   },
 ];
 
+// ✅ UPDATED: Changed "For parents" to "For students"
 const audienceCards = [
   {
     title: "For schools",
@@ -52,9 +50,9 @@ const audienceCards = [
     accent: "from-brand/15 to-electric/10",
   },
   {
-    title: "For parents",
-    text: "Stay informed about study habits, revision patterns, and daily activity with clear progress snapshots.",
-    link: "/parents",
+    title: "For students", // ✅ UPDATED
+    text: "Master any subject with AI-generated summaries, audio podcasts, and interactive quizzes tailored to your unique learning style.", // ✅ UPDATED
+    link: "/student", // ✅ UPDATED (Make sure this route exists, or change to "/signup")
     accent: "from-flame/15 to-brand/10",
   },
   {
@@ -65,32 +63,6 @@ const audienceCards = [
   },
 ];
 
-const stats = [
-  { value: "3x", label: "more active study time" },
-  { value: "90%", label: "less manual note cleanup" },
-  { value: "24/7", label: "access to your revision engine" },
-];
-
-const howItWorks = [
-  {
-    step: "01",
-    icon: BookOpen,
-    title: "Paste your notes",
-    description: "Drop in your messy class notes, textbook pages, or lecture transcripts.",
-  },
-  {
-    step: "02",
-    icon: Zap,
-    title: "AI transforms them",
-    description: "Our engine instantly summarizes, structures, and generates audio or visual aids.",
-  },
-  {
-    step: "03",
-    icon: Headphones,
-    title: "Learn your way",
-    description: "Listen to it like a podcast, watch the visual summary, or test yourself with AI quizzes.",
-  },
-];
 
 export default function LandingPage() {
   return (

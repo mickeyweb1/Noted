@@ -126,31 +126,38 @@ export const addStudent = async (req, res, next) => {
   try {
     const { fullName, email, className, phone, parentName } = req.body;
     let org = await Organization.findOne({ adminId: req.user._id });
+    
     if (!org) {
       const inviteCode = await generateUniqueCode();
       org = await Organization.create({ name: "My School", adminId: req.user._id, inviteCode });
       await User.findByIdAndUpdate(req.user._id, { schoolName: "My School", schoolId: org._id });
     }
 
-    // ✅ Generate unique code for THIS specific student
+    // Generate unique code and temp password for THIS specific student
     const studentCode = await generateStudentCode();
-     const tempPassword = crypto.randomBytes(6).toString('hex').toUpperCase() + '!' + crypto.randomInt(10, 99);
-    
+    const tempPassword = crypto.randomBytes(6).toString('hex').toUpperCase() + '!' + crypto.randomInt(10, 99);
     
     const user = await User.create({
-      fullName, email, password: tempPassword, role: 'student',
-      schoolId: org._id, schoolName: org.name, className: className || '',
-      phone: phone || '', parentInfo: parentName ? { name: parentName } : {},
-      uniqueInviteCode: studentCode
+      fullName, 
+      email, 
+      password: tempPassword, 
+      role: 'student',
+      schoolId: org._id, 
+      schoolName: org.name, 
+      className: className || '',
+      phone: phone || '', 
+      parentInfo: parentName ? { name: parentName } : {},
+      uniqueInviteCode: studentCode,
+      isActive: false // ✅ Start as inactive until they claim it
     });
 
     res.status(201).json({ 
       success: true, 
-      message: "Student added successfully. Please securely share the invite code and a temporary password with the student.",
+      message: "Student added successfully.",
       data: { 
         student: { fullName: user.fullName, email: user.email }, 
-        studentCode 
-        // tempPassword is intentionally omitted here for security
+        studentCode,
+        tempPassword // ✅ SEND THIS so the frontend can display it to the admin
       }
     });
   } catch (error) {

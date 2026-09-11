@@ -273,10 +273,10 @@ export default function StudentDirectory() {
                       </span>
                     </td>
 
-                    {/* ✅ Time Spent Column */}
-                    <td className="whitespace-nowrap px-4 py-4 font-medium text-foreground sm:px-6">
-                      {formatTime(student.dailyFocusLog?.get(selectedDate))}
-                    </td>
+{/* ✅ Time Spent Column */}
+<td className="whitespace-nowrap px-4 py-4 font-medium text-foreground sm:px-6">
+  {formatTime(student.dailyFocusLog ? student.dailyFocusLog[selectedDate] : 0)} {/* ✅ FIXED */}
+</td>
 
                     {/* Direct Action Button */}
                     <td className="px-4 py-4 text-right sm:px-6">

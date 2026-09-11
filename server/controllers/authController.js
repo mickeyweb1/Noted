@@ -108,14 +108,11 @@ export const loginUser = async (req, res, next) => {
 // @route   POST /api/auth/claim
 export const claimAccount = async (req, res, next) => {
   try {
-    const { uniqueInviteCode, email, password, fullName } = req.body;
+    const { uniqueInviteCode, email, password } = req.body;
 
-    // If fullName is provided (from the new form), update it
-    const updateData = { password };
-    if (fullName) updateData.fullName = fullName;
-
+    // Find the user by code AND email to ensure it's the right student
     const user = await User.findOne({ 
-      uniqueInviteCode: uniqueInviteCode.trim(), 
+      uniqueInviteCode: uniqueInviteCode.trim().toUpperCase(), 
       email: email.toLowerCase().trim(), 
       role: 'student' 
     });
@@ -124,16 +121,12 @@ export const claimAccount = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "No account found with this specific code and email." });
     }
 
-    if (!user.isActive) {
-      return res.status(403).json({ success: false, message: "This account has been deactivated by your administrator." });
-    }
-
-    // Update user fields
-    Object.assign(user, updateData);
+    // Update user with their new password and activate the account
+    user.password = password; // The pre-save hook in User.js will automatically hash this
     user.isActive = true;
     await user.save();
 
-    const token = generateToken(user._id); // ✅ Using the helper here too
+    const token = generateToken(user._id);
 
     res.status(200).json({
       success: true, 
@@ -153,6 +146,7 @@ export const claimAccount = async (req, res, next) => {
     next(error);
   }
 };
+
 // @desc    Validate a student's unique invite code
 // @route   POST /api/auth/validate-code
 export const validateInviteCode = async (req, res, next) => {
