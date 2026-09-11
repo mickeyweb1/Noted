@@ -28,9 +28,6 @@ export default function FocusTime() {
 } = useMusic();
     const [localVolume, setLocalVolume] = useState(0.4);
 
-    useEffect(() => {
-        setGlobalVolume(localVolume);
-    }, [localVolume, setGlobalVolume]);
 
 // Replace the getTimeForMode function and initial state with this:
 
