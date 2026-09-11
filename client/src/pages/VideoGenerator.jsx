@@ -63,66 +63,56 @@ export default function VideoGenerator() {
   }, []);
 
   useEffect(() => {
+    let timeoutId;
+
+    const poll = async () => {
+      if (!videoId || isFinished) return;
+      
+      try {
+        const res = await api.get(`/ai/video/status/${videoId}`);
+        if (res.data.success) {
+          const { videoData, progress: newProgress, isFinished: done, mediaUrl, outputMode: dbOutputMode, statusMessage: newStatusMessage } = res.data.data;
+          
+          setScenes(videoData.scenes);
+          setVideoTitle(videoData.title);
+          setProgress(newProgress);
+          setStatusMessage(newStatusMessage || "Generating scenes...");
+          
+          if (dbOutputMode) setOutputMode(dbOutputMode);
+
+          if (mediaUrl) {
+            const filename = mediaUrl.split(/[\\/]/).pop();
+            // ✅ FIX: Prevent double /api/ in the URL
+            const baseUrl = import.meta.env.VITE_API_URL || window.location.origin;
+            const cleanBaseUrl = baseUrl.endsWith('/api') ? baseUrl.slice(0, -4) : baseUrl;
+            const url = `${cleanBaseUrl}/api/ai/video/stream/${filename}`;
+            setStitchedVideoUrl(url);
+          }
+
+          if (done) {
+            setIsFinished(true);
+            localStorage.removeItem("activeVideoId");
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("Noted AI Video Ready!", { body: `Your video "${videoTitle}" has finished generating!` });
+            }
+            return; // Stop polling
+          }
+        }
+      } catch (err) { 
+        console.error("Polling error:", err); 
+      }
+      
+      // ✅ FIX: Use recursive setTimeout instead of setInterval to prevent overlap
+      timeoutId = setTimeout(poll, 2000);
+    };
+
     if (videoId && !isFinished) {
       localStorage.setItem("activeVideoId", videoId);
-      pollIntervalRef.current = setInterval(async () => {
-        try {
-          const res = await api.get(`/ai/video/status/${videoId}`);
-          if (res.data.success) {
-            const {
-              videoData,
-              progress: newProgress,
-              isFinished: done,
-              mediaUrl,
-              outputMode: dbOutputMode,
-              statusMessage: newStatusMessage,
-            } = res.data.data;
-
-            setScenes(videoData.scenes);
-            setVideoTitle(videoData.title);
-            setProgress(newProgress);
-            setStatusMessage(newStatusMessage || "Generating scenes...");
-
-            // Fix #11: Ensure outputMode is restored if the user refreshes the page
-            if (dbOutputMode) {
-              setOutputMode(dbOutputMode);
-            }
-
-            if (mediaUrl) {
-              const filename = mediaUrl.split(/[\\/]/).pop();
-              // Fix #8: Use environment variable for API URL, fallback to localhost for dev
-              const apiUrl =
-                import.meta.env.VITE_API_URL || "http://localhost:5000";
-              const url = `${apiUrl}/api/ai/video/stream/${filename}`;
-              console.log("✅ Setting stitchedVideoUrl to:", url);
-              setStitchedVideoUrl(url);
-            }
-
-            if (done) {
-              console.log(
-                "🎉 Generation DONE! isFinished: true, outputMode:",
-                dbOutputMode,
-              );
-              setIsFinished(true);
-              localStorage.removeItem("activeVideoId");
-              clearInterval(pollIntervalRef.current);
-              if (
-                "Notification" in window &&
-                Notification.permission === "granted"
-              ) {
-                new Notification("Noted AI Video Ready!", {
-                  body: `Your video "${videoTitle}" has finished generating!`,
-                });
-              }
-            }
-          }
-        } catch (err) {
-          console.error("Polling error:", err);
-        }
-      }, 2000);
+      poll();
     }
-    return () => clearInterval(pollIntervalRef.current);
-  }, [videoId, isFinished, videoTitle]);
+
+    return () => clearTimeout(timeoutId);
+  }, [videoId, isFinished]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];

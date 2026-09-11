@@ -20,21 +20,34 @@ export default function FocusTime() {
     const [showSuccess, setShowSuccess] = useState(false);
     
     // ✅ Global Music State
-    const { isPlaying: isBeatPlaying, currentBeat, setCurrentBeat, toggle: toggleBeat, setVolume: setGlobalVolume } = useMusic();
+    const { 
+  isPlaying: isBeatPlaying, 
+  currentBeat, 
+  playBeat, 
+  pauseBeat 
+} = useMusic();
     const [localVolume, setLocalVolume] = useState(0.4);
 
     useEffect(() => {
         setGlobalVolume(localVolume);
     }, [localVolume, setGlobalVolume]);
 
-    const getTimeForMode = (mode) => {
-        if (mode === "focus") return 25 * 60;
-        if (mode === "shortBreak") return 5 * 60;
-        if (mode === "longBreak") return 15 * 60;
-        return 25 * 60;
-    };
+// Replace the getTimeForMode function and initial state with this:
 
-    const [timeLeft, setTimeLeft] = useState(getTimeForMode("focus"));
+const getTimeForMode = (mode) => {
+    // ✅ Read from localStorage, fallback to defaults if not set
+    const savedFocus = Number(localStorage.getItem("focusTime")) || 25;
+    const savedShort = Number(localStorage.getItem("shortBreak")) || 5;
+    const savedLong = Number(localStorage.getItem("longBreak")) || 15;
+
+    if (mode === "focus") return savedFocus * 60;
+    if (mode === "shortBreak") return savedShort * 60;
+    if (mode === "longBreak") return savedLong * 60;
+    return savedFocus * 60;
+};
+
+// Update the initial state to use the saved focus time
+const [timeLeft, setTimeLeft] = useState(getTimeForMode("focus"));
     const timerRef = useRef(null);
 
     const formatTime = (seconds) => {
@@ -164,13 +177,22 @@ export default function FocusTime() {
                                     <option value="">Select a beat...</option>
                                     {BEATS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                 </select>
-                                <button 
-                                    onClick={toggleBeat}
-                                    disabled={!currentBeat}
-                                    className={`p-3 rounded-full transition-colors ${isBeatPlaying ? 'bg-purple-500 text-white' : 'bg-muted text-muted-foreground hover:bg-purple-500/10 hover:text-purple-500'} disabled:opacity-50`}
-                                >
-                                    {isBeatPlaying ? <Pause className="w-5 h-5" fill="currentColor" /> : <Play className="w-5 h-5" fill="currentColor" />}
-                                </button>
+                               <button 
+  onClick={() => {
+    const beat = FREE_BEATS.find(b => b.id === selectedBeatId);
+    if (beat) {
+      if (isBeatPlaying) {
+        pauseBeat();
+      } else {
+        playBeat(beat);
+      }
+    }
+  }}
+  disabled={!currentBeat && !selectedBeatId}
+  className={`p-3 rounded-full transition-colors ${isBeatPlaying ? 'bg-purple-500 text-white' : 'bg-muted text-muted-foreground hover:bg-purple-500/10 hover:text-purple-500'} disabled:opacity-50`}
+>
+  {isBeatPlaying ? <Pause className="w-5 h-5" fill="currentColor" /> : <Play className="w-5 h-5" fill="currentColor" />}
+</button>
                             </div>
                             
                             {currentBeat && (
