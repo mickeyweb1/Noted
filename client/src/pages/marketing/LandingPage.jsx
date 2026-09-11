@@ -17,7 +17,6 @@ import {
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
 
-// ✅ UPDATED: Changed "School + parent visibility" to "Student progress tracking"
 const features = [
   {
     icon: BrainCircuit,
@@ -36,12 +35,11 @@ const features = [
   },
   {
     icon: Users,
-    title: "Student progress tracking", // ✅ UPDATED
+    title: "Student progress tracking", // ✅ UPDATED from "School + parent visibility"
     description: "Empower students with clear insights into their study habits, revision patterns, and daily activity to boost confidence.", // ✅ UPDATED
   },
 ];
 
-// ✅ UPDATED: Changed "For parents" to "For students"
 const audienceCards = [
   {
     title: "For schools",
@@ -50,9 +48,9 @@ const audienceCards = [
     accent: "from-brand/15 to-electric/10",
   },
   {
-    title: "For students", // ✅ UPDATED
+    title: "For students", // ✅ UPDATED from "For parents"
     text: "Master any subject with AI-generated summaries, audio podcasts, and interactive quizzes tailored to your unique learning style.", // ✅ UPDATED
-    link: "/student", // ✅ UPDATED (Make sure this route exists, or change to "/signup")
+    link: "/student", // ✅ UPDATED (Ensure this route exists, or change to "/signup")
     accent: "from-flame/15 to-brand/10",
   },
   {
@@ -63,6 +61,33 @@ const audienceCards = [
   },
 ];
 
+const stats = [
+  { value: "3x", label: "more active study time" },
+  { value: "90%", label: "less manual note cleanup" },
+  { value: "24/7", label: "access to your revision engine" },
+];
+
+// ✅ ENSURED: howItWorks is defined here so it doesn't throw a ReferenceError
+const howItWorks = [
+  {
+    step: "01",
+    icon: BookOpen,
+    title: "Paste your notes",
+    description: "Drop in your messy class notes, textbook pages, or lecture transcripts.",
+  },
+  {
+    step: "02",
+    icon: Zap,
+    title: "AI transforms them",
+    description: "Our engine instantly summarizes, structures, and generates audio or visual aids.",
+  },
+  {
+    step: "03",
+    icon: Headphones,
+    title: "Learn your way",
+    description: "Listen to it like a podcast, watch the visual summary, or test yourself with AI quizzes.",
+  },
+];
 
 export default function LandingPage() {
   return (
@@ -120,7 +145,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Hero Right Side (Dashboard Mockup) - Kept exactly as you had it */}
+            {/* Hero Right Side (Dashboard Mockup) */}
             <div className="relative">
               <div className="absolute -left-10 top-8 h-40 w-40 rounded-full bg-brand/15 blur-3xl" />
               <div className="absolute -right-8 bottom-4 h-40 w-40 rounded-full bg-electric/15 blur-3xl" />
@@ -199,7 +224,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ================= NEW: NATION BUILDER MISSION SECTION ================= */}
+      {/* ================= NATION BUILDER MISSION SECTION ================= */}
       <section className="border-y border-border bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
@@ -233,7 +258,6 @@ export default function LandingPage() {
               </ul>
             </div>
             
-            {/* Visual element for the mission */}
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-brand/10 to-electric/10 rounded-[30px] blur-2xl"></div>
               <div className="relative rounded-[30px] border border-border bg-card p-8 shadow-soft">
@@ -251,7 +275,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ================= NEW: HOW IT WORKS SECTION ================= */}
+      {/* ================= HOW IT WORKS SECTION ================= */}
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <div className="mb-12 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Simple Workflow</p>
@@ -329,7 +353,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ================= NEW: FINAL CTA SECTION ================= */}
+      {/* ================= FINAL CTA SECTION ================= */}
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
         <div className="relative overflow-hidden rounded-[30px] bg-gradient-to-br from-brand to-electric p-10 text-center shadow-glow lg:p-16">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIi8+PC9zdmc+')] opacity-30"></div>
@@ -362,4 +386,4 @@ export default function LandingPage() {
 
     </MarketingLayout>
   );
-} 
+}
