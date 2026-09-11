@@ -5,7 +5,7 @@ import {
     CheckCircle2, Target, Award
 } from "lucide-react";
 import api from "../../utils/api";
-import { useMusic } from "../../context/MusicContext"; // ✅ ADD THIS
+import { useMusic } from "../../context/MusicContext";
 
 const BEATS = [
   { id: "beat_1", name: "Upbeat Hip-Hop", url: "https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3" },
@@ -21,30 +21,24 @@ export default function FocusTime() {
     
     // ✅ Global Music State
     const { 
-  isPlaying: isBeatPlaying, 
-  currentBeat, 
-  playBeat, 
-  pauseBeat 
-} = useMusic();
-    const [localVolume, setLocalVolume] = useState(0.4);
+        isPlaying: isBeatPlaying, 
+        currentBeat, 
+        playBeat, 
+        pauseBeat 
+    } = useMusic();
 
+    const getTimeForMode = (mode) => {
+        const savedFocus = Number(localStorage.getItem("focusTime")) || 25;
+        const savedShort = Number(localStorage.getItem("shortBreak")) || 5;
+        const savedLong = Number(localStorage.getItem("longBreak")) || 15;
 
-// Replace the getTimeForMode function and initial state with this:
+        if (mode === "focus") return savedFocus * 60;
+        if (mode === "shortBreak") return savedShort * 60;
+        if (mode === "longBreak") return savedLong * 60;
+        return savedFocus * 60;
+    };
 
-const getTimeForMode = (mode) => {
-    // ✅ Read from localStorage, fallback to defaults if not set
-    const savedFocus = Number(localStorage.getItem("focusTime")) || 25;
-    const savedShort = Number(localStorage.getItem("shortBreak")) || 5;
-    const savedLong = Number(localStorage.getItem("longBreak")) || 15;
-
-    if (mode === "focus") return savedFocus * 60;
-    if (mode === "shortBreak") return savedShort * 60;
-    if (mode === "longBreak") return savedLong * 60;
-    return savedFocus * 60;
-};
-
-// Update the initial state to use the saved focus time
-const [timeLeft, setTimeLeft] = useState(getTimeForMode("focus"));
+    const [timeLeft, setTimeLeft] = useState(getTimeForMode("focus"));
     const timerRef = useRef(null);
 
     const formatTime = (seconds) => {
@@ -158,7 +152,7 @@ const [timeLeft, setTimeLeft] = useState(getTimeForMode("focus"));
                     </div>
 
                     <div className="space-y-6">
-                        {/* ✅ NEW: Global Background Music Controls */}
+                        {/* ✅ FIXED: Global Background Music Controls */}
                         <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-4">
                             <h3 className="font-display font-semibold text-foreground text-lg flex items-center gap-2">
                                 <Music className="w-5 h-5 text-purple-500" /> Background Music
@@ -168,36 +162,31 @@ const [timeLeft, setTimeLeft] = useState(getTimeForMode("focus"));
                             <div className="flex items-center gap-3">
                                 <select 
                                     value={currentBeat?.id || ""} 
-                                    onChange={(e) => setCurrentBeat(BEATS.find(b => b.id === e.target.value))}
+                                    onChange={(e) => {
+                                        const beat = BEATS.find(b => b.id === e.target.value);
+                                        if (beat) playBeat(beat);
+                                    }}
                                     className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                                 >
                                     <option value="">Select a beat...</option>
                                     {BEATS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                 </select>
-                               <button 
-  onClick={() => {
-    const beat = FREE_BEATS.find(b => b.id === selectedBeatId);
-    if (beat) {
-      if (isBeatPlaying) {
-        pauseBeat();
-      } else {
-        playBeat(beat);
-      }
-    }
-  }}
-  disabled={!currentBeat && !selectedBeatId}
-  className={`p-3 rounded-full transition-colors ${isBeatPlaying ? 'bg-purple-500 text-white' : 'bg-muted text-muted-foreground hover:bg-purple-500/10 hover:text-purple-500'} disabled:opacity-50`}
->
-  {isBeatPlaying ? <Pause className="w-5 h-5" fill="currentColor" /> : <Play className="w-5 h-5" fill="currentColor" />}
-</button>
+                                
+                                {/* ✅ FIXED BUTTON: Uses currentBeat directly, no more undefined errors */}
+                                <button 
+                                    onClick={() => {
+                                        if (isBeatPlaying) {
+                                            pauseBeat();
+                                        } else if (currentBeat) {
+                                            playBeat(currentBeat);
+                                        }
+                                    }}
+                                    disabled={!currentBeat}
+                                    className={`p-3 rounded-full transition-colors ${isBeatPlaying ? 'bg-purple-500 text-white' : 'bg-muted text-muted-foreground hover:bg-purple-500/10 hover:text-purple-500'} disabled:opacity-50`}
+                                >
+                                    {isBeatPlaying ? <Pause className="w-5 h-5" fill="currentColor" /> : <Play className="w-5 h-5" fill="currentColor" />}
+                                </button>
                             </div>
-                            
-                            {currentBeat && (
-                                <div className="flex items-center gap-3 pt-2">
-                                    <Volume2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                                    <input type="range" min="0" max="1" step="0.05" value={localVolume} onChange={(e) => setLocalVolume(Number(e.target.value))} className="w-full accent-purple-600" />
-                                </div>
-                            )}
                         </div>
 
                         <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-4">
