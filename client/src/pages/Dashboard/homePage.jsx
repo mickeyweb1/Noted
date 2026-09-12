@@ -16,15 +16,10 @@ import {
   Copy,
   Check,
   Share2,
-<<<<<<< HEAD
-  MessageCircle, // ✅ Cleanly imported here
+  MessageCircle,
 } from "lucide-react";
 import api from "../../utils/api";
-import FeedbackModal from "../../components/FeedbackModal"; 
-=======
-} from "lucide-react";
-import api from "../../utils/api";
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
+import FeedbackModal from "../../components/FeedbackModal";
 
 export default function StudentHome() {
   const { user } = useUserContext();
@@ -39,7 +34,6 @@ export default function StudentHome() {
     }
   })();
 
-<<<<<<< HEAD
   const currentUser = storedUserInfo.xp !== undefined ? storedUserInfo : user || {};
   const userName = currentUser?.firstName || currentUser?.fullName || "Student";
   const isPersonalUser = currentUser?.role === "personal_user";
@@ -50,43 +44,12 @@ export default function StudentHome() {
   const [topStudents, setTopStudents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [focusData, setFocusData] = useState({ dailyMinutes: 0, totalHours: 0 });
-=======
-  const currentUser =
-    storedUserInfo.xp !== undefined ? storedUserInfo : user || {};
-  const userName = currentUser?.firstName || currentUser?.fullName || "Student";
-
-  // ✅ Detect if user is a personal user
-  const isPersonalUser = currentUser?.role === "personal_user";
-
-  const [libraryData, setLibraryData] = useState([]);
-  const [stats, setStats] = useState({
-    streak: 0,
-    totalNotes: 0,
-    totalQuizzes: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [topStudents, setTopStudents] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
-  const [focusData, setFocusData] = useState({
-    dailyMinutes: 0,
-    totalHours: 0,
-  });
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
 
   // Battle Arena States
   const [classmates, setClassmates] = useState([]);
   const [pendingBattles, setPendingBattles] = useState([]);
-<<<<<<< HEAD
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false); // ✅ Feedback State
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [battleTab, setBattleTab] = useState(isPersonalUser ? "link" : "classmate");
-=======
-  // ✅ Default to "link" if personal user, otherwise "classmate"
-  const [battleTab, setBattleTab] = useState(
-    isPersonalUser ? "link" : "classmate",
-  );
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
   const [selectedOpponent, setSelectedOpponent] = useState("");
   const [battleTopic, setBattleTopic] = useState("");
   const [numQuestions, setNumQuestions] = useState(3);
@@ -104,18 +67,7 @@ export default function StudentHome() {
   const date = new Date();
   const dateInfo = `${date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`;
   const hours = date.getHours();
-<<<<<<< HEAD
   let period = hours >= 5 && hours < 12 ? "Good morning" : hours >= 12 && hours < 17 ? "Good afternoon" : hours >= 17 && hours < 21 ? "Good evening" : "Late night Study";
-=======
-  let period =
-    hours >= 5 && hours < 12
-      ? "Good morning"
-      : hours >= 12 && hours < 17
-        ? "Good afternoon"
-        : hours >= 17 && hours < 21
-          ? "Good evening"
-          : "Late night Study";
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -126,15 +78,7 @@ export default function StudentHome() {
           setLibraryData(allItems);
           let streak = 0;
           if (allItems.length > 0) {
-<<<<<<< HEAD
             const uniqueDates = [...new Set(allItems.map((item) => new Date(item.createdAt).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
-=======
-            const uniqueDates = [
-              ...new Set(
-                allItems.map((item) => new Date(item.createdAt).toDateString()),
-              ),
-            ].sort((a, b) => new Date(b) - new Date(a));
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
             const today = new Date().toDateString();
             const yesterday = new Date(Date.now() - 86400000).toDateString();
             if (uniqueDates[0] === today || uniqueDates[0] === yesterday) {
@@ -155,12 +99,7 @@ export default function StudentHome() {
           setStats({
             streak,
             totalNotes: allItems.filter((item) => item.type !== "quiz").length,
-<<<<<<< HEAD
             totalQuizzes: allItems.filter((item) => item.type === "quiz").length,
-=======
-            totalQuizzes: allItems.filter((item) => item.type === "quiz")
-              .length,
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
           });
         }
 
@@ -174,12 +113,7 @@ export default function StudentHome() {
         }
 
         const lbRes = await api.get("/auth/leaderboard?scope=class");
-<<<<<<< HEAD
         if (lbRes.data.success) setTopStudents(lbRes.data.data.topUsers.slice(0, 3));
-=======
-        if (lbRes.data.success)
-          setTopStudents(lbRes.data.data.topUsers.slice(0, 3));
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
 
         const classmatesRes = await api.get("/ai/battle/classmates");
         if (classmatesRes.data.success) setClassmates(classmatesRes.data.data);
@@ -187,14 +121,7 @@ export default function StudentHome() {
         const battlesRes = await api.get("/ai/battle/pending");
         if (battlesRes.data.success) {
           const incomingBattles = battlesRes.data.data.filter(
-<<<<<<< HEAD
             (b) => b.status === "pending" && b.challengerId !== user?._id && b.challengerId !== currentUser._id
-=======
-            (b) =>
-              b.status === "pending" &&
-              b.challengerId !== user?._id &&
-              b.challengerId !== currentUser._id,
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
           );
           setPendingBattles(incomingBattles);
         }
@@ -211,15 +138,7 @@ export default function StudentHome() {
     if (!selectedOpponent) return alert("Please select an opponent!");
     setIsActionLoading(true);
     try {
-<<<<<<< HEAD
       const res = await api.post("/ai/battle/challenge", { opponentId: selectedOpponent, topic: battleTopic || "General Knowledge", numQuestions });
-=======
-      const res = await api.post("/ai/battle/challenge", {
-        opponentId: selectedOpponent,
-        topic: battleTopic || "General Knowledge",
-        numQuestions,
-      });
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
       if (res.data.success) {
         alert(res.data.message);
         setSelectedOpponent("");
@@ -238,20 +157,12 @@ export default function StudentHome() {
       if (res.data.success) {
         setGeneratedLink(res.data.data.battleLink);
         setCopied(false);
-<<<<<<< HEAD
       }
     } catch (error) { 
       alert(error.response?.data?.message || "Failed to generate link."); 
     } finally { 
       setIsActionLoading(false); 
     }
-=======
-        // ✅ REMOVED: navigate(...) 
-        // Now the user stays on the dashboard to see the link and the new button.
-      }
-    } catch (error) { alert(error.response?.data?.message || "Failed to generate link."); }
-    finally { setIsActionLoading(false); }
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
   };
 
   const copyLink = () => {
@@ -284,7 +195,6 @@ export default function StudentHome() {
         <div className="relative z-10 flex flex-col items-start justify-between gap-6 lg:flex-row lg:items-end">
           <div className="min-w-0 space-y-2">
             <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-<<<<<<< HEAD
               <span className="w-2 h-2 rounded-full bg-brand animate-pulse" /> {dateInfo}
             </p>
             <h2 className="max-w-2xl text-2xl font-display font-bold leading-tight text-foreground sm:text-3xl lg:text-4xl">
@@ -297,29 +207,6 @@ export default function StudentHome() {
               <Sparkles className="w-4 h-4" /> Generate AI Summary
             </NavLink>
             <NavLink to="/focusTime" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold text-foreground transition-all hover:scale-105 hover:bg-accent hover:text-accent-foreground active:scale-95 sm:w-auto sm:px-6">
-=======
-              <span className="w-2 h-2 rounded-full bg-brand animate-pulse" />{" "}
-              {dateInfo}
-            </p>
-            <h2 className="max-w-2xl text-2xl font-display font-bold leading-tight text-foreground sm:text-3xl lg:text-4xl">
-              {period}, {userName}! <br />
-              <span className="text-muted-foreground">
-                Ready to learn something new?
-              </span>
-            </h2>
-          </div>
-          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-            <NavLink
-              to="/aiGenerator"
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-brand-foreground shadow-lg shadow-brand/20 transition-all hover:scale-105 hover:bg-brand/90 active:scale-95 sm:w-auto sm:px-6"
-            >
-              <Sparkles className="w-4 h-4" /> Generate AI Summary
-            </NavLink>
-            <NavLink
-              to="/focusTime"
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold text-foreground transition-all hover:scale-105 hover:bg-accent hover:text-accent-foreground active:scale-95 sm:w-auto sm:px-6"
-            >
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
               <Clock className="w-4 h-4" /> Start Focus
             </NavLink>
           </div>
@@ -335,37 +222,19 @@ export default function StudentHome() {
               <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <Trophy className="w-4 h-4 text-flame" /> Study Streak
               </div>
-<<<<<<< HEAD
               <span className="text-2xl font-display font-bold text-foreground">{isLoading ? "..." : `${stats.streak} Days`}</span>
-=======
-              <span className="text-2xl font-display font-bold text-foreground">
-                {isLoading ? "..." : `${stats.streak} Days`}
-              </span>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
             </div>
             <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
               <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <BookOpen className="w-4 h-4 text-brand" /> Total Notes
               </div>
-<<<<<<< HEAD
               <span className="text-2xl font-display font-bold text-foreground">{isLoading ? "..." : stats.totalNotes}</span>
-=======
-              <span className="text-2xl font-display font-bold text-foreground">
-                {isLoading ? "..." : stats.totalNotes}
-              </span>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
             </div>
             <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
               <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <Brain className="w-4 h-4 text-electric" /> Quizzes Taken
               </div>
-<<<<<<< HEAD
               <span className="text-2xl font-display font-bold text-foreground">{isLoading ? "..." : stats.totalQuizzes}</span>
-=======
-              <span className="text-2xl font-display font-bold text-foreground">
-                {isLoading ? "..." : stats.totalQuizzes}
-              </span>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
             </div>
             <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-brand/20 bg-gradient-to-br from-brand/10 to-electric/10 p-4 shadow-sm sm:p-5">
               <div className="flex min-w-0 items-center justify-between gap-2">
@@ -380,7 +249,6 @@ export default function StudentHome() {
                 />
               </div>
               <div className="mt-1 min-w-0">
-<<<<<<< HEAD
                 <span className="text-xs text-muted-foreground mb-1 block">{currentUser?.xp || 0} XP Total</span>
                 <span className="text-2xl font-display font-bold text-foreground">{isLoading ? "..." : formatTime(focusData.dailyMinutes)}</span>
                 <p className="text-xs text-muted-foreground">Studied on this day</p>
@@ -388,56 +256,19 @@ export default function StudentHome() {
               <div className="pt-2 border-t border-brand/10 mt-1 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Lifetime Total:</span>
                 <span className="text-sm font-bold text-brand">{isLoading ? "..." : formatTime(Math.round(focusData.totalHours * 60))}</span>
-=======
-                <span className="text-xs text-muted-foreground mb-1 block">
-                  {currentUser?.xp || 0} XP Total
-                </span>
-                <span className="text-2xl font-display font-bold text-foreground">
-                  {isLoading ? "..." : formatTime(focusData.dailyMinutes)}
-                </span>
-                <p className="text-xs text-muted-foreground">
-                  Studied on this day
-                </p>
-              </div>
-              <div className="pt-2 border-t border-brand/10 mt-1 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  Lifetime Total:
-                </span>
-                <span className="text-sm font-bold text-brand">
-                  {isLoading
-                    ? "..."
-                    : formatTime(Math.round(focusData.totalHours * 60))}
-                </span>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
               </div>
             </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
-<<<<<<< HEAD
               <h3 className="font-display font-semibold text-foreground">Recent Notes</h3>
               <NavLink to="/myLibrary" className="text-xs font-medium text-brand hover:underline flex items-center gap-1">
-=======
-              <h3 className="font-display font-semibold text-foreground">
-                Recent Notes
-              </h3>
-              <NavLink
-                to="/myLibrary"
-                className="text-xs font-medium text-brand hover:underline flex items-center gap-1"
-              >
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                 View all <ArrowRight className="w-3 h-3" />
               </NavLink>
             </div>
             {isLoading ? (
-<<<<<<< HEAD
               <div className="p-8 text-center text-muted-foreground">Loading...</div>
-=======
-              <div className="p-8 text-center text-muted-foreground">
-                Loading...
-              </div>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
             ) : libraryData.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
                 <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -446,7 +277,6 @@ export default function StudentHome() {
             ) : (
               <div className="divide-y divide-border">
                 {libraryData.slice(0, 3).map((item) => (
-<<<<<<< HEAD
                   <NavLink key={item._id} to="/myLibrary" className="group flex min-w-0 items-center justify-between gap-3 p-4 transition-colors hover:bg-accent/50 sm:p-5">
                     <div className="flex min-w-0 items-center gap-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${item.type === "quiz" ? "bg-electric/10 text-electric" : "bg-brand/10 text-brand"}`}>
@@ -455,31 +285,6 @@ export default function StudentHome() {
                       <div className="min-w-0">
                         <p className="max-w-[calc(100vw-9rem)] truncate text-sm font-medium text-foreground transition-colors group-hover:text-brand sm:max-w-[22rem]">{item.title}</p>
                         <p className="text-xs text-muted-foreground capitalize">{item.type} • {new Date(item.createdAt).toLocaleDateString()}</p>
-=======
-                  <NavLink
-                    key={item._id}
-                    to="/myLibrary"
-                    className="group flex min-w-0 items-center justify-between gap-3 p-4 transition-colors hover:bg-accent/50 sm:p-5"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center ${item.type === "quiz" ? "bg-electric/10 text-electric" : "bg-brand/10 text-brand"}`}
-                      >
-                        {item.type === "quiz" ? (
-                          <Brain className="w-5 h-5" />
-                        ) : (
-                          <BookOpen className="w-5 h-5" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="max-w-[calc(100vw-9rem)] truncate text-sm font-medium text-foreground transition-colors group-hover:text-brand sm:max-w-[22rem]">
-                          {item.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground capitalize">
-                          {item.type} •{" "}
-                          {new Date(item.createdAt).toLocaleDateString()}
-                        </p>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                       </div>
                     </div>
                     <ArrowRight className="w-4 h-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -500,18 +305,8 @@ export default function StudentHome() {
                   <Swords className="w-5 h-5 text-electric" /> Battle Waiting!
                 </h3>
               </div>
-<<<<<<< HEAD
               <p className="text-sm text-muted-foreground mb-3">You have a battle ready to start or join.</p>
               <button onClick={() => handleAcceptBattle(pendingBattles[0])} className="w-full py-2 rounded-lg bg-electric text-electric-foreground text-sm font-bold hover:bg-electric/90 transition-colors">
-=======
-              <p className="text-sm text-muted-foreground mb-3">
-                You have a battle ready to start or join.
-              </p>
-              <button
-                onClick={() => handleAcceptBattle(pendingBattles[0])}
-                className="w-full py-2 rounded-lg bg-electric text-electric-foreground text-sm font-bold hover:bg-electric/90 transition-colors"
-              >
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                 Enter Arena Now
               </button>
             </div>
@@ -524,18 +319,11 @@ export default function StudentHome() {
               <h3 className="font-display font-bold text-foreground flex items-center gap-2">
                 <Swords className="w-5 h-5 text-brand" /> Battle Arena
               </h3>
-<<<<<<< HEAD
               <span className="text-[10px] font-bold uppercase tracking-wider text-brand bg-brand/10 px-2 py-1 rounded-full">Live</span>
-=======
-              <span className="text-[10px] font-bold uppercase tracking-wider text-brand bg-brand/10 px-2 py-1 rounded-full">
-                Live
-              </span>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
             </div>
 
             {pendingBattles.length > 0 ? (
               <div className="space-y-3 relative z-10">
-<<<<<<< HEAD
                 <p className="text-sm text-muted-foreground font-medium">🔥 You have been challenged!</p>
                 {pendingBattles.slice(0, 1).map((battle) => (
                   <div key={battle._id} className="p-3 rounded-lg bg-card border border-brand/20 space-y-3">
@@ -545,31 +333,6 @@ export default function StudentHome() {
                     </div>
                     <p className="text-xs text-muted-foreground">Topic: {battle.topic} ({battle.questions?.length || 3} Qs)</p>
                     <button onClick={() => handleAcceptBattle(battle)} className="w-full py-2 rounded-lg bg-brand text-brand-foreground text-sm font-bold hover:bg-brand/90 transition-colors flex items-center justify-center gap-2">
-=======
-                <p className="text-sm text-muted-foreground font-medium">
-                  🔥 You have been challenged!
-                </p>
-                {pendingBattles.slice(0, 1).map((battle) => (
-                  <div
-                    key={battle._id}
-                    className="p-3 rounded-lg bg-card border border-brand/20 space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-foreground">
-                        {battle.challengerName}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        vs You
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Topic: {battle.topic} ({battle.questions?.length || 3} Qs)
-                    </p>
-                    <button
-                      onClick={() => handleAcceptBattle(battle)}
-                      className="w-full py-2 rounded-lg bg-brand text-brand-foreground text-sm font-bold hover:bg-brand/90 transition-colors flex items-center justify-center gap-2"
-                    >
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                       <Swords className="w-4 h-4" /> Accept Challenge
                     </button>
                   </div>
@@ -577,7 +340,6 @@ export default function StudentHome() {
               </div>
             ) : (
               <div className="relative z-10">
-<<<<<<< HEAD
                 <div className="flex bg-background/50 rounded-lg p-1 mb-4 border border-border">
                   {!isPersonalUser && (
                     <button onClick={() => setBattleTab("classmate")} className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${battleTab === "classmate" ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -585,80 +347,24 @@ export default function StudentHome() {
                     </button>
                   )}
                   <button onClick={() => setBattleTab("link")} className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${battleTab === "link" ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-=======
-                {/* Tabs: Hide "Classmate" for Personal Users */}
-                <div className="flex bg-background/50 rounded-lg p-1 mb-4 border border-border">
-                  {!isPersonalUser && (
-                    <button
-                      onClick={() => setBattleTab("classmate")}
-                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${battleTab === "classmate" ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    >
-                      Classmate
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setBattleTab("link")}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${battleTab === "link" ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                  >
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                     Invite Link
                   </button>
                 </div>
 
                 {battleTab === "classmate" && !isPersonalUser && (
                   <div className="space-y-3">
-<<<<<<< HEAD
                     <select value={selectedOpponent} onChange={(e) => setSelectedOpponent(e.target.value)} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
                       <option value="">Select a classmate...</option>
                       {classmates.map((c) => (<option key={c._id} value={c._id}>{c.fullName} (Lvl {c.level})</option>))}
                     </select>
                     <input type="text" placeholder="Enter topic (e.g., Biology, World War II)" value={battleTopic} onChange={(e) => setBattleTopic(e.target.value)} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
                     <select value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-=======
-                    <select
-                      value={selectedOpponent}
-                      onChange={(e) => setSelectedOpponent(e.target.value)}
-                      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                    >
-                      <option value="">Select a classmate...</option>
-                      {classmates.map((c) => (
-                        <option key={c._id} value={c._id}>
-                          {c.fullName} (Lvl {c.level})
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Enter topic (e.g., Biology, World War II)"
-                      value={battleTopic}
-                      onChange={(e) => setBattleTopic(e.target.value)}
-                      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                    />
-                    <select
-                      value={numQuestions}
-                      onChange={(e) => setNumQuestions(Number(e.target.value))}
-                      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                    >
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                       <option value={3}>3 Questions (Quick)</option>
                       <option value={5}>5 Questions (Standard)</option>
                       <option value={10}>10 Questions (Marathon)</option>
                     </select>
-<<<<<<< HEAD
                     <button onClick={handleSendChallenge} disabled={isActionLoading || !selectedOpponent} className="w-full py-2.5 rounded-lg bg-brand text-brand-foreground text-sm font-bold hover:bg-brand/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
                       {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
-=======
-                    <button
-                      onClick={handleSendChallenge}
-                      disabled={isActionLoading || !selectedOpponent}
-                      className="w-full py-2.5 rounded-lg bg-brand text-brand-foreground text-sm font-bold hover:bg-brand/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isActionLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Swords className="w-4 h-4" />
-                      )}
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                       {isActionLoading ? "Generating..." : "Send Challenge"}
                     </button>
                   </div>
@@ -666,28 +372,9 @@ export default function StudentHome() {
 
                 {battleTab === "link" && (
                   <div className="space-y-3">
-<<<<<<< HEAD
                     <p className="text-xs text-muted-foreground">Generate a secure link and share it via WhatsApp. The receiver will get the exact quiz you set up!</p>
                     <input type="text" placeholder="Enter topic (e.g., Physics, History)" value={battleTopic} onChange={(e) => setBattleTopic(e.target.value)} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
                     <select value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-=======
-                    <p className="text-xs text-muted-foreground">
-                      Generate a secure link and share it via WhatsApp. The
-                      receiver will get the exact quiz you set up!
-                    </p>
-                    <input
-                      type="text"
-                      placeholder="Enter topic (e.g., Physics, History)"
-                      value={battleTopic}
-                      onChange={(e) => setBattleTopic(e.target.value)}
-                      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                    />
-                    <select
-                      value={numQuestions}
-                      onChange={(e) => setNumQuestions(Number(e.target.value))}
-                      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                    >
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                       <option value={3}>3 Questions (Quick)</option>
                       <option value={5}>5 Questions (Standard)</option>
                       <option value={10}>10 Questions (Marathon)</option>
@@ -706,11 +393,6 @@ export default function StudentHome() {
                             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                           </button>
                         </div>
-<<<<<<< HEAD
-=======
-                        
-                        {/* ✅ NEW: Enter Arena Button */}
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                         <button 
                           onClick={() => {
                             const inviteCode = generatedLink.split('invite=')[1];
@@ -720,17 +402,9 @@ export default function StudentHome() {
                         >
                           <Swords className="w-4 h-4" /> Enter Arena & Wait
                         </button>
-<<<<<<< HEAD
                         <button onClick={shareToWhatsApp} className="w-full py-2.5 rounded-lg bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
                           <Share2 className="w-4 h-4" /> Share to WhatsApp
                         </button>
-=======
-
-                        <button onClick={shareToWhatsApp} className="w-full py-2.5 rounded-lg bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
-                          <Share2 className="w-4 h-4" /> Share to WhatsApp
-                        </button>
-                        
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
                         <button onClick={() => { setGeneratedLink(""); setBattleTopic(""); }} className="w-full text-xs text-muted-foreground hover:text-foreground underline">
                           Generate New Link
                         </button>
@@ -748,7 +422,6 @@ export default function StudentHome() {
               <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-brand" /> Top 3 This Week
               </h3>
-<<<<<<< HEAD
               <NavLink to="/leaderboard" className="text-xs font-medium text-brand hover:underline">View All</NavLink>
             </div>
             <div className="space-y-3">
@@ -767,52 +440,11 @@ export default function StudentHome() {
                 ))
               ) : (
                 <div className="text-sm text-muted-foreground text-center py-2">No class data yet. Be the first!</div>
-=======
-              <NavLink
-                to="/leaderboard"
-                className="text-xs font-medium text-brand hover:underline"
-              >
-                View All
-              </NavLink>
-            </div>
-            <div className="space-y-3">
-              {isLoading ? (
-                <div className="text-sm text-muted-foreground text-center py-2">
-                  Loading...
-                </div>
-              ) : topStudents.length > 0 ? (
-                topStudents.map((student, index) => (
-                  <div
-                    key={student._id}
-                    className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/30 border border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="w-6 flex justify-center shrink-0">
-                      {getRankIcon(index)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {student.fullName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Level {student.level}
-                      </p>
-                    </div>
-                    <span className="text-sm font-bold text-brand shrink-0">
-                      {student.xp} XP
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-muted-foreground text-center py-2">
-                  No class data yet. Be the first!
-                </div>
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
               )}
             </div>
           </div>
         </div>
       </div>
-<<<<<<< HEAD
       
       {/* ✅ FLOATING FEEDBACK BUTTON & MODAL (Placed at root level for perfect positioning) */}
       <button 
@@ -827,8 +459,3 @@ export default function StudentHome() {
     </section>
   );
 }
-=======
-    </section>
-  );
-}
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
