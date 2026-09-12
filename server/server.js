@@ -8,8 +8,11 @@ import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js'; // ✅ ADDE
+<<<<<<< HEAD
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import { submitContactForm } from './controllers/contactController.js';
+=======
+>>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
 
 dotenv.config();
 
@@ -66,8 +69,11 @@ app.use('/api/auth/claim', claimLimiter);
 // 4. Routes
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', authRoutes);
+<<<<<<< HEAD
 app.use('/api/feedback', feedbackRoutes);
 app.post('/api/contact', submitContactForm);
+=======
+>>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
 
 app.use('/api/ai/generate', aiLimiter);
 app.use('/api/ai', aiRoutes);
