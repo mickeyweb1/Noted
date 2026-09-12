@@ -2,34 +2,31 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import helmet from 'helmet'; // ✅ ADDED: Missing import
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
-import { errorHandler } from './middleware/errorHandler.js'; // ✅ ADDE
-<<<<<<< HEAD
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import { submitContactForm } from './controllers/contactController.js';
-=======
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
+import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
 
 const app = express();
 
-// 2. Security & Global Middleware (Must be early)
-app.use(helmet()); // ✅ SECURE: Sets secure HTTP headers automatically
+// 2. Security & Global Middleware
+app.use(helmet());
 app.use(cors({
   origin: process.env.CLIENT_URL || "http://localhost:5173",
   credentials: true
 }));
-   app.use(express.json({ limit: '10mb' }));
-   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 3. Rate Limiting (Protects against brute force & API drain)
+// 3. Rate Limiting
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 5, 
   message: { success: false, message: "Too many login attempts, please try again later." },
   standardHeaders: true,
@@ -37,47 +34,40 @@ const loginLimiter = rateLimit({
 });
 
 const aiLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 15, // Increased slightly to 15 so users don't hit it too fast during demo
+  windowMs: 60 * 60 * 1000,
+  max: 15,
   message: { success: false, message: "AI generation limit reached. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// ✅ SECURE: Limit registration attempts
 const registrationLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 5, 
   message: { success: false, message: "Too many registration attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// ✅ SECURE: Limit account claim attempts
 const claimLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 10, 
   message: { success: false, message: "Too many activation attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Apply them (Add these lines where your other app.use statements are)
 app.use('/api/auth/register', registrationLimiter);
 app.use('/api/auth/claim', claimLimiter);
 
 // 4. Routes
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', authRoutes);
-<<<<<<< HEAD
 app.use('/api/feedback', feedbackRoutes);
 app.post('/api/contact', submitContactForm);
-=======
->>>>>>> 45d7c19d3f74fa382afad7f0a96948337af450b0
 
 app.use('/api/ai/generate', aiLimiter);
 app.use('/api/ai', aiRoutes);
-
 app.use('/api/admin', adminRoutes);
 
 // 5. Test Route
@@ -85,15 +75,15 @@ app.get('/', (req, res) => {
     res.json({ success: true, message: '✅ Noted Backend API is running smoothly!' });
 });
 
-// 6. 404 Catch-All (MUST be after all routes)
+// 6. 404 Catch-All
 app.use((req, res) => {
     res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` });
 });
 
-// 7. Global Error Handler (MUST BE THE VERY LAST THING)
+// 7. Global Error Handler
 app.use(errorHandler);
 
-// 8. Database Connection with AUTO-RECONNECT Logic
+// 8. Database Connection
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 
