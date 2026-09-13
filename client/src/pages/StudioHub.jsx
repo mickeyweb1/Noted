@@ -91,7 +91,7 @@ export default function StudioHub() {
         <div className="mt-12 text-center">
           <p className="text-sm text-muted-foreground">
             💡 <span className="font-semibold text-foreground">Pro Tip:</span> You can also access all your previously generated content in the{" "}
-            <Link to="/library" className="text-brand hover:underline font-medium">Student Library</Link>.
+            <Link to="/myLibrary" className="text-brand hover:underline font-medium">Student Library</Link>.
           </p>
         </div>
 

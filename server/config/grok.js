@@ -7,8 +7,9 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// ✅ Changed to a highly reliable model from your available list
+// Revert back to your original working model
 const BEST_MODEL = "qwen/qwen3.8-27b"; 
+// (Note: You can also use "llama3-70b-8192" if you want it to be even smarter, but 8b is much faster and cheaper).
 
 const MAX_RETRIES = 2;
 
@@ -25,15 +26,13 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
         messages: messages,
         model: BEST_MODEL,
         temperature: 0.7,
-        max_tokens: options.max_tokens || 1024,
+       // ✅ INCREASED: Changed from 1024 to 4096 to allow long, detailed study notes
+        max_tokens: options.max_tokens || 4096, 
         ...options,
       });
 
       let rawText = completion.choices[0]?.message?.content || "";
       
-      // ✅ DEBUG: Let's see exactly what Groq returns BEFORE we clean it
-      console.log("🔍 RAW RESPONSE FROM GROQ (before cleaning):", rawText);
-
       // Clean up common AI formatting artifacts
       let cleanText = rawText
         .replace(/<think>[\s\S]*?<\/think>/gi, "")

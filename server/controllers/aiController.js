@@ -123,8 +123,8 @@ export const generateContent = async (req, res, next) => {
     if (!ALLOWED_MODES.includes(mode)) throw httpError("Invalid generation mode.", 400);
 
     const inputToCheck = mode === "tutor" ? (Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.content : "") : text;
-    const cleanInput = ensureText(inputToCheck, "Please provide at least 5 characters.");
-    if (cleanInput.length < 5) throw httpError("Please provide at least 5 characters.", 400);
+const cleanInput = ensureText(inputToCheck, "Please provide some text.");
+if (cleanInput.length < 1) throw httpError("Please provide some text.", 400);
     if (cleanInput.length > MAX_INPUT_LENGTH) throw httpError("Your notes are too long. Please use fewer than 50,000 characters.", 413);
 
     const requestedTitle = typeof title === "string" && title.trim() ? title.trim().slice(0, 160) : "";
@@ -132,15 +132,18 @@ export const generateContent = async (req, res, next) => {
 
     let aiTitle = requestedTitle || `${mode.charAt(0).toUpperCase()}${mode.slice(1)} Notes`;
     let aiContent = "";
-
+    
     if (mode === "tutor") {
-      const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant. STRICT RULE: EDUCATIONAL CONTENT ONLY. Answer clearly, accurately, and concisely.`;
-      const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
+      const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant. 
+      
+      STRICT RULES:
+      1. EDUCATIONAL CONTENT ONLY: Answer clearly, accurately, and concisely.
+      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name (such as Qwen, Groq, Llama, etc.). If a user asks who you are, who created you, or what model you are, you MUST strictly reply that you are the Noted AI Tutor, built by the Noted development team.`;      const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
       aiContent = await runGroq([{ role: "system", content: tutorSystemPrompt }, ...safeMessages]);
       aiTitle = requestedTitle || "Tutor Chat";
     } else if (mode === "summary") {
       const systemPrompt = "You are an expert academic study assistant. Create an accurate, well-structured study summary. Educational content only.";
-      const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`);
+const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`, { max_tokens: 4096 });
       const lines = generatedTextFull.split("\n");
       const firstLine = lines.find((line) => line.trim().length > 0);
       if (firstLine && !firstLine.trim().startsWith("-") && !firstLine.trim().startsWith("*") && !firstLine.trim().startsWith("**") && !firstLine.trim().startsWith("📚")) {
@@ -194,8 +197,8 @@ export const generateContent = async (req, res, next) => {
       const questionCount = Math.min(Math.max(Number.isFinite(parsedQuestionCount) ? parsedQuestionCount : 5, 3), 15);
       const difficultyLevel = typeof difficulty === "string" && difficulty.trim() ? difficulty.trim().slice(0, 30) : "Medium";
       const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions. Difficulty: ${difficultyLevel}. Every question must be answerable from the notes. Output VALID JSON ONLY: { "title": "Quiz title", "questions": [ { "question": "Question text", "options": ["A", "B", "C", "D"], "answer": "Correct option", "explanation": "Short explanation" } ] }`;
-      const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }]);
-      const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull));
+      const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 2048 });
+         const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedQuiz.title;
       aiContent = JSON.stringify(parsedQuiz);
     }

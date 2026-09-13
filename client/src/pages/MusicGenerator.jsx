@@ -24,7 +24,8 @@ export default function MusicGenerator() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   
-  const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat, resumeBeat, stopBeat } = useMusic();
+  // ✅ Added setGlobalVolume to control the beat volume
+  const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat, resumeBeat, stopBeat, setVolume: setGlobalVolume } = useMusic();
   const [localVolume, setLocalVolume] = useState(0.4);
 
   const [libraryNotes, setLibraryNotes] = useState([]);
@@ -32,7 +33,6 @@ export default function MusicGenerator() {
 
   const vocalsRef = useRef(null);
 
-  // ✅ FIX 6: Split useEffects so library isn't re-fetched on audio change
   useEffect(() => {
     const fetchLibrary = async () => {
       try {
@@ -51,12 +51,13 @@ export default function MusicGenerator() {
     };
   }, [audioUrl]);
 
-  // ✅ FIX 10: Sync vocal volume with the slider
+  // ✅ FIX: Sync BOTH vocal and beat volume with the slider
   useEffect(() => {
     if (vocalsRef.current) {
       vocalsRef.current.volume = localVolume;
     }
-  }, [localVolume]);
+    setGlobalVolume(localVolume); // This ensures the background beat matches the slider
+  }, [localVolume, setGlobalVolume]);
 
   const handleLibrarySelect = (e) => {
     const noteId = e.target.value;
@@ -68,8 +69,8 @@ export default function MusicGenerator() {
     }
   };
 
-  // ✅ FIX 7: Stop old song and clean up before generating new lyrics
   const handleGenerateLyrics = async () => {
+    // ✅ Removed the strict 5-character check, just checks if it's not empty
     if (!notes.trim()) return alert("Please enter or scan some notes first!");
     
     stopPlayback();
@@ -116,7 +117,6 @@ export default function MusicGenerator() {
     }
   };
 
-  // ✅ FIX 4: Separate Pause and Stop behavior
   const pausePlayback = () => {
     if (vocalsRef.current) vocalsRef.current.pause();
     window.speechSynthesis.pause();
@@ -129,30 +129,20 @@ export default function MusicGenerator() {
       vocalsRef.current.pause(); 
       vocalsRef.current.currentTime = 0; 
     }
-    stopBeat(); // ✅ FIX 3: Use dedicated stop function to prevent double-toggle
+    stopBeat();
     window.speechSynthesis.cancel();
     setIsPlaying(false);
   };
 
-  const resumePlayback = async () => {
-    if (useBrowserTTS) {
-      window.speechSynthesis.resume();
-    } else {
-      await vocalsRef.current?.play();
-    }
-    if (currentBeat) {
-      await resumeBeat();
-    }
-    setIsPlaying(true);
-  };
-
   const handlePlayFullTrack = async () => {
     if (isPlaying) { 
-      pausePlayback(); // ✅ Now it actually pauses instead of resetting
+      pausePlayback(); 
       return; 
     }
 
-    // ✅ FIX 2: Use playBeat to ensure state updates correctly
+    // ✅ Ensure global volume matches slider before playing
+    setGlobalVolume(localVolume);
+
     const beat = FREE_BEATS.find(b => b.id === selectedBeatId);
     if (beat) {
       await playBeat(beat);
@@ -166,17 +156,14 @@ export default function MusicGenerator() {
       const rapVoice = voices.find(v => v.lang.includes('en-NG') || v.lang.includes('en-US') || v.name.includes('Google US English'));
       if (rapVoice) utterance.voice = rapVoice;
       utterance.rate = 1.15;
+      utterance.volume = localVolume; // ✅ Ensure TTS respects volume
       
-      // ✅ FIX 3: Removed extra toggleBeat() here
       utterance.onend = () => stopPlayback();
-      
       window.speechSynthesis.speak(utterance);
       setIsPlaying(true);
     } else if (vocalsRef.current) {
-      // ✅ FIX 3: Removed extra toggleBeat() here
       vocalsRef.current.onended = () => stopPlayback();
       
-      // ✅ FIX 5: Properly await play() and catch errors
       try {
         await vocalsRef.current.play();
         setIsPlaying(true);
@@ -221,7 +208,6 @@ export default function MusicGenerator() {
             </select>
           )}
 
-          {/* ✅ FIX 1: Changed setNotesText to setNotes */}
           {inputMethod === "scan" && (
             <NoteScanner 
               onScanComplete={(text) => { 
@@ -268,7 +254,6 @@ export default function MusicGenerator() {
                 <Music className="w-5 h-5 text-purple-500" /> Your Track is Ready!
               </h3>
               
-              {/* ✅ FIX 4: Separate Pause and Stop buttons */}
               <div className="flex gap-3">
                 <button onClick={isPlaying ? pausePlayback : handlePlayFullTrack} className="flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-purple-600 text-white hover:bg-purple-700">
                   {isPlaying ? <><Pause className="w-5 h-5" /> Pause</> : <><Play className="w-5 h-5" /> Play Full Track</>}
