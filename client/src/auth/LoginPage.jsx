@@ -26,15 +26,17 @@ export default function LoginPage() {
       // 2. Send request to backend
       const response = await api.post("/auth/login", { email, password });
 
-      // 3. ✅ USE THE CONTEXT LOGIN FUNCTION (This updates localStorage AND global state instantly)
+      // 3. ✅ USE THE CONTEXT LOGIN FUNCTION
       login(response.data, response.data.token);
 
-      // 4. Redirect based on user role
-      const { role } = response.data;
-      if (role === "school_admin") {
+      // 4. ✅ FIXED: Redirect based on user role (Now includes super_admin)
+      // The role might be in response.data.user.role or response.data.role depending on your API
+      const userRole = response.data.user?.role || response.data.role;
+      
+      if (userRole === "school_admin" || userRole === "super_admin") {
         navigate("/admin/dashboard", { replace: true });
       } else {
-        navigate("/dashboard", { replace: true }); // Student or Personal user
+        navigate("/dashboard", { replace: true }); 
       }
     } catch (err) {
       // Handle backend errors gracefully
