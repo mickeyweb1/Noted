@@ -46,12 +46,37 @@ export default function AdminDashboard() {
     );
   }
  
-  const stats = [
+  // ✅ Build stats dynamically based on role
+  const baseStats = [
     { title: "Total Students", value: data?.stats?.totalStudents || 0, change: "All time", trend: "up", icon: Users, color: "text-brand", bg: "bg-brand-soft" },
     { title: "Active Students", value: data?.stats?.activeStudents || 0, change: "Last 7 days", trend: "up", icon: UserCheck, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
     { title: "Inactive Students", value: data?.stats?.inactiveStudents || 0, change: "Needs attention", trend: "down", icon: UserX, color: "text-destructive", bg: "bg-destructive/10" },
-    { title: "School Code", value: data?.inviteCode || "N/A", change: "Share with students", trend: "up", icon: Copy, color: "text-electric", bg: "bg-electric-soft" },
   ];
+
+  // ✅ Add School Code for regular admins, OR Total Personal Users for Super Admin
+  if (user?.role === "super_admin") {
+    baseStats.push({ 
+      title: "Personal Users", 
+      value: data?.stats?.totalPersonalUsers || 0, 
+      change: "Independent learners", 
+      trend: "up", 
+      icon: User, // Make sure to import 'User' from lucide-react at the top
+      color: "text-electric", 
+      bg: "bg-electric-soft" 
+    });
+  } else {
+    baseStats.push({ 
+      title: "School Code", 
+      value: data?.inviteCode || "N/A", 
+      change: "Share with students", 
+      trend: "up", 
+      icon: Copy, 
+      color: "text-electric", 
+      bg: "bg-electric-soft" 
+    });
+  }
+
+  const stats = baseStats;
  
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-3 py-5 sm:space-y-7 sm:px-5 sm:py-6 lg:space-y-8 lg:px-8">
