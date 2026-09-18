@@ -41,24 +41,67 @@ export const createOrganization = async (req, res, next) => {
 
 export const getAdminStats = async (req, res, next) => {
   try {
-    let org = await Organization.findOne({ adminId: req.user._id });
-    if (!org) {
-      const inviteCode = await generateUniqueCode();
-      org = await Organization.create({ name: "My School", adminId: req.user._id, inviteCode });
-      await User.findByIdAndUpdate(req.user._id, { schoolName: "My School", schoolId: org._id });
+    // ✅ Check if the logged-in user is the Super Admin
+    const isSuperAdmin = req.user.role === 'super_admin';
+    
+    let totalStudents, activeStudents, inactiveStudents, recentStudents, schoolName, inviteCode, totalPersonalUsers = 0;
+
+    if (isSuperAdmin) {
+      // 🌍 GLOBAL STATS: Count EVERYONE in the database
+      totalStudents = await User.countDocuments({ role: 'student' });
+      activeStudents = await User.countDocuments({ role: 'student', isActive: true });
+      inactiveStudents = totalStudents - activeStudents;
+      totalPersonalUsers = await User.countDocuments({ role: 'personal_user' }); // ✅ Total independent users
+      
+      // Get recent students from ANY school
+      recentStudents = await User.find({ role: 'student' })
+        .select('fullName className schoolName createdAt')
+        .sort({ createdAt: -1 })
+        .limit(5);
+        
+      schoolName = "Global Platform";
+      inviteCode = "N/A (Super Admin)";
+    } else {
+      // 🏫 SCHOOL STATS: Only count users in this specific admin's school
+      let org = await Organization.findOne({ adminId: req.user._id });
+      if (!org) {
+        const generatedCode = await generateUniqueCode();
+        org = await Organization.create({ name: "My School", adminId: req.user._id, inviteCode: generatedCode });
+        await User.findByIdAndUpdate(req.user._id, { schoolName: "My School", schoolId: org._id });
+      }
+      
+      totalStudents = await User.countDocuments({ schoolId: org._id, role: 'student' });
+      activeStudents = await User.countDocuments({ schoolId: org._id, role: 'student', isActive: true });
+      inactiveStudents = totalStudents - activeStudents;
+      
+      recentStudents = await User.find({ schoolId: org._id, role: 'student' })
+        .select('fullName className createdAt')
+        .sort({ createdAt: -1 })
+        .limit(5);
+        
+      schoolName = org.name;
+      inviteCode = org.inviteCode;
     }
-    const totalStudents = await User.countDocuments({ schoolId: org._id, role: 'student' });
-    const activeStudents = await User.countDocuments({ schoolId: org._id, role: 'student', isActive: true });
-    const inactiveStudents = totalStudents - activeStudents;
-    const recentStudents = await User.find({ schoolId: org._id, role: 'student' }).select('fullName className createdAt').sort({ createdAt: -1 }).limit(5);
 
     res.status(200).json({
       success: true,
       data: {
-        schoolName: org.name,
-        inviteCode: org.inviteCode,
-        stats: { totalStudents, activeStudents, inactiveStudents },
-        recentStudents: recentStudents.map(s => ({ id: s._id, name: s.fullName, class: s.className || 'N/A', status: s.isActive ? 'Active' : 'Inactive', date: new Date(s.createdAt).toLocaleDateString() }))
+        schoolName,
+        inviteCode,
+        stats: { 
+          totalStudents, 
+          activeStudents, 
+          inactiveStudents,
+          totalPersonalUsers // ✅ Send this to the frontend for the Super Admin
+        },
+        recentStudents: recentStudents.map(s => ({ 
+          id: s._id, 
+          name: s.fullName, 
+          class: s.className || 'N/A', 
+          school: s.schoolName || 'Personal', // ✅ Show which school they belong to
+          status: s.isActive ? 'Active' : 'Inactive', 
+          date: new Date(s.createdAt).toLocaleDateString() 
+        }))
       }
     });
   } catch (error) {
