@@ -103,10 +103,11 @@ function App() {
         <Route path="/video-studio" element={<VideoGenerator />} />
       </Route>
 
-      {/* ================= ADMIN DASHBOARD ROUTES ================= */}
+        {/* ================= ADMIN DASHBOARD ROUTES ================= */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={["school_admin", "super_admin"]}> {/* ✅ ADDED super_admin HERE */}
+          // ✅ ADDED "super_admin" TO THE ALLOWED ROLES
+          <ProtectedRoute allowedRoles={["school_admin", "super_admin"]}>
             <AdminDashboardLayout />
           </ProtectedRoute>
         }
