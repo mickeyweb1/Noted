@@ -64,7 +64,6 @@ export default function MusicGenerator() {
     }
   };
 
-  // ✅ CRITICAL FIX: Exact vibe line parsing + smart fallback
   const handleAutoSelectVibe = async () => {
     if (!notes.trim()) return alert("Please enter some notes first so the AI can analyze them!");
     
@@ -88,26 +87,29 @@ WHY: [one short sentence]`;
         text: analysisPrompt,
         mode: "summary",
         title: "Music Analysis",
-        max_tokens: 150 // ✅ Now respected by backend
+        max_tokens: 150
       });
 
-      const aiResponse = response.data.data.generatedText;
-      console.log("🎵 AI Response:", aiResponse);
+      // ✅ SAFE EXTRACTION: Handle different backend response structures
+      const generatedText = response.data?.data?.generatedText || response.data?.generatedText;
+      if (!generatedText) {
+        throw new Error("AI returned empty content");
+      }
+
+      console.log("🎵 AI Response:", generatedText);
       
       let detectedVibe = "";
       let reason = "Based on your notes";
       
-      // ✅ Parse the exact VIBE: line
-      const vibeMatch = aiResponse.match(/^VIBE:\s*(.+)$/im);
+      const vibeMatch = generatedText.match(/^VIBE:\s*(.+)$/im);
       if (vibeMatch) {
         const rawVibe = vibeMatch[1].trim();
         detectedVibe = VIBES.find(v => v.toLowerCase() === rawVibe.toLowerCase()) || "";
       }
       
-      const reasonMatch = aiResponse.match(/WHY:\s*(.+?)(?:\n|$)/i);
+      const reasonMatch = generatedText.match(/WHY:\s*(.+?)(?:\n|$)/i);
       if (reasonMatch) reason = reasonMatch[1].trim();
       
-      // ✅ Fallback to smart local analysis if AI didn't give a valid vibe
       if (!detectedVibe) {
         console.warn("⚠️ No valid vibe detected from AI, using fallback logic");
         const notesLower = notes.toLowerCase();
@@ -137,7 +139,9 @@ WHY: [one short sentence]`;
       
     } catch (error) {
       console.error("Auto-select failed:", error);
-      alert("AI couldn't analyze the vibe. Please select manually.");
+      // ✅ Show the exact error to help us debug
+      const errorMsg = error.response?.data?.message || error.message || "Unknown error";
+      alert(`AI couldn't analyze the vibe.\n\nError: ${errorMsg}\n\nPlease select manually.`);
     } finally {
       setIsGeneratingLyrics(false);
     }
@@ -218,7 +222,6 @@ WHY: [one short sentence]`;
         setIsPlaying(true);
       } catch (error) {
         console.error("Vocal playback blocked by browser:", error);
-        // ✅ CRITICAL FIX: Stop the beat if vocals fail
         stopBeat();
         setUseBrowserTTS(true);
         setIsPlaying(false);
