@@ -7,9 +7,8 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Using the most stable and consistently supported Groq model.
-// If you prefer Qwen, you can change this to "qwen-2.5-32b".
-const BEST_MODEL = "llama-3.1-8b-instant"; 
+// ✅ CONFIRMED: This model is in your available list!
+const BEST_MODEL = "qwen/qwen3.8-27b"; 
 
 const MAX_RETRIES = 2;
 
@@ -40,26 +39,27 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
         .trim();
 
       if (!cleanText) {
-        console.warn("Groq returned empty content after cleaning. Raw text was:", rawText);
+        console.warn("⚠️ Groq returned empty content after cleaning. Raw text was:", rawText);
       }
 
       return cleanText;
 
     } catch (error) {
       lastError = error;
-      console.warn(`Groq attempt ${attempt + 1} failed:`, error.status || error.message);
+      console.warn(`⚠️ Groq attempt ${attempt + 1} failed:`, error.status || error.message);
 
       if (error.status === 429 || (error.status >= 500 && error.status < 600)) {
         const waitTime = 1000 * (attempt + 1);
-        console.log(`Retrying in ${waitTime / 1000} seconds...`);
+        console.log(`🔄 Retrying in ${waitTime / 1000} seconds...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       } else {
+        // If it's a 400 or 404, don't retry, it's a permanent model/config issue
         break;
       }
     }
   }
 
-  console.error("Groq failed after all retries:", lastError.message);
+  console.error("❌ Groq failed after all retries:", lastError.message);
   throw lastError;
 };
 
