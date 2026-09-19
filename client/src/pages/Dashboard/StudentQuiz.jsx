@@ -267,23 +267,42 @@ export default function StudentQuiz() {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {currentQ.options.map((option) => {
+                                    {currentQ.options.map((option, optIndex) => {
+                                        // ✅ BULLETPROOF MATCHING
+                                        const safeOpt = typeof option === 'string' ? option.trim() : '';
+                                        const safeCorrect = typeof currentQ.correctAnswer === 'string' ? currentQ.correctAnswer.trim() : '';
+                                        const lowerOpt = safeOpt.toLowerCase();
+                                        const lowerCorrect = safeCorrect.toLowerCase();
+
+                                        const isCorrect = 
+                                            lowerOpt === lowerCorrect ||
+                                            lowerOpt.includes(lowerCorrect) ||
+                                            lowerCorrect.includes(lowerOpt) ||
+                                            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && (lowerOpt.startsWith(lowerCorrect + ".") || lowerOpt.startsWith(lowerCorrect + ")")) ||
+                                            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && String.fromCharCode(97 + optIndex) === lowerCorrect);
+
                                         let style = "border-border bg-background hover:bg-accent/50";
                                         if (selectedOption) {
-                                            if (option === currentQ.correctAnswer) style = "border-green-500 bg-green-500/10 text-green-600";
-                                            else if (option === selectedOption) style = "border-red-500 bg-red-500/10 text-red-600";
-                                            else style = "border-border bg-background opacity-50";
+                                            if (isCorrect) {
+                                                style = "border-green-500 bg-green-500/10 text-green-600 dark:text-green-400";
+                                            } else if (safeOpt === selectedOption) {
+                                                style = "border-red-500 bg-red-500/10 text-red-600 dark:text-red-400";
+                                            } else {
+                                                style = "border-border bg-background opacity-50";
+                                            }
                                         }
                                         return (
                                             <button 
-                                                key={option} 
+                                                key={optIndex} 
                                                 onClick={() => handleOptionClick(option)} 
                                                 disabled={!!selectedOption} 
                                                 className={`flex items-center justify-between p-4 rounded-xl border-2 text-left font-medium transition-all duration-200 ${style} ${!selectedOption ? 'hover:scale-[1.01] active:scale-[0.99]' : ''}`}
                                             >
                                                 <span>{option}</span>
-                                                {selectedOption && option === currentQ.correctAnswer && <CheckCircle2 className="w-5 h-5" />}
-                                                {selectedOption && option === selectedOption && option !== currentQ.correctAnswer && <XCircle className="w-5 h-5" />}
+                                                {/* ✅ Show Green Check if it's the correct answer */}
+                                                {selectedOption && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />}
+                                                {/* ✅ Show Red X only if it's the selected WRONG answer */}
+                                                {selectedOption && !isCorrect && option === selectedOption && <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
                                             </button>
                                         );
                                     })}
