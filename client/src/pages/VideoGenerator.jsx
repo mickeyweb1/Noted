@@ -32,7 +32,10 @@ export default function VideoGenerator() {
   const [progress, setProgress] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [regeneratingScene, setRegeneratingScene] = useState(null);
+  
+  // ✅ NEW: State to hold the secure blob URL
   const [stitchedVideoUrl, setStitchedVideoUrl] = useState("");
+  const [isFetchingVideo, setIsFetchingVideo] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Generating scenes...");
 
   const [libraryNotes, setLibraryNotes] = useState([]);
@@ -62,6 +65,15 @@ export default function VideoGenerator() {
     }
   }, []);
 
+  // ✅ CLEANUP: Prevent memory leaks by revoking the blob URL
+  useEffect(() => {
+    return () => {
+      if (stitchedVideoUrl && stitchedVideoUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(stitchedVideoUrl);
+      }
+    };
+  }, [stitchedVideoUrl]);
+
   useEffect(() => {
     let timeoutId;
 
@@ -80,13 +92,21 @@ export default function VideoGenerator() {
           
           if (dbOutputMode) setOutputMode(dbOutputMode);
 
-          if (mediaUrl) {
+          // ✅ CRITICAL FIX: Fetch video as a blob using the authenticated 'api' instance
+          if (mediaUrl && !stitchedVideoUrl && !isFetchingVideo) {
+            setIsFetchingVideo(true);
             const filename = mediaUrl.split(/[\\/]/).pop();
-            // ✅ FIX: Prevent double /api/ in the URL
-            const baseUrl = import.meta.env.VITE_API_URL || window.location.origin;
-            const cleanBaseUrl = baseUrl.endsWith('/api') ? baseUrl.slice(0, -4) : baseUrl;
-            const url = `${cleanBaseUrl}/api/ai/video/stream/${filename}`;
-            setStitchedVideoUrl(url);
+            try {
+              const response = await api.get(`/ai/video/stream/${filename}`, {
+                responseType: 'blob' // This tells Axios to handle it as a file
+              });
+              const blobUrl = URL.createObjectURL(response.data);
+              setStitchedVideoUrl(blobUrl);
+            } catch (err) {
+              console.error("Failed to fetch authenticated video:", err);
+            } finally {
+              setIsFetchingVideo(false);
+            }
           }
 
           if (done) {
@@ -102,7 +122,6 @@ export default function VideoGenerator() {
         console.error("Polling error:", err); 
       }
       
-      // ✅ FIX: Use recursive setTimeout instead of setInterval to prevent overlap
       timeoutId = setTimeout(poll, 2000);
     };
 
@@ -112,7 +131,7 @@ export default function VideoGenerator() {
     }
 
     return () => clearTimeout(timeoutId);
-  }, [videoId, isFinished]);
+  }, [videoId, isFinished, stitchedVideoUrl, isFetchingVideo]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -124,7 +143,6 @@ export default function VideoGenerator() {
         try {
           const res = await api.post("/ai/ocr/extract-text", { imageUrl: reader.result });
           if (res.data.success) {
-            // ✅ APPENDS new text with a page break instead of overwriting
             setNotes(prevNotes => prevNotes ? prevNotes + "\n\n--- 📄 New Page ---\n\n" + res.data.text : res.data.text);
           }
         } catch (err) { alert("OCR failed."); }
@@ -132,7 +150,6 @@ export default function VideoGenerator() {
       reader.readAsDataURL(file);
     } else if (file.type === "text/plain") {
       const text = await file.text();
-      // ✅ APPENDS text files too
       setNotes(prevNotes => prevNotes ? prevNotes + "\n\n--- 📄 New Page ---\n\n" + text : text);
     }
   };
@@ -143,7 +160,7 @@ export default function VideoGenerator() {
     setIsFinished(false);
     setProgress(0);
     setScenes([]);
-    setStitchedVideoUrl("");
+    setStitchedVideoUrl(""); // Reset video URL on new generation
 
     try {
       const res = await api.post("/ai/video/generate-storyboard", {
@@ -322,8 +339,7 @@ export default function VideoGenerator() {
       {videoId && !isFinished && (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="font-bold text-foreground">{statusMessage}</h3>{" "}
-            {/* ✅ UPDATED */}
+            <h3 className="font-bold text-foreground">{statusMessage}</h3>
             <span className="text-sm font-medium text-brand">{progress}%</span>
           </div>
           <div className="w-full bg-muted rounded-full h-2.5">
@@ -345,24 +361,19 @@ export default function VideoGenerator() {
           </h2>
 
           {/* ✅ SHOW COMBINED VIDEO IF OUTPUT MODE IS SINGLE AND IT'S READY */}
-          {/* ✅ SHOW COMBINED VIDEO IF OUTPUT MODE IS SINGLE AND IT'S READY */}
           {isFinished && outputMode === "single" && stitchedVideoUrl && (
             <div className="rounded-2xl border-2 border-brand bg-brand/5 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-500">
               <h3 className="font-bold text-brand flex items-center gap-2">
                 <Check className="w-5 h-5" /> Full Combined Video Ready
               </h3>
 
-              {/* ✅ Force reload by using key and adding poster */}
               <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
                 <video
                   key={stitchedVideoUrl}
                   controls
                   preload="auto"
-                  poster="" // Optional: add a thumbnail URL here
                   className="w-full h-full"
-                  onLoadedData={() =>
-                    console.log("✅ Video loaded successfully!")
-                  }
+                  onLoadedData={() => console.log("✅ Video loaded successfully!")}
                   onError={(e) => console.error("❌ Video error:", e)}
                 >
                   <source src={stitchedVideoUrl} type="video/mp4" />
