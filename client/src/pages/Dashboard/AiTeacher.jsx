@@ -8,7 +8,6 @@ import ReactMarkdown from "react-markdown"; // ✅ ADDED: For proper markdown re
 import remarkGfm from "remark-gfm"; // ✅ ADDED: For tables and lists
 
 // ✅ POLISHED: Quiz Card with bulletproof correct answer matching
-// ✅ POLISHED: Quiz Card with bulletproof correct answer matching
 const ChatQuizCard = ({ msg, onUpdateMessage }) => {
   const quizState = msg.quizState || {
     currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0,
@@ -19,12 +18,16 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
   const handleSelect = (opt) => {
     if (quizState.selected) return;
     
-    // ✅ BULLETPROOF: Handle undefined options or answers safely
     const safeOpt = typeof opt === 'string' ? opt.trim() : '';
     const safeCorrect = typeof q.correctAnswer === 'string' ? q.correctAnswer.trim().toLowerCase() : '';
+    const lowerOpt = safeOpt.toLowerCase();
     
-    const isCorrect = safeOpt.toLowerCase() === safeCorrect || 
-                      (safeCorrect && safeOpt.toLowerCase().includes(safeCorrect));
+    // ✅ BULLETPROOF MATCHING: Handles exact text, substrings, or single letters (A, B, C, D)
+    const isCorrect = 
+      lowerOpt === safeCorrect ||
+      lowerOpt.includes(safeCorrect) ||
+      safeCorrect.includes(lowerOpt) ||
+      (safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect) && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")") || String.fromCharCode(97 + q.options.indexOf(opt)) === safeCorrect));
 
     const newState = {
       ...quizState,
@@ -85,12 +88,16 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
       </p>
       <div className="space-y-2">
         {q.options.map((opt, index) => {
-          // ✅ BULLETPROOF: Ensure opt is a string before trimming to prevent crashes
           const safeOpt = typeof opt === 'string' ? opt.trim() : `Option ${index + 1}`;
           const safeCorrect = typeof q.correctAnswer === 'string' ? q.correctAnswer.trim().toLowerCase() : '';
+          const lowerOpt = safeOpt.toLowerCase();
           
-          const isCorrect = safeOpt.toLowerCase() === safeCorrect || 
-                            (safeCorrect && safeOpt.toLowerCase().includes(safeCorrect));
+          // ✅ BULLETPROOF MATCHING FOR STYLING
+          const isCorrect = 
+            lowerOpt === safeCorrect ||
+            lowerOpt.includes(safeCorrect) ||
+            safeCorrect.includes(lowerOpt) ||
+            (safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect) && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")") || String.fromCharCode(97 + index) === safeCorrect));
           
           let style = "border-border bg-background hover:bg-accent/50 hover:border-brand/30";
           if (quizState.selected) {
@@ -110,8 +117,10 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
               className={`w-full flex items-center justify-between p-3 rounded-xl border-2 text-left text-sm font-medium transition-all ${style}`}
             >
               <span>{safeOpt}</span>
+              {/* ✅ Show Green Check if it's the correct answer */}
               {quizState.selected && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />}
-              {quizState.selected && safeOpt === quizState.selected && !isCorrect && <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
+              {/* ✅ Show Red X only if it's the selected WRONG answer */}
+              {quizState.selected && !isCorrect && safeOpt === quizState.selected && <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
             </button>
           );
         })}
