@@ -5,6 +5,7 @@ import ffmpeg from "fluent-ffmpeg";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import crypto from "crypto"; // ✅ ADDED for unique job IDs
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,13 +90,32 @@ const validatePodcast = (parsed) => {
   };
 };
 
-const validateQuiz = (parsed) => {
-  if (!parsed || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+// ✅ CRITICAL FIX: Strict quiz validation. No more dangerous fallbacks.
+const validateQuiz = (parsed, expectedCount) => {
+  if (!parsed || !Array.isArray(parsed.questions)) {
     throw httpError("The AI returned an invalid quiz.", 502);
   }
+  if (parsed.questions.length !== expectedCount) {
+    throw httpError(`The AI returned ${parsed.questions.length} questions, but ${expectedCount} were requested.`, 502);
+  }
+  const questions = parsed.questions.map((q, index) => {
+    if (
+      !q ||
+      typeof q.question !== "string" ||
+      !Array.isArray(q.options) ||
+      q.options.length !== 4 ||
+      q.options.some((option) => typeof option !== "string") ||
+      typeof q.correctAnswer !== "string" ||
+      !q.options.includes(q.correctAnswer) ||
+      typeof q.explanation !== "string"
+    ) {
+      throw httpError(`Invalid quiz question ${index + 1}. Ensure 4 options, valid correctAnswer, and explanation.`, 502);
+    }
+    return q;
+  });
   return {
     title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Quiz",
-    questions: parsed.questions,
+    questions,
   };
 };
 
@@ -103,9 +123,24 @@ const validateVideo = (parsed) => {
   if (!parsed || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
     throw httpError("The AI returned an invalid video storyboard.", 502);
   }
+  const scenes = parsed.scenes.map((scene, index) => {
+    if (
+      typeof scene.narration !== "string" ||
+      typeof scene.visualPrompt !== "string" ||
+      !scene.narration.trim() ||
+      !scene.visualPrompt.trim()
+    ) {
+      throw httpError(`Invalid video scene ${index + 1}.`, 502);
+    }
+    return {
+      sceneNumber: index + 1,
+      narration: scene.narration.trim().slice(0, 500),
+      visualPrompt: scene.visualPrompt.trim().slice(0, 500),
+    };
+  });
   return {
     title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Video Storyboard",
-    scenes: parsed.scenes,
+    scenes,
   };
 };
 
@@ -118,13 +153,13 @@ const getPodcastInstructions = (length) => {
 export const generateContent = async (req, res, next) => {
   try {
     const userId = requireUser(req);
-    const { text, mode, vibe, title, subject, numQuestions, difficulty, messages } = req.body || {};
+    const { text, mode, vibe, title, subject, numQuestions, difficulty, messages, max_tokens } = req.body || {};
 
     if (!ALLOWED_MODES.includes(mode)) throw httpError("Invalid generation mode.", 400);
 
     const inputToCheck = mode === "tutor" ? (Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.content : "") : text;
-const cleanInput = ensureText(inputToCheck, "Please provide some text.");
-if (cleanInput.length < 1) throw httpError("Please provide some text.", 400);
+    const cleanInput = ensureText(inputToCheck, "Please provide some text.");
+    if (cleanInput.length < 1) throw httpError("Please provide some text.", 400);
     if (cleanInput.length > MAX_INPUT_LENGTH) throw httpError("Your notes are too long. Please use fewer than 50,000 characters.", 413);
 
     const requestedTitle = typeof title === "string" && title.trim() ? title.trim().slice(0, 160) : "";
@@ -138,12 +173,17 @@ if (cleanInput.length < 1) throw httpError("Please provide some text.", 400);
       
       STRICT RULES:
       1. EDUCATIONAL CONTENT ONLY: Answer clearly, accurately, and concisely.
-      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name (such as Qwen, Groq, Llama, etc.). If a user asks who you are, who created you, or what model you are, you MUST strictly reply that you are the Noted AI Tutor, built by the Noted development team.`;      const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
+      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name. If a user asks who you are, you MUST strictly reply that you are the Noted AI Tutor, built by the Noted development team.`;
+      const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
       aiContent = await runGroq([{ role: "system", content: tutorSystemPrompt }, ...safeMessages]);
       aiTitle = requestedTitle || "Tutor Chat";
     } else if (mode === "summary") {
       const systemPrompt = "You are an expert academic study assistant. Create an accurate, well-structured study summary. Educational content only.";
-const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`, { max_tokens: 4096 });
+      // ✅ CRITICAL FIX: Respect max_tokens from frontend (e.g., for vibe analysis)
+      const requestedMaxTokens = Number(max_tokens);
+      const finalMaxTokens = Number.isInteger(requestedMaxTokens) ? Math.min(Math.max(requestedMaxTokens, 50), 4096) : 4096;
+      
+      const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`, { max_tokens: finalMaxTokens });
       const lines = generatedTextFull.split("\n");
       const firstLine = lines.find((line) => line.trim().length > 0);
       if (firstLine && !firstLine.trim().startsWith("-") && !firstLine.trim().startsWith("*") && !firstLine.trim().startsWith("**") && !firstLine.trim().startsWith("📚")) {
@@ -172,13 +212,7 @@ const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${clea
       There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
       Length: ${exchangeCount}. ${detailLevel}. 
       Rules: 1. Leo opens with a surprising fact. 2. Dr. Nova introduces the topic. 3. Include a historical misconception. 4. Leo asks: "Why do we actually need to know this?" 5. Dr. Nova gives a practical answer. 6. Keep lines short. 
-      7. Output VALID JSON ONLY. 
-      Return exactly: { 
-        "title": "Catchy title", 
-        "script": [ { "speaker": "Leo", "text": "..." }, { "speaker": "Dr. Nova", "text": "..." } ],
-        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
-        "quiz": [ { "question": "Q?", "options": ["A","B","C","D"], "answer": "A" } ]
-      }`;
+      7. Output VALID JSON ONLY.`;
       
       const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
       const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
@@ -192,21 +226,19 @@ const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${clea
       CRITICAL: Use commas (,) and ellipses (...) frequently to create natural breathing pauses for the text-to-speech engine. Keep lines to 6-10 words. Do not output markdown.`;
       aiContent = await runGroq(`${musicSystemPrompt}\n\nNotes:\n${cleanInput}`);
       aiTitle = requestedTitle || `${musicVibe} Study Track`;
-   // Find the mode === "quiz" section and replace it with this:
-
     } else if (mode === "quiz") {
       const parsedQuestionCount = Number(numQuestions || 5);
-      const questionCount = Math.min(Math.max(Number.isFinite(parsedQuestionCount) ? parsedQuestionCount : 5, 3), 15);
+      const questionCount = Math.min(Math.max(Number.isInteger(parsedQuestionCount) ? parsedQuestionCount : 5, 3), 15);
       const difficultyLevel = typeof difficulty === "string" && difficulty.trim() ? difficulty.trim().slice(0, 30) : "Medium";
       
       const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions based on the provided notes.
       
 Difficulty: ${difficultyLevel}
 CRITICAL REQUIREMENTS:
-1. Every question MUST have exactly 4 options labeled A, B, C, D
-2. The "correctAnswer" field MUST contain the EXACT TEXT of the correct option (not just "A", "B", etc.)
-3. Every question MUST have an explanation
-4. Output VALID JSON ONLY - no markdown, no extra text
+1. Every question MUST have exactly 4 options.
+2. The "correctAnswer" field MUST contain the EXACT TEXT of one of the options.
+3. Every question MUST have an explanation.
+4. Output VALID JSON ONLY - no markdown, no extra text.
 
 Example format:
 {
@@ -223,17 +255,8 @@ Example format:
 
       const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 4096 });
       
-      // ✅ Validate and fix the quiz data
-      let parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull));
-      
-      // ✅ Ensure every question has a correctAnswer
-      parsedQuiz.questions = parsedQuiz.questions.map((q, idx) => {
-        if (!q.correctAnswer && q.options && q.options.length > 0) {
-          console.warn(`️ Question ${idx + 1} missing correctAnswer. Using first option as fallback.`);
-          q.correctAnswer = q.options[0]; // Fallback to first option
-        }
-        return q;
-      });
+      // ✅ CRITICAL FIX: Strict validation, no dangerous fallbacks
+      const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull), questionCount);
       
       aiTitle = requestedTitle || parsedQuiz.title;
       aiContent = JSON.stringify(parsedQuiz);
@@ -329,7 +352,6 @@ const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
     .slice(0, 6)
     .join(" ");
 
-  // 1. Try Replicate
   const replicateApiKey = process.env.REPLICATE_API_TOKEN;
   if (replicateApiKey) {
     try {
@@ -354,7 +376,6 @@ const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
     }
   }
 
-  // 2. Try Pexels Video
   const pexelsApiKey = process.env.PEXELS_API_KEY;
   if (!pexelsApiKey) throw httpError("Video generation is unavailable because no video provider is configured.", 503);
   
@@ -384,7 +405,6 @@ const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
     console.warn("Pexels video search failed:", error.message);
   }
 
-  // 3. Fallback to Pexels Image
   const pexelsImageUrl = `https://api.pexels.com/v1/search?query=${searchQuery}&per_page=10&orientation=${orientation}`;
   try {
     const imageResponse = await fetchWithTimeout(pexelsImageUrl, { headers: { Authorization: pexelsApiKey } }, 30000);
@@ -407,7 +427,6 @@ const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
 
 const getSceneAudio = async (narration, tempDir, index) => {
   if (!narration || !narration.trim()) {
-    console.log(`️ Scene ${index} has no narration, skipping audio`);
     return null;
   }
 
@@ -421,12 +440,11 @@ const getSceneAudio = async (narration, tempDir, index) => {
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
   try {
-    console.log(`🎙️ Generating ElevenLabs audio for Scene ${index + 1}: "${narration.substring(0, 30)}..."`);
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: { Accept: "audio/mpeg", "Content-Type": "application/json", "xi-api-key": apiKey },
       body: JSON.stringify({ text: narration, model_id: "eleven_turbo_v2_5", voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true } }),
-    });
+    }, 45000);
 
     if (!response.ok) throw new Error(`ElevenLabs API returned ${response.status}`);
 
@@ -440,22 +458,23 @@ const getSceneAudio = async (narration, tempDir, index) => {
   }
 };
 
+// ✅ CRITICAL FIX: Unique temp directories and mixed audio stream fix
 const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
   if (outputMode !== "single") return null;
   
   const activeFfmpegProcesses = [];
-  const tempDir = path.join(__dirname, "../../temp_videos");
+  const jobId = crypto.randomUUID();
+  const tempDir = path.join(__dirname, "../../temp_videos", jobId);
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-  // ✅ FIX: Dynamic dimensions for 9:16 vs 16:9
   const isPortrait = aspectRatio === "9:16";
   const targetWidth = isPortrait ? 720 : 1280;
   const targetHeight = isPortrait ? 1280 : 720;
   const vfFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2`;
 
   const mergedFiles = [];
-  const listFile = path.join(tempDir, `list_${Date.now()}.txt`);
-  const outputFile = path.join(tempDir, `final_${Date.now()}.mp4`);
+  const listFile = path.join(tempDir, `list.txt`);
+  const outputFile = path.join(tempDir, `final.mp4`);
 
   for (let i = 0; i < scenesData.length; i++) {
     const scene = scenesData[i];
@@ -463,7 +482,8 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
     if (!url) continue;
 
     try {
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url, {}, 30000);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buffer = await res.arrayBuffer();
       
       if (buffer.byteLength < 5000) {
@@ -487,11 +507,16 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
           if (!audioPath) ffmpegCmd.duration(5);
         }
 
-        if (audioPath) ffmpegCmd.input(audioPath);
+        if (audioPath) {
+          ffmpegCmd.input(audioPath);
+        } else {
+          // ✅ CRITICAL FIX: Add silent audio track so ALL inputs have an audio stream for concat
+          ffmpegCmd.input('anullsrc=channel_layout=stereo:sample_rate=44100', { f: 'lavfi' });
+        }
 
         const outputOpts = [
           '-c:v libx264', '-preset fast', '-crf 23',
-          `-vf ${vfFilter}`, // ✅ Uses dynamic dimensions
+          `-vf ${vfFilter}`,
           '-r 30', '-pix_fmt yuv420p', '-movflags +faststart'
         ];
 
@@ -499,7 +524,8 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
 
         ffmpegCmd
           .outputOptions(outputOpts)
-          .outputOptions(audioPath ? ['-map 0:v:0', '-map 1:a:0', '-c:a aac'] : ['-an'])
+          // ✅ CRITICAL FIX: Always map video from 0, and audio from 1 (real or silent)
+          .outputOptions(['-map 0:v:0', '-map 1:a:0', '-c:a aac'])
           .output(mergedPath)
           .on('end', () => {
             const idx = activeFfmpegProcesses.indexOf(ffmpegCmd);
@@ -557,7 +583,6 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
 export const generateVideoStoryboard = async (req, res, next) => {
   try {
     const userId = requireUser(req);
-    // ✅ FIX: Validate inputs
     const { text, aspectRatio: requestedAspectRatio = "16:9", outputMode: requestedOutputMode = "story" } = req.body || {};
     const aspectRatio = ["16:9", "9:16"].includes(requestedAspectRatio) ? requestedAspectRatio : "16:9";
     const outputMode = ["story", "single"].includes(requestedOutputMode) ? requestedOutputMode : "story";
@@ -584,6 +609,7 @@ export const generateVideoStoryboard = async (req, res, next) => {
   }
 };
 
+// ✅ CRITICAL FIX: Persist ALL background job failures
 const processVideoScenes = async (contentId) => {
   try {
     const content = await Content.findById(contentId);
@@ -614,12 +640,12 @@ const processVideoScenes = async (contentId) => {
       try {
         const finalVideoPath = await stitchVideos(scenesForStitching, outputMode, aspectRatio);
         if (finalVideoPath) {
-          videoData.stitchedPath = finalVideoPath; 
-          await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData), mediaUrl: finalVideoPath });
+          const relativePath = path.relative(path.join(__dirname, "../../"), finalVideoPath).replace(/\\/g, '/');
+          videoData.stitchedPath = relativePath; 
+          await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData), mediaUrl: relativePath });
         }
       } catch (ffmpegErr) {
         console.error("Stitching failed:", ffmpegErr);
-        // ✅ FIX: Save error state so frontend stops polling
         await Content.findByIdAndUpdate(contentId, { 
           generatedText: JSON.stringify({ ...videoData, status: "failed", error: "Stitching failed" }),
           mediaUrl: null 
@@ -627,20 +653,27 @@ const processVideoScenes = async (contentId) => {
       }
     }
   } catch (error) {
-    console.error("Background processing error:", error.message);
+    console.error("Background processing error:", error);
+    // ✅ CRITICAL FIX: Persist unexpected failures so frontend stops polling
+    try {
+      await Content.findByIdAndUpdate(contentId, {
+        generatedText: JSON.stringify({ status: "failed", error: error.message || "Video processing failed" }),
+        mediaUrl: null,
+      });
+    } catch (dbErr) {
+      console.error("Failed to persist background error:", dbErr);
+    }
   }
 };
 
 export const checkVideoStatus = async (req, res, next) => {
   try {
-    // ✅ FIX: Ownership check
     const content = await Content.findOne({ _id: req.params.id, userId: req.user._id });
     if (!content) throw httpError("Video not found.", 404);
     
     const videoData = JSON.parse(content.generatedText);
     const totalScenes = videoData.scenes.length;
     
-    // ✅ FIX: Count failed scenes to prevent infinite polling
     const finishedScenes = videoData.scenes.filter(s => ["completed", "failed"].includes(s.status)).length;
     const hasFailures = videoData.scenes.some(s => s.status === "failed");
     
@@ -680,12 +713,16 @@ export const checkVideoStatus = async (req, res, next) => {
   }
 };
 
+// ✅ CRITICAL FIX: Only regenerate the specific scene, don't loop all scenes
 export const regenerateScene = async (req, res, next) => {
   try {
     const userId = requireUser(req);
     const { contentId, sceneIndex } = req.body;
     
-    // ✅ FIX: Ownership check
+    if (!Number.isInteger(sceneIndex) || sceneIndex < 0) {
+      throw httpError("Invalid scene index.", 400);
+    }
+
     const content = await Content.findOne({ _id: contentId, userId });
     if (!content) throw httpError("Video not found.", 404);
     
@@ -696,11 +733,10 @@ export const regenerateScene = async (req, res, next) => {
     const visual = await generateSceneVisual(scene.visualPrompt, videoData.aspectRatio);
     videoData.scenes[sceneIndex] = { ...scene, ...visual, status: "completed", error: null };
     
-    // ✅ FIX: Clear mediaUrl so frontend knows it needs to rebuild
     if (videoData.outputMode === "single") {
       videoData.status = "rebuilding"; 
       await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData), mediaUrl: null });
-      processVideoScenes(contentId.toString()).catch(err => console.error("Rebuild failed:", err));
+      rebuildStitchedVideo(contentId.toString()).catch(err => console.error("Rebuild failed:", err));
     } else {
       await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData) });
     }
@@ -711,23 +747,58 @@ export const regenerateScene = async (req, res, next) => {
   }
 };
 
+// ✅ NEW: Targeted rebuild function
+const rebuildStitchedVideo = async (contentId) => {
+  try {
+    const content = await Content.findById(contentId);
+    if (!content) return;
+    let videoData = JSON.parse(content.generatedText);
+    const { scenes, aspectRatio, outputMode } = videoData;
+    
+    if (outputMode !== "single") return;
+
+    const scenesForStitching = scenes
+      .filter(s => s.status === "completed" && (s.videoUrl || s.imageUrl))
+      .map(s => ({ videoUrl: s.videoUrl, imageUrl: s.imageUrl, narration: s.narration }));
+
+    if (scenesForStitching.length > 0) {
+      const finalVideoPath = await stitchVideos(scenesForStitching, outputMode, aspectRatio);
+      if (finalVideoPath) {
+        const relativePath = path.relative(path.join(__dirname, "../../"), finalVideoPath).replace(/\\/g, '/');
+        videoData.stitchedPath = relativePath;
+        videoData.status = "completed";
+        await Content.findByIdAndUpdate(contentId, { generatedText: JSON.stringify(videoData), mediaUrl: relativePath });
+      } else {
+        throw new Error("Stitching returned null");
+      }
+    }
+  } catch (error) {
+    console.error("Rebuild stitching failed:", error);
+    await Content.findByIdAndUpdate(contentId, {
+      generatedText: JSON.stringify({ status: "failed", error: "Rebuild stitching failed" }),
+      mediaUrl: null,
+    });
+  }
+};
+
 export const streamGeneratedVideo = async (req, res) => {
   try {
-    // ✅ FIX: Ownership check
     if (!req.user?._id) return res.status(401).json({ error: "Not authorized." });
     
     const { filename } = req.params;
-    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "");
+    // ✅ CRITICAL FIX: Allow relative paths but prevent directory traversal
+    if (!filename || !/^[a-zA-Z0-9._\-\/]+$/.test(filename) || filename.includes('..')) {
+      return res.status(400).json({ error: "Invalid filename." });
+    }
     
-    // Find content that owns this file
-    const content = await Content.findOne({ userId: req.user._id, mediaUrl: { $regex: safeFilename } });
+    const content = await Content.findOne({ userId: req.user._id, mediaUrl: filename });
     if (!content) return res.status(404).json({ error: "Video not found." });
 
-    const filePath = path.join(__dirname, "../../temp_videos", safeFilename);
+    const filePath = path.join(__dirname, "../../", filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Video file not found." });
     
     res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Content-Disposition", `inline; filename="${safeFilename}"`);
+    res.setHeader("Content-Disposition", `inline; filename="${path.basename(filename)}"`);
     res.sendFile(filePath);
   } catch (error) {
     console.error("Video streaming error:", error.message);
@@ -739,10 +810,7 @@ export const generateAIVideoScene = async (req, res, next) => {
   try {
     requireUser(req);
     const { visualPrompt, sceneNumber, aspectRatio = "16:9" } = req.body || {};
-    
-    // ✅ FIX: Use the shared helper function
     const visual = await generateSceneVisual(visualPrompt, aspectRatio);
-    
     return res.status(200).json({
       success: true,
       message: `Visual generated for Scene ${sceneNumber ?? ""}`.trim(),
