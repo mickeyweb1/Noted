@@ -139,7 +139,7 @@ export default function StudentQuiz() {
 
         const currentQ = activeQuizData.questions[currentQuestionIndex];
         
-        // ✅ CLEAN & SAFE MATCHING LOGIC (No parenthesis errors!)
+        // ✅ CLEAN & SAFE MATCHING LOGIC
         const safeOpt = typeof option === 'string' ? option.trim() : '';
         const safeCorrect = typeof currentQ.correctAnswer === 'string' ? currentQ.correctAnswer.trim() : '';
         const lowerOpt = safeOpt.toLowerCase();
@@ -462,12 +462,23 @@ export default function StudentQuiz() {
                                             <p className="font-semibold text-foreground mb-3">{idx + 1}. {q.question}</p>
                                             <div className="space-y-2 ml-4">
                                                 {q.options.map((opt, optIdx) => {
+                                                    // ✅ BULLETPROOF MODAL MATCHING (Matches the main quiz logic exactly)
                                                     const safeOpt = typeof opt === 'string' ? opt.trim() : '';
                                                     const safeCorrect = typeof q.correctAnswer === 'string' ? q.correctAnswer.trim() : '';
+                                                    const lowerOpt = safeOpt.toLowerCase();
+                                                    const lowerCorrect = safeCorrect.toLowerCase();
+
+                                                    const isLetter = lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect);
+                                                    const isPrefix = isLetter && (lowerOpt.startsWith(lowerCorrect + ".") || lowerOpt.startsWith(lowerCorrect + ")"));
+                                                    const isIndex = isLetter && String.fromCharCode(97 + optIdx) === lowerCorrect;
+
                                                     const isCorrect = safeCorrect !== '' && (
-                                                        safeOpt.toLowerCase() === safeCorrect.toLowerCase() ||
-                                                        safeOpt.toLowerCase().includes(safeCorrect.toLowerCase())
+                                                        lowerOpt === lowerCorrect ||
+                                                        (lowerCorrect.length > 1 && (lowerOpt.includes(lowerCorrect) || lowerCorrect.includes(lowerOpt))) ||
+                                                        isPrefix ||
+                                                        isIndex
                                                     );
+
                                                     return (
                                                         <div key={optIdx} className={`flex items-center gap-2 text-sm ${isCorrect ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
                                                             <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">{String.fromCharCode(65 + optIdx)}</span>
