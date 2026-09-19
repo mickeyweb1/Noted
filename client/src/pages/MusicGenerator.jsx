@@ -64,44 +64,53 @@ export default function MusicGenerator() {
     }
   };
 
-  // ✅ FIXED: AI Auto-Select Vibe Feature
+  // ✅ FIXED: AI Auto-Select Vibe Feature - Simpler & More Reliable
   const handleAutoSelectVibe = async () => {
     if (!notes.trim()) return alert("Please enter some notes first so the AI can analyze them!");
+    
     setIsGeneratingLyrics(true);
     try {
+      // ✅ Use a simpler, direct prompt that won't crash the backend
+      const analysisPrompt = `Based on these notes, recommend the best music vibe for studying. Choose ONLY from: Afrobeat Rap, Chill Lo-Fi, Upbeat Pop, or Epic Orchestral. Give a one-sentence reason why.
+
+Notes: ${notes.substring(0, 1000)}
+
+Response format: VIBE: [vibe name]
+REASON: [one sentence]`;
+
       const response = await api.post("/ai/generate", {
-        text: `Analyze this text and recommend the best study music vibe and beat. 
-        Available Vibes: 'Afrobeat Rap', 'Chill Lo-Fi', 'Upbeat Pop', 'Epic Orchestral'.
-        Available Beats: 'Upbeat Hip-Hop Loop', 'Chill Lo-Fi Study', 'Afrobeat Groove'.
-        Return ONLY valid JSON: { "recommendedVibe": "...", "recommendedBeat": "...", "reason": "..." }
-        Text to analyze: ${notes}`,
-        mode: "summary", // ✅ CRITICAL FIX: Changed from "tutor" to "summary" so the backend processes the 'text' field!
-        title: "Vibe Analyzer"
+        text: analysisPrompt,
+        mode: "summary",
+        title: "Music Vibe Analysis",
+        max_tokens: 200 // ✅ Limit response size to prevent timeout
       });
 
-      const rawText = response.data.data.generatedText;
-      const cleanText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+      const aiResponse = response.data.data.generatedText.toLowerCase();
       
-      if (jsonMatch) {
-        const analysis = JSON.parse(jsonMatch[0]);
+      // ✅ Parse the AI's response
+      let detectedVibe = "";
+      if (aiResponse.includes("afrobeat")) detectedVibe = "Afrobeat Rap";
+      else if (aiResponse.includes("lo-fi") || aiResponse.includes("lofi") || aiResponse.includes("chill")) detectedVibe = "Chill Lo-Fi";
+      else if (aiResponse.includes("upbeat") || aiResponse.includes("pop")) detectedVibe = "Upbeat Pop";
+      else if (aiResponse.includes("epic") || aiResponse.includes("orchestral") || aiResponse.includes("classical")) detectedVibe = "Epic Orchestral";
+      
+      // ✅ Extract reason from response
+      const reasonMatch = aiResponse.match(/reason[:\s]+(.+?)(?:\n|$)/);
+      const reason = reasonMatch ? reasonMatch[1].trim() : "Based on your notes content";
+
+      if (detectedVibe) {
+        setSelectedVibe(detectedVibe);
         
-        // ✅ Safely update state only if the AI returned valid matches
-        if (analysis.recommendedVibe && VIBES.includes(analysis.recommendedVibe)) {
-          setSelectedVibe(analysis.recommendedVibe);
-        }
+        // ✅ Auto-select beat based on vibe
+        if (detectedVibe === "Afrobeat Rap") setSelectedBeatId("beat_3");
+        else if (detectedVibe === "Chill Lo-Fi") setSelectedBeatId("beat_2");
+        else setSelectedBeatId("beat_1");
         
-        if (analysis.recommendedBeat) {
-          const beatLower = analysis.recommendedBeat.toLowerCase();
-          if (beatLower.includes("hip-hop")) setSelectedBeatId("beat_1");
-          else if (beatLower.includes("lo-fi")) setSelectedBeatId("beat_2");
-          else if (beatLower.includes("afrobeat")) setSelectedBeatId("beat_3");
-        }
-        
-        alert(`🎵 AI Analysis Complete!\n\nReason: ${analysis.reason || "Based on your notes."}\n\nI've automatically selected the best Vibe and Beat for you!`);
+        alert(`🎵 AI Analysis Complete!\n\nSelected: ${detectedVibe}\nReason: ${reason}\n\nI've automatically selected the best vibe and beat for you!`);
       } else {
-        throw new Error("AI did not return valid JSON");
+        throw new Error("AI couldn't determine a vibe");
       }
+      
     } catch (error) {
       console.error("Auto-select failed:", error);
       alert("AI couldn't analyze the vibe. Please select manually.");
