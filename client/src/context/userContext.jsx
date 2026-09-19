@@ -29,7 +29,15 @@ export function UserContextProvider({ children }) {
 
       try {
         const response = await api.get("/auth/me");
-        setUser(response.data.data);
+        const userData = response.data.data || response.data;
+        
+        // ✅ Clean the role field here too
+        const cleanUserData = {
+          ...userData,
+          role: userData.role?.replace(/"/g, '') || userData.role
+        };
+        
+        setUser(cleanUserData);
         setIsAuthenticated(true);
       } catch (error) {
         console.error("Failed to fetch user data, logging out");
