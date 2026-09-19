@@ -64,7 +64,7 @@ export default function MusicGenerator() {
     }
   };
 
-  // ✅ NEW: AI Auto-Select Vibe Feature
+  // ✅ FIXED: AI Auto-Select Vibe Feature
   const handleAutoSelectVibe = async () => {
     if (!notes.trim()) return alert("Please enter some notes first so the AI can analyze them!");
     setIsGeneratingLyrics(true);
@@ -75,21 +75,32 @@ export default function MusicGenerator() {
         Available Beats: 'Upbeat Hip-Hop Loop', 'Chill Lo-Fi Study', 'Afrobeat Groove'.
         Return ONLY valid JSON: { "recommendedVibe": "...", "recommendedBeat": "...", "reason": "..." }
         Text to analyze: ${notes}`,
-        mode: "tutor",
+        mode: "summary", // ✅ CRITICAL FIX: Changed from "tutor" to "summary" so the backend processes the 'text' field!
         title: "Vibe Analyzer"
       });
 
       const rawText = response.data.data.generatedText;
-      const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const cleanText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
       const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
       
       if (jsonMatch) {
         const analysis = JSON.parse(jsonMatch[0]);
-        if (analysis.recommendedVibe) setSelectedVibe(analysis.recommendedVibe);
-        if (analysis.recommendedBeat.includes("Hip-Hop")) setSelectedBeatId("beat_1");
-        else if (analysis.recommendedBeat.includes("Lo-Fi")) setSelectedBeatId("beat_2");
-        else if (analysis.recommendedBeat.includes("Afrobeat")) setSelectedBeatId("beat_3");
-        alert(`🎵 AI Analysis Complete!\n\nReason: ${analysis.reason}\n\nI've automatically selected the best Vibe and Beat for you!`);
+        
+        // ✅ Safely update state only if the AI returned valid matches
+        if (analysis.recommendedVibe && VIBES.includes(analysis.recommendedVibe)) {
+          setSelectedVibe(analysis.recommendedVibe);
+        }
+        
+        if (analysis.recommendedBeat) {
+          const beatLower = analysis.recommendedBeat.toLowerCase();
+          if (beatLower.includes("hip-hop")) setSelectedBeatId("beat_1");
+          else if (beatLower.includes("lo-fi")) setSelectedBeatId("beat_2");
+          else if (beatLower.includes("afrobeat")) setSelectedBeatId("beat_3");
+        }
+        
+        alert(`🎵 AI Analysis Complete!\n\nReason: ${analysis.reason || "Based on your notes."}\n\nI've automatically selected the best Vibe and Beat for you!`);
+      } else {
+        throw new Error("AI did not return valid JSON");
       }
     } catch (error) {
       console.error("Auto-select failed:", error);
@@ -232,7 +243,7 @@ export default function MusicGenerator() {
             </div>
           </div>
 
-          {/* ✅ NEW: AI Auto-Select Button */}
+          {/* ✅ AI Auto-Select Button */}
           <button onClick={handleAutoSelectVibe} disabled={isGeneratingLyrics || !notes.trim()} className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             <Wand2 className="w-5 h-5" /> ✨ AI Auto-Select Best Vibe & Beat
           </button>
