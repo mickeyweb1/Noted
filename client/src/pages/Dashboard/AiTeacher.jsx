@@ -7,7 +7,7 @@ import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// ✅ ULTRA-BULLETPROOF: Handles AI returning text, letters (A/B/C/D), or numbers (0/1/2/3)
+// ✅ ULTRA-BULLETPROOF: Handles AI returning text, letters (A/B/C/D), numbers (0/1/2/3), or EMPTY answers
 const ChatQuizCard = ({ msg, onUpdateMessage }) => {
   const quizState = msg.quizState || {
     currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0,
@@ -29,8 +29,8 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
       safeCorrect = q.correctAnswer.trim().toLowerCase();
     }
 
-    // ✅ DEBUG: Check your browser console (F12) to see exactly what the AI returned!
-    console.log("🔍 Option:", safeOpt, "| AI Correct Answer:", safeCorrect);
+    // ✅ DEBUG: Check console to see what AI returned
+    console.log("🔍 Option:", safeOpt, "| AI Correct Answer:", safeCorrect || "(EMPTY - AI failed to provide answer)");
 
     let isCorrect = false;
 
@@ -49,6 +49,11 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
                     lowerOpt.startsWith(safeCorrect + ")") || 
                     String.fromCharCode(97 + q.options.indexOf(opt)).toLowerCase() === safeCorrect;
       }
+    } else {
+      // ✅ FALLBACK: If AI provided no correct answer, mark the user's choice as correct by default
+      // This prevents the quiz from breaking when the AI fails
+      console.warn("️ AI provided no correct answer. Marking user's choice as correct.");
+      isCorrect = true;
     }
 
     const newState = {
@@ -131,11 +136,15 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
                           lowerOpt.startsWith(safeCorrect + ")") || 
                           String.fromCharCode(97 + index).toLowerCase() === safeCorrect;
             }
+          } else {
+            // ✅ FALLBACK: If no correct answer from AI, don't highlight anything as correct
+            // Just show the user's selection
+            if (safeOpt === quizState.selected) isCorrect = true;
           }
           
           let style = "border-border bg-background hover:bg-accent/50 hover:border-brand/30";
           if (quizState.selected) {
-            if (isCorrect) {
+            if (isCorrect && safeCorrect !== '') {
               style = "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400";
             } else if (safeOpt === quizState.selected) {
               style = "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400";
@@ -151,7 +160,7 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
               className={`w-full flex items-center justify-between p-3 rounded-xl border-2 text-left text-sm font-medium transition-all ${style}`}
             >
               <span>{safeOpt}</span>
-              {quizState.selected && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />}
+              {quizState.selected && isCorrect && safeCorrect !== '' && <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />}
               {quizState.selected && !isCorrect && safeOpt === quizState.selected && <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
             </button>
           );
@@ -179,7 +188,7 @@ const INITIAL_MESSAGES = [
   {
     id: 1,
     role: "ai",
-    text: "Hello! I'm your **Noted AI Tutor**. 🎓 What subject or topic would you like to explore today? You can ask me to explain a concept, break down complex notes, or quiz you!",
+    text: "Hello! I'm your **Noted AI Tutor**.  What subject or topic would you like to explore today? You can ask me to explain a concept, break down complex notes, or quiz you!",
   },
 ];
 
@@ -335,7 +344,7 @@ export default function AiTeacher() {
     } catch (error) {
       console.error("Generate quiz from chat error:", error);
       const errorMsg = error.response?.data?.message || "Failed to generate quiz.";
-      setMessages((prev) => [...prev, { id: Date.now(), role: "ai", text: `⚠️ **Error:** ${errorMsg}` }]);
+      setMessages((prev) => [...prev, { id: Date.now(), role: "ai", text: `️ **Error:** ${errorMsg}` }]);
     } finally {
       setGeneratingQuizId(null);
     }
