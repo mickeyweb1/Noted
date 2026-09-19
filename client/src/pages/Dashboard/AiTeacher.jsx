@@ -4,10 +4,10 @@ import {
   Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, RotateCcw, Loader2
 } from "lucide-react";
 import api from "../../utils/api";
-import ReactMarkdown from "react-markdown"; // ✅ ADDED: For proper markdown rendering
-import remarkGfm from "remark-gfm"; // ✅ ADDED: For tables and lists
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
-// ✅ POLISHED: Quiz Card with bulletproof correct answer matching
+// ✅ FIXED: Quiz Card with safe, bulletproof correct answer matching
 const ChatQuizCard = ({ msg, onUpdateMessage }) => {
   const quizState = msg.quizState || {
     currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0,
@@ -22,12 +22,17 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
     const safeCorrect = typeof q.correctAnswer === 'string' ? q.correctAnswer.trim().toLowerCase() : '';
     const lowerOpt = safeOpt.toLowerCase();
     
-    // ✅ BULLETPROOF MATCHING: Handles exact text, substrings, or single letters (A, B, C, D)
-    const isCorrect = 
+    // ✅ CRITICAL FIX: Prevent "includes('')" from marking everything as correct
+    const isLetter = safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect);
+    const isPrefix = isLetter && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")"));
+    const isIndex = isLetter && String.fromCharCode(97 + q.options.indexOf(opt)) === safeCorrect;
+
+    const isCorrect = safeCorrect !== '' && (
       lowerOpt === safeCorrect ||
-      lowerOpt.includes(safeCorrect) ||
-      safeCorrect.includes(lowerOpt) ||
-      (safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect) && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")") || String.fromCharCode(97 + q.options.indexOf(opt)) === safeCorrect));
+      (safeCorrect.length > 1 && (lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt))) ||
+      isPrefix ||
+      isIndex
+    );
 
     const newState = {
       ...quizState,
@@ -92,12 +97,17 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
           const safeCorrect = typeof q.correctAnswer === 'string' ? q.correctAnswer.trim().toLowerCase() : '';
           const lowerOpt = safeOpt.toLowerCase();
           
-          // ✅ BULLETPROOF MATCHING FOR STYLING
-          const isCorrect = 
+          // ✅ CRITICAL FIX: Same safe logic for UI styling
+          const isLetter = safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect);
+          const isPrefix = isLetter && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")"));
+          const isIndex = isLetter && String.fromCharCode(97 + index) === safeCorrect;
+
+          const isCorrect = safeCorrect !== '' && (
             lowerOpt === safeCorrect ||
-            lowerOpt.includes(safeCorrect) ||
-            safeCorrect.includes(lowerOpt) ||
-            (safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect) && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")") || String.fromCharCode(97 + index) === safeCorrect));
+            (safeCorrect.length > 1 && (lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt))) ||
+            isPrefix ||
+            isIndex
+          );
           
           let style = "border-border bg-background hover:bg-accent/50 hover:border-brand/30";
           if (quizState.selected) {
@@ -117,9 +127,7 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
               className={`w-full flex items-center justify-between p-3 rounded-xl border-2 text-left text-sm font-medium transition-all ${style}`}
             >
               <span>{safeOpt}</span>
-              {/* ✅ Show Green Check if it's the correct answer */}
               {quizState.selected && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />}
-              {/* ✅ Show Red X only if it's the selected WRONG answer */}
               {quizState.selected && !isCorrect && safeOpt === quizState.selected && <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
             </button>
           );
@@ -359,7 +367,6 @@ export default function AiTeacher() {
 
             <div className={`max-w-[85%] md:max-w-[75%] space-y-2 ${msg.role === "user" ? "items-end" : "items-start"} flex flex-col`}>
               {(msg.role === "user" || msg.role === "ai") && (
-                // ✅ REPLACED dangerouslySetInnerHTML with ReactMarkdown for perfect formatting
                 <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm prose prose-sm dark:prose-invert max-w-none ${
                   msg.role === "user" 
                     ? "bg-brand text-brand-foreground rounded-tr-sm prose-invert" 
