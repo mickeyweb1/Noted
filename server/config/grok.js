@@ -7,9 +7,8 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// ✅ CRITICAL FIX: Use the currently active, highly reliable Groq model
-// "llama-3.3-70b-versatile" is the latest, smartest, and fully supported model on Groq.
-const BEST_MODEL = "llama-3.3-70b-versatile"; 
+// ✅ CRITICAL FIX: Use the most stable, universally available Groq model
+const BEST_MODEL = "llama3-70b-8192"; 
 
 const MAX_RETRIES = 2;
 
@@ -54,7 +53,7 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
         console.log(`🔄 Retrying in ${waitTime / 1000} seconds...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       } else {
-        // If it's a bad request (400) or auth error (401), don't retry, just fail
+        // If it's a bad request (400) or not found (404), don't retry, just fail
         break;
       }
     }
