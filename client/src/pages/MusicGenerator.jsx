@@ -64,20 +64,19 @@ export default function MusicGenerator() {
     }
   };
 
-    // ✅ ULTRA-RELIABLE: AI Auto-Select Vibe Feature
+  // ✅ CRITICAL FIX: Exact vibe line parsing + smart fallback
   const handleAutoSelectVibe = async () => {
     if (!notes.trim()) return alert("Please enter some notes first so the AI can analyze them!");
     
     setIsGeneratingLyrics(true);
     try {
-      // ✅ Use an even simpler prompt with clear instructions
       const analysisPrompt = `Analyze these study notes and recommend the BEST music vibe for studying this content.
 
 Choose ONE vibe from these options:
-- Afrobeat Rap (energetic, rhythmic, motivational)
-- Chill Lo-Fi (calm, steady, focus-enhancing)
-- Upbeat Pop (positive, engaging, memorable)
-- Epic Orchestral (dramatic, important, serious)
+- Afrobeat Rap
+- Chill Lo-Fi
+- Upbeat Pop
+- Epic Orchestral
 
 Notes: ${notes.substring(0, 800)}
 
@@ -89,38 +88,28 @@ WHY: [one short sentence]`;
         text: analysisPrompt,
         mode: "summary",
         title: "Music Analysis",
-        max_tokens: 150
+        max_tokens: 150 // ✅ Now respected by backend
       });
 
       const aiResponse = response.data.data.generatedText;
-      console.log("🎵 AI Response:", aiResponse); // ✅ Debug log
-      
-      // ✅ More flexible parsing - check the ENTIRE response
-      const responseLower = aiResponse.toLowerCase();
+      console.log("🎵 AI Response:", aiResponse);
       
       let detectedVibe = "";
       let reason = "Based on your notes";
       
-      // Extract reason if present
-      const reasonMatch = aiResponse.match(/why[:\s]+(.+?)(?:\n|$)/i);
-      if (reasonMatch) reason = reasonMatch[1].trim();
-      
-      // ✅ Check for vibe keywords in order of specificity
-      if (responseLower.includes("epic") || responseLower.includes("orchestral") || responseLower.includes("dramatic") || responseLower.includes("serious")) {
-        detectedVibe = "Epic Orchestral";
-      } else if (responseLower.includes("afrobeat") || responseLower.includes("afro") || (responseLower.includes("energetic") && responseLower.includes("rhythmic"))) {
-        detectedVibe = "Afrobeat Rap";
-      } else if (responseLower.includes("lo-fi") || responseLower.includes("lofi") || responseLower.includes("chill") || responseLower.includes("calm") || responseLower.includes("steady") || responseLower.includes("focus")) {
-        detectedVibe = "Chill Lo-Fi";
-      } else if (responseLower.includes("upbeat") || responseLower.includes("pop") || responseLower.includes("positive") || responseLower.includes("engaging") || responseLower.includes("memorable")) {
-        detectedVibe = "Upbeat Pop";
+      // ✅ Parse the exact VIBE: line
+      const vibeMatch = aiResponse.match(/^VIBE:\s*(.+)$/im);
+      if (vibeMatch) {
+        const rawVibe = vibeMatch[1].trim();
+        detectedVibe = VIBES.find(v => v.toLowerCase() === rawVibe.toLowerCase()) || "";
       }
       
-      // ✅ If still no vibe detected, use a smart default based on content analysis
+      const reasonMatch = aiResponse.match(/WHY:\s*(.+?)(?:\n|$)/i);
+      if (reasonMatch) reason = reasonMatch[1].trim();
+      
+      // ✅ Fallback to smart local analysis if AI didn't give a valid vibe
       if (!detectedVibe) {
-        console.warn("⚠️ No vibe detected, using fallback logic");
-        
-        // Analyze the notes directly for keywords
+        console.warn("⚠️ No valid vibe detected from AI, using fallback logic");
         const notesLower = notes.toLowerCase();
         if (notesLower.includes("history") || notesLower.includes("war") || notesLower.includes("battle") || notesLower.includes("important")) {
           detectedVibe = "Epic Orchestral";
@@ -132,16 +121,15 @@ WHY: [one short sentence]`;
           detectedVibe = "Afrobeat Rap";
           reason = "Energetic content matches rhythmic beats";
         } else {
-          detectedVibe = "Chill Lo-Fi"; // Default fallback
+          detectedVibe = "Chill Lo-Fi";
           reason = "General study content works best with calm music";
         }
       }
       
-      // ✅ Auto-select matching beat
       if (detectedVibe === "Afrobeat Rap") setSelectedBeatId("beat_3");
       else if (detectedVibe === "Chill Lo-Fi") setSelectedBeatId("beat_2");
       else if (detectedVibe === "Upbeat Pop") setSelectedBeatId("beat_1");
-      else setSelectedBeatId("beat_1"); // Epic Orchestral uses beat_1 as default
+      else setSelectedBeatId("beat_1");
       
       setSelectedVibe(detectedVibe);
       
@@ -230,6 +218,8 @@ WHY: [one short sentence]`;
         setIsPlaying(true);
       } catch (error) {
         console.error("Vocal playback blocked by browser:", error);
+        // ✅ CRITICAL FIX: Stop the beat if vocals fail
+        stopBeat();
         setUseBrowserTTS(true);
         setIsPlaying(false);
       }
@@ -288,7 +278,6 @@ WHY: [one short sentence]`;
             </div>
           </div>
 
-          {/* ✅ AI Auto-Select Button */}
           <button onClick={handleAutoSelectVibe} disabled={isGeneratingLyrics || !notes.trim()} className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             <Wand2 className="w-5 h-5" /> ✨ AI Auto-Select Best Vibe & Beat
           </button>
