@@ -192,13 +192,49 @@ const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${clea
       CRITICAL: Use commas (,) and ellipses (...) frequently to create natural breathing pauses for the text-to-speech engine. Keep lines to 6-10 words. Do not output markdown.`;
       aiContent = await runGroq(`${musicSystemPrompt}\n\nNotes:\n${cleanInput}`);
       aiTitle = requestedTitle || `${musicVibe} Study Track`;
+   // Find the mode === "quiz" section and replace it with this:
+
     } else if (mode === "quiz") {
       const parsedQuestionCount = Number(numQuestions || 5);
       const questionCount = Math.min(Math.max(Number.isFinite(parsedQuestionCount) ? parsedQuestionCount : 5, 3), 15);
       const difficultyLevel = typeof difficulty === "string" && difficulty.trim() ? difficulty.trim().slice(0, 30) : "Medium";
-      const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions. Difficulty: ${difficultyLevel}. Every question must be answerable from the notes. Output VALID JSON ONLY: { "title": "Quiz title", "questions": [ { "question": "Question text", "options": ["A", "B", "C", "D"], "answer": "Correct option", "explanation": "Short explanation" } ] }`;
-      const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 2048 });
-         const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull));
+      
+      const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions based on the provided notes.
+      
+Difficulty: ${difficultyLevel}
+CRITICAL REQUIREMENTS:
+1. Every question MUST have exactly 4 options labeled A, B, C, D
+2. The "correctAnswer" field MUST contain the EXACT TEXT of the correct option (not just "A", "B", etc.)
+3. Every question MUST have an explanation
+4. Output VALID JSON ONLY - no markdown, no extra text
+
+Example format:
+{
+  "title": "Quiz Title",
+  "questions": [
+    {
+      "question": "What is 2+2?",
+      "options": ["3", "4", "5", "6"],
+      "correctAnswer": "4",
+      "explanation": "2+2 equals 4"
+    }
+  ]
+}`;
+
+      const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 4096 });
+      
+      // ✅ Validate and fix the quiz data
+      let parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull));
+      
+      // ✅ Ensure every question has a correctAnswer
+      parsedQuiz.questions = parsedQuiz.questions.map((q, idx) => {
+        if (!q.correctAnswer && q.options && q.options.length > 0) {
+          console.warn(`️ Question ${idx + 1} missing correctAnswer. Using first option as fallback.`);
+          q.correctAnswer = q.options[0]; // Fallback to first option
+        }
+        return q;
+      });
+      
       aiTitle = requestedTitle || parsedQuiz.title;
       aiContent = JSON.stringify(parsedQuiz);
     }
