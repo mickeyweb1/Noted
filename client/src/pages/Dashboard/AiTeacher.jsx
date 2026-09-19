@@ -7,7 +7,7 @@ import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// ✅ FIXED: Quiz Card with safe, bulletproof correct answer matching
+// ✅ ULTRA-BULLETPROOF: Handles AI returning text, letters (A/B/C/D), or numbers (0/1/2/3)
 const ChatQuizCard = ({ msg, onUpdateMessage }) => {
   const quizState = msg.quizState || {
     currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0,
@@ -19,20 +19,37 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
     if (quizState.selected) return;
     
     const safeOpt = typeof opt === 'string' ? opt.trim() : '';
-    const safeCorrect = typeof q.correctAnswer === 'string' ? q.correctAnswer.trim().toLowerCase() : '';
     const lowerOpt = safeOpt.toLowerCase();
     
-    // ✅ CRITICAL FIX: Prevent "includes('')" from marking everything as correct
-    const isLetter = safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect);
-    const isPrefix = isLetter && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")"));
-    const isIndex = isLetter && String.fromCharCode(97 + q.options.indexOf(opt)) === safeCorrect;
+    // ✅ Handle AI returning a number (index), a letter, or full text
+    let safeCorrect = '';
+    if (typeof q.correctAnswer === 'number') {
+      safeCorrect = String.fromCharCode(97 + q.correctAnswer); // 0 -> 'a', 1 -> 'b', etc.
+    } else if (typeof q.correctAnswer === 'string') {
+      safeCorrect = q.correctAnswer.trim().toLowerCase();
+    }
 
-    const isCorrect = safeCorrect !== '' && (
-      lowerOpt === safeCorrect ||
-      (safeCorrect.length > 1 && (lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt))) ||
-      isPrefix ||
-      isIndex
-    );
+    // ✅ DEBUG: Check your browser console (F12) to see exactly what the AI returned!
+    console.log("🔍 Option:", safeOpt, "| AI Correct Answer:", safeCorrect);
+
+    let isCorrect = false;
+
+    if (safeCorrect !== '') {
+      // 1. Exact match
+      if (lowerOpt === safeCorrect) isCorrect = true;
+      
+      // 2. Substring match (e.g., AI says "the mitochondria", option is "mitochondria")
+      if (!isCorrect && safeCorrect.length > 1) {
+        isCorrect = lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt);
+      }
+      
+      // 3. Letter match (e.g., AI says "b", option is "B. Mitochondria")
+      if (!isCorrect && safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect)) {
+        isCorrect = lowerOpt.startsWith(safeCorrect + ".") || 
+                    lowerOpt.startsWith(safeCorrect + ")") || 
+                    String.fromCharCode(97 + q.options.indexOf(opt)).toLowerCase() === safeCorrect;
+      }
+    }
 
     const newState = {
       ...quizState,
@@ -94,20 +111,27 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
       <div className="space-y-2">
         {q.options.map((opt, index) => {
           const safeOpt = typeof opt === 'string' ? opt.trim() : `Option ${index + 1}`;
-          const safeCorrect = typeof q.correctAnswer === 'string' ? q.correctAnswer.trim().toLowerCase() : '';
           const lowerOpt = safeOpt.toLowerCase();
           
-          // ✅ CRITICAL FIX: Same safe logic for UI styling
-          const isLetter = safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect);
-          const isPrefix = isLetter && (lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")"));
-          const isIndex = isLetter && String.fromCharCode(97 + index) === safeCorrect;
+          let safeCorrect = '';
+          if (typeof q.correctAnswer === 'number') {
+            safeCorrect = String.fromCharCode(97 + q.correctAnswer);
+          } else if (typeof q.correctAnswer === 'string') {
+            safeCorrect = q.correctAnswer.trim().toLowerCase();
+          }
 
-          const isCorrect = safeCorrect !== '' && (
-            lowerOpt === safeCorrect ||
-            (safeCorrect.length > 1 && (lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt))) ||
-            isPrefix ||
-            isIndex
-          );
+          let isCorrect = false;
+          if (safeCorrect !== '') {
+            if (lowerOpt === safeCorrect) isCorrect = true;
+            if (!isCorrect && safeCorrect.length > 1) {
+              isCorrect = lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt);
+            }
+            if (!isCorrect && safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect)) {
+              isCorrect = lowerOpt.startsWith(safeCorrect + ".") || 
+                          lowerOpt.startsWith(safeCorrect + ")") || 
+                          String.fromCharCode(97 + index).toLowerCase() === safeCorrect;
+            }
+          }
           
           let style = "border-border bg-background hover:bg-accent/50 hover:border-brand/30";
           if (quizState.selected) {
