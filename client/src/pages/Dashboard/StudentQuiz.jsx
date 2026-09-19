@@ -138,9 +138,29 @@ export default function StudentQuiz() {
         setIsPlaying(false);
 
         const currentQ = activeQuizData.questions[currentQuestionIndex];
-        const isCorrect = option === currentQ.correctAnswer;
+        
+        // ✅ BULLETPROOF MATCHING: Must match the UI styling logic exactly!
+        const safeOpt = typeof option === 'string' ? option.trim() : '';
+        const safeCorrect = typeof currentQ.correctAnswer === 'string' ? currentQ.correctAnswer.trim() : '';
+        const lowerOpt = safeOpt.toLowerCase();
+        const lowerCorrect = safeCorrect.toLowerCase();
+
+        const isCorrect = 
+            lowerOpt === lowerCorrect ||
+            lowerOpt.includes(lowerCorrect) ||
+            lowerCorrect.includes(lowerOpt) ||
+            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && (lowerOpt.startsWith(lowerCorrect + ".") || lowerOpt.startsWith(lowerCorrect + ")")) ||
+            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && String.fromCharCode(97 + currentQ.options.indexOf(option)) === lowerCorrect);
+
+        // ✅ Now the score updates correctly even if the AI returns "A", "B", "C", or "D"
         if (isCorrect) setScore(prev => prev + 1);
-        setUserAnswers(prev => [...prev, { question: currentQ.question, selected: option, correct: currentQ.correctAnswer, isCorrect }]);
+        
+        setUserAnswers(prev => [...prev, { 
+            question: currentQ.question, 
+            selected: option, 
+            correct: currentQ.correctAnswer, 
+            isCorrect 
+        }]);
     };
 
     const handleNextQuestion = () => {
