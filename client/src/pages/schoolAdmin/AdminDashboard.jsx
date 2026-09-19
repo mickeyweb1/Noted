@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock, Copy, Check, MessageSquare } from "lucide-react";
+// ✅ CRITICAL FIX: Added 'User' to this import list!
+import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock, Copy, Check, MessageSquare, User } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { useUserContext } from "../../context/userContext"; // ✅ Added this
+import { useUserContext } from "../../context/userContext"; 
 import api from "../../utils/api";
  
 export default function AdminDashboard() {
-  const { user } = useUserContext(); // ✅ Added this to get the user role
+  const { user, isAuthLoading } = useUserContext(); 
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -13,12 +14,17 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log("🔄 Fetching admin stats...");
         const response = await api.get("/admin/stats");
+        console.log("✅ Admin stats response:", response.data);
+        
         if (response.data.success) {
           setData(response.data.data);
+        } else {
+          console.error("❌ API returned success: false", response.data);
         }
       } catch (error) {
-        console.error("Failed to fetch admin stats:", error);
+        console.error("❌ Failed to fetch admin stats:", error);
       } finally {
         setIsLoading(false);
       }
@@ -37,7 +43,8 @@ export default function AdminDashboard() {
   const date = new Date();
   const today = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
  
-  if (isLoading) {
+  // ✅ Show loading spinner while fetching OR while auth is still loading
+  if (isLoading || isAuthLoading) {
     return (
       <div className="flex min-h-[60vh] w-full flex-col items-center justify-center gap-3 px-4">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand/20 border-t-brand"></div>
@@ -46,21 +53,21 @@ export default function AdminDashboard() {
     );
   }
  
-  // ✅ Build stats dynamically based on role
+  // ✅ Safe stats generation with optional chaining
   const baseStats = [
     { title: "Total Students", value: data?.stats?.totalStudents || 0, change: "All time", trend: "up", icon: Users, color: "text-brand", bg: "bg-brand-soft" },
     { title: "Active Students", value: data?.stats?.activeStudents || 0, change: "Last 7 days", trend: "up", icon: UserCheck, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
     { title: "Inactive Students", value: data?.stats?.inactiveStudents || 0, change: "Needs attention", trend: "down", icon: UserX, color: "text-destructive", bg: "bg-destructive/10" },
   ];
 
-  // ✅ Add School Code for regular admins, OR Total Personal Users for Super Admin
+  // ✅ Add Super Admin specific stats OR regular Admin stats
   if (user?.role === "super_admin") {
     baseStats.push({ 
       title: "Personal Users", 
       value: data?.stats?.totalPersonalUsers || 0, 
       change: "Independent learners", 
       trend: "up", 
-      icon: User, // Make sure to import 'User' from lucide-react at the top
+      icon: User, // ✅ Now this will work because 'User' is imported!
       color: "text-electric", 
       bg: "bg-electric-soft" 
     });
