@@ -23,22 +23,26 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // 2. Send request to backend
+      // 1. Send request to backend
       const response = await api.post("/auth/login", { email, password });
 
-      const userData =
-        response.data.user ?? response.data.data ?? response.data;
-      const authToken = response.data.token ?? response.data.data?.token;
+      // 2. ✅ FOOLPROOF EXTRACTION: Handles both { data: { user: {...} } } and { data: { ... } }
+      const responseData = response.data.data || response.data;
+      const userData = responseData.user || responseData; 
+      const authToken = responseData.token || response.data.token;
 
+      // 3. Safety check
       if (!authToken || !userData?.role) {
-        throw new Error(
-          "Login response did not include a token and user role.",
-        );
+        console.error("Login response missing token or role:", response.data);
+        throw new Error("Login response did not include a token and user role.");
       }
 
+      // 4. Call the context login function
       login(userData, authToken);
 
+      // 5. Smart Redirect
       const userRole = userData.role;
+      console.log("Logged in user role:", userRole); // ✅ This will print to your console so we can see it!
 
       if (userRole === "school_admin" || userRole === "super_admin") {
         navigate("/admin/dashboard", { replace: true });
