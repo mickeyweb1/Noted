@@ -1,14 +1,12 @@
-// src/pages/auth/LoginPage.jsx
 import { useState } from "react";
 import { AudioLines, ArrowRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "./authLayout"; // Kept your exact import
+import AuthLayout from "./authLayout";
 import { ThemeToggle } from "../components/themeToggle";
-import api from "../utils/api"; // Import the API bridge we created
+import api from "../utils/api";
 import { useUserContext } from "../context/userContext";
 
 export default function LoginPage() {
-  // ✅ 1. Get the login function from context
   const { login } = useUserContext();
 
   const [email, setEmail] = useState("");
@@ -29,12 +27,12 @@ export default function LoginPage() {
       // 2. Extract data - backend sends it flat at the top level
       const responseData = response.data;
       
-      // 3. ✅ CRITICAL FIX: Clean the role field (remove escaped quotes)
+      // 3. ✅ CRITICAL FIX: Clean the role field (remove escaped quotes just in case)
       const userData = {
         _id: responseData._id,
         fullName: responseData.fullName,
         email: responseData.email,
-        role: responseData.role?.replace(/"/g, '') || responseData.role, // Remove escaped quotes!
+        role: responseData.role?.replace(/"/g, '') || responseData.role, 
         level: responseData.level,
         xp: responseData.xp,
         schoolId: responseData.schoolId,
@@ -54,25 +52,23 @@ export default function LoginPage() {
 
       // 6. Smart Redirect
       const userRole = userData.role;
-      console.log("✅ Logged in user role:", userRole); // Should print: super_admin
+      console.log("✅ Logged in user role:", userRole); 
 
       if (userRole === "school_admin" || userRole === "super_admin") {
         console.log("🎯 Redirecting to Admin Dashboard...");
         navigate("/admin/dashboard", { replace: true });
       } else {
-        console.log(" Redirecting to Student Dashboard...");
+        console.log("🎯 Redirecting to Student Dashboard...");
         navigate("/dashboard", { replace: true });
       }
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          "Login failed. Please check your credentials.",
+        err.response?.data?.message || "Login failed. Please check your credentials."
       );
     } finally {
       setIsLoading(false);
-    }
-
-  // ... rest of your component remains exactly the same ...
+    } // ✅ THIS WAS THE MISSING BRACE!
+  };
 
   return (
     <AuthLayout>
@@ -103,7 +99,6 @@ export default function LoginPage() {
             </div>
 
             <form onSubmit={handleLogin} className="space-y-4">
-              {/* Error Message Display */}
               {error && (
                 <div className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center">
                   {error}
