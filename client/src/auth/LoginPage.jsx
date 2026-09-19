@@ -26,31 +26,44 @@ export default function LoginPage() {
       // 1. Send request to backend
       const response = await api.post("/auth/login", { email, password });
 
-      // 2. ✅ FOOLPROOF EXTRACTION: Handles both { data: { user: {...} } } and { data: { ... } }
-      const responseData = response.data.data || response.data;
-      const userData = responseData.user || responseData; 
-      const authToken = responseData.token || response.data.token;
+      // 2. Extract data - backend sends it flat at the top level
+      const responseData = response.data;
+      
+      // 3. ✅ CRITICAL FIX: Clean the role field (remove escaped quotes)
+      const userData = {
+        _id: responseData._id,
+        fullName: responseData.fullName,
+        email: responseData.email,
+        role: responseData.role?.replace(/"/g, '') || responseData.role, // Remove escaped quotes!
+        level: responseData.level,
+        xp: responseData.xp,
+        schoolId: responseData.schoolId,
+        schoolName: responseData.schoolName,
+      };
+      
+      const authToken = responseData.token;
 
-      // 3. Safety check
+      // 4. Safety check
       if (!authToken || !userData?.role) {
         console.error("Login response missing token or role:", response.data);
         throw new Error("Login response did not include a token and user role.");
       }
 
-      // 4. Call the context login function
+      // 5. Call the context login function
       login(userData, authToken);
 
-      // 5. Smart Redirect
+      // 6. Smart Redirect
       const userRole = userData.role;
-      console.log("Logged in user role:", userRole); // ✅ This will print to your console so we can see it!
+      console.log("✅ Logged in user role:", userRole); // Should print: super_admin
 
       if (userRole === "school_admin" || userRole === "super_admin") {
+        console.log("🎯 Redirecting to Admin Dashboard...");
         navigate("/admin/dashboard", { replace: true });
       } else {
+        console.log(" Redirecting to Student Dashboard...");
         navigate("/dashboard", { replace: true });
       }
     } catch (err) {
-      // Handle backend errors gracefully
       setError(
         err.response?.data?.message ||
           "Login failed. Please check your credentials.",
@@ -58,7 +71,6 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
 
   // ... rest of your component remains exactly the same ...
 
