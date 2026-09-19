@@ -139,17 +139,21 @@ export default function StudentQuiz() {
 
         const currentQ = activeQuizData.questions[currentQuestionIndex];
         
-        // ✅ CRITICAL FIX: Prevent "includes('')" from marking everything as correct
+        // ✅ CLEAN & SAFE MATCHING LOGIC (No parenthesis errors!)
         const safeOpt = typeof option === 'string' ? option.trim() : '';
         const safeCorrect = typeof currentQ.correctAnswer === 'string' ? currentQ.correctAnswer.trim() : '';
         const lowerOpt = safeOpt.toLowerCase();
         const lowerCorrect = safeCorrect.toLowerCase();
 
+        const isLetter = lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect);
+        const isPrefix = isLetter && (lowerOpt.startsWith(lowerCorrect + ".") || lowerOpt.startsWith(lowerCorrect + ")"));
+        const isIndex = isLetter && String.fromCharCode(97 + currentQ.options.indexOf(option)) === lowerCorrect;
+
         const isCorrect = safeCorrect !== '' && (
             lowerOpt === lowerCorrect ||
             (lowerCorrect.length > 1 && (lowerOpt.includes(lowerCorrect) || lowerCorrect.includes(lowerOpt))) ||
-            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && (lowerOpt.startsWith(lowerCorrect + ".") || lowerOpt.startsWith(lowerCorrect + ")")) ||
-            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && String.fromCharCode(97 + currentQ.options.indexOf(option)) === lowerCorrect)
+            isPrefix ||
+            isIndex
         );
 
         if (isCorrect) setScore(prev => prev + 1);
@@ -177,7 +181,7 @@ export default function StudentQuiz() {
             const contentId = generatedQuiz?.id || userLibrary.find(n => n.title === activeQuizData.title || activeQuizData.title.includes(n.title))?.id;
             
             await api.post('/ai/attempt', {
-                contentId: contentId || "mock-quiz-id", // ✅ Fallback to prevent backend validation errors
+                contentId: contentId || "mock-quiz-id",
                 title: activeQuizData.title,
                 score: score,
                 totalQuestions: activeQuizData.questions.length,
@@ -289,17 +293,21 @@ export default function StudentQuiz() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {currentQ.options.map((option, optIndex) => {
-                                        // ✅ CRITICAL FIX: Prevent "includes('')" bug
+                                        // ✅ CLEAN & SAFE MATCHING LOGIC
                                         const safeOpt = typeof option === 'string' ? option.trim() : '';
                                         const safeCorrect = typeof currentQ.correctAnswer === 'string' ? currentQ.correctAnswer.trim() : '';
                                         const lowerOpt = safeOpt.toLowerCase();
                                         const lowerCorrect = safeCorrect.toLowerCase();
 
+                                        const isLetter = lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect);
+                                        const isPrefix = isLetter && (lowerOpt.startsWith(lowerCorrect + ".") || lowerOpt.startsWith(lowerCorrect + ")"));
+                                        const isIndex = isLetter && String.fromCharCode(97 + optIndex) === lowerCorrect;
+
                                         const isCorrect = safeCorrect !== '' && (
                                             lowerOpt === lowerCorrect ||
                                             (lowerCorrect.length > 1 && (lowerOpt.includes(lowerCorrect) || lowerCorrect.includes(lowerOpt))) ||
-                                            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && (lowerOpt.startsWith(lowerCorrect + ".") || lowerOpt.startsWith(lowerCorrect + ")")) ||
-                                            (lowerCorrect.length === 1 && /^[a-d]$/.test(lowerCorrect) && String.fromCharCode(97 + optIndex) === lowerCorrect)
+                                            isPrefix ||
+                                            isIndex
                                         );
 
                                         let style = "border-border bg-background hover:bg-accent/50";
@@ -319,9 +327,7 @@ export default function StudentQuiz() {
                                                 disabled={!!selectedOption} 
                                                 className={`flex items-center justify-between p-4 rounded-xl border-2 text-left font-medium transition-all duration-200 ${style} ${!selectedOption ? 'hover:scale-[1.01] active:scale-[0.99]' : ''}`}
                                             >
-                                                {/* ✅ Safe rendering in case option is not a string */}
                                                 <span>{typeof option === 'string' ? option : String(option)}</span>
-                                                
                                                 {selectedOption && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />}
                                                 {selectedOption && !isCorrect && option === selectedOption && <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
                                             </button>
