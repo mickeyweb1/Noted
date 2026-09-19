@@ -4,10 +4,10 @@ import api from "../utils/api"; // Adjust path if your utils folder is elsewhere
 const UserContext = createContext(null);
 
 export function UserContextProvider({ children }) {
-  // 1. Initialize state safely
   const [token, setToken] = useState(() => localStorage.getItem("userToken"));
-  const [isAuthenticated, setIsAuthenticated] = useState(!!token);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   
   const [formState, setFormState] = useState({
     page: "signin",
@@ -19,30 +19,38 @@ export function UserContextProvider({ children }) {
     forgot: { email: "" },
   });
 
-  // 2. ✅ SECURE: Fetch fresh user data on mount instead of trusting localStorage
   useEffect(() => {
     const fetchUserData = async () => {
       const storedToken = localStorage.getItem("userToken");
-      if (storedToken) {
-        try {
-          const response = await api.get("/auth/me");
-          setUser(response.data.data);
-          setIsAuthenticated(true);
-        } catch (error) {
-          console.error("Failed to fetch user data, logging out");
-          logout();
-        }
+      if (!storedToken) {
+        setIsAuthLoading(false);
+        return;
+      }
+
+      try {
+        const response = await api.get("/auth/me");
+        setUser(response.data.data);
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error("Failed to fetch user data, logging out");
+        localStorage.removeItem("userToken");
+        setToken(null);
+        setUser(null);
+        setIsAuthenticated(false);
+      } finally {
+        setIsAuthLoading(false);
       }
     };
+
     fetchUserData();
   }, []);
 
-  // 3. ✅ SECURE: Only save the TOKEN to localStorage. User data stays in memory.
   const login = (userData, authToken) => {
     localStorage.setItem("userToken", authToken);
     setToken(authToken);
     setUser(userData);
     setIsAuthenticated(true);
+    setIsAuthLoading(false);
   };
 
   const logout = () => {
@@ -55,7 +63,6 @@ export function UserContextProvider({ children }) {
     window.location.replace("/login"); 
   };
 
-  // 4. ✅ SECURE: Update state only. Do not write sensitive user data to localStorage.
   const updateUser = (updatedFields) => {
     setUser((prevUser) => ({ ...prevUser, ...updatedFields }));
   };
@@ -72,7 +79,8 @@ export function UserContextProvider({ children }) {
   return (
     <UserContext.Provider
       value={{ 
-        isAuthenticated, 
+        isAuthenticated,
+        isAuthLoading,
         user, 
         token, 
         login, 

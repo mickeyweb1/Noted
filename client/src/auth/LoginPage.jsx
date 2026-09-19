@@ -5,12 +5,12 @@ import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "./authLayout"; // Kept your exact import
 import { ThemeToggle } from "../components/themeToggle";
 import api from "../utils/api"; // Import the API bridge we created
-import { useUserContext } from "../context/userContext"; 
+import { useUserContext } from "../context/userContext";
 
 export default function LoginPage() {
   // ✅ 1. Get the login function from context
-  const { login } = useUserContext(); 
-  
+  const { login } = useUserContext();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -26,22 +26,30 @@ export default function LoginPage() {
       // 2. Send request to backend
       const response = await api.post("/auth/login", { email, password });
 
-      // 3. ✅ USE THE CONTEXT LOGIN FUNCTION
-      login(response.data, response.data.token);
+      const userData =
+        response.data.user ?? response.data.data ?? response.data;
+      const authToken = response.data.token ?? response.data.data?.token;
 
-      // 4. ✅ FIXED: Redirect based on user role (Now includes super_admin)
-      // The role might be in response.data.user.role or response.data.role depending on your API
-      const userRole = response.data.user?.role || response.data.role;
-      
+      if (!authToken || !userData?.role) {
+        throw new Error(
+          "Login response did not include a token and user role.",
+        );
+      }
+
+      login(userData, authToken);
+
+      const userRole = userData.role;
+
       if (userRole === "school_admin" || userRole === "super_admin") {
         navigate("/admin/dashboard", { replace: true });
       } else {
-        navigate("/dashboard", { replace: true }); 
+        navigate("/dashboard", { replace: true });
       }
     } catch (err) {
       // Handle backend errors gracefully
       setError(
-        err.response?.data?.message || "Login failed. Please check your credentials."
+        err.response?.data?.message ||
+          "Login failed. Please check your credentials.",
       );
     } finally {
       setIsLoading(false);
