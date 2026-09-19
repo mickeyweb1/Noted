@@ -7,9 +7,8 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Revert back to your original working model
-const BEST_MODEL = "qwen/qwen3.8-27b"; 
-// (Note: You can also use "llama3-70b-8192" if you want it to be even smarter, but 8b is much faster and cheaper).
+// ✅ CRITICAL FIX: Use the standard, highly reliable Groq model
+const BEST_MODEL = "llama-3.1-70b-versatile"; 
 
 const MAX_RETRIES = 2;
 
@@ -26,14 +25,12 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
         messages: messages,
         model: BEST_MODEL,
         temperature: 0.7,
-       // ✅ INCREASED: Changed from 1024 to 4096 to allow long, detailed study notes
         max_tokens: options.max_tokens || 4096, 
         ...options,
       });
 
       let rawText = completion.choices[0]?.message?.content || "";
       
-      // Clean up common AI formatting artifacts
       let cleanText = rawText
         .replace(/<think>[\s\S]*?<\/think>/gi, "")
         .replace(/<think>[\s\S]*/gi, "")
@@ -51,19 +48,16 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
       lastError = error;
       console.warn(`⚠️ Groq attempt ${attempt + 1} failed:`, error.status || error.message);
 
-      // If it's a Rate Limit (429) or Server Error (5xx), wait and retry
       if (error.status === 429 || (error.status >= 500 && error.status < 600)) {
-        const waitTime = 1000 * (attempt + 1); // Wait 1s, then 2s
+        const waitTime = 1000 * (attempt + 1);
         console.log(`🔄 Retrying in ${waitTime / 1000} seconds...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       } else {
-        // If it's a bad request (400) or auth error (401), don't retry, just fail
         break;
       }
     }
   }
 
-  // If all retries fail, throw the error
   console.error("❌ Groq failed after all retries:", lastError.message);
   throw lastError;
 };
