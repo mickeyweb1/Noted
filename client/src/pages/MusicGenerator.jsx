@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Music, Mic, Loader2, Sparkles, Volume2, Play, Pause, Square, FileText, Camera, MessageCircle } from "lucide-react";
+import { Music, Mic, Loader2, Sparkles, Volume2, Play, Pause, Square, FileText, Camera, MessageCircle, Wand2 } from "lucide-react";
 import api from "../utils/api";
 import NoteScanner from "../components/NoteScanner";
 import { useMusic } from "../context/MusicContext";
@@ -24,13 +24,11 @@ export default function MusicGenerator() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   
-  // ✅ Added setGlobalVolume to control the beat volume
   const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat, resumeBeat, stopBeat, setVolume: setGlobalVolume } = useMusic();
   const [localVolume, setLocalVolume] = useState(0.4);
 
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
-
   const vocalsRef = useRef(null);
 
   useEffect(() => {
@@ -51,12 +49,9 @@ export default function MusicGenerator() {
     };
   }, [audioUrl]);
 
-  // ✅ FIX: Sync BOTH vocal and beat volume with the slider
   useEffect(() => {
-    if (vocalsRef.current) {
-      vocalsRef.current.volume = localVolume;
-    }
-    setGlobalVolume(localVolume); // This ensures the background beat matches the slider
+    if (vocalsRef.current) vocalsRef.current.volume = localVolume;
+    setGlobalVolume(localVolume);
   }, [localVolume, setGlobalVolume]);
 
   const handleLibrarySelect = (e) => {
@@ -69,26 +64,50 @@ export default function MusicGenerator() {
     }
   };
 
-  const handleGenerateLyrics = async () => {
-    // ✅ Removed the strict 5-character check, just checks if it's not empty
-    if (!notes.trim()) return alert("Please enter or scan some notes first!");
-    
-    stopPlayback();
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-      setAudioUrl(null);
-    }
-    setUseBrowserTTS(false);
-    setLyrics("");
-    
+  // ✅ NEW: AI Auto-Select Vibe Feature
+  const handleAutoSelectVibe = async () => {
+    if (!notes.trim()) return alert("Please enter some notes first so the AI can analyze them!");
     setIsGeneratingLyrics(true);
     try {
       const response = await api.post("/ai/generate", {
-        text: notes,
-        mode: "music",
-        vibe: selectedVibe,
-        title: "AI Study Track"
+        text: `Analyze this text and recommend the best study music vibe and beat. 
+        Available Vibes: 'Afrobeat Rap', 'Chill Lo-Fi', 'Upbeat Pop', 'Epic Orchestral'.
+        Available Beats: 'Upbeat Hip-Hop Loop', 'Chill Lo-Fi Study', 'Afrobeat Groove'.
+        Return ONLY valid JSON: { "recommendedVibe": "...", "recommendedBeat": "...", "reason": "..." }
+        Text to analyze: ${notes}`,
+        mode: "tutor",
+        title: "Vibe Analyzer"
       });
+
+      const rawText = response.data.data.generatedText;
+      const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+      
+      if (jsonMatch) {
+        const analysis = JSON.parse(jsonMatch[0]);
+        if (analysis.recommendedVibe) setSelectedVibe(analysis.recommendedVibe);
+        if (analysis.recommendedBeat.includes("Hip-Hop")) setSelectedBeatId("beat_1");
+        else if (analysis.recommendedBeat.includes("Lo-Fi")) setSelectedBeatId("beat_2");
+        else if (analysis.recommendedBeat.includes("Afrobeat")) setSelectedBeatId("beat_3");
+        alert(`🎵 AI Analysis Complete!\n\nReason: ${analysis.reason}\n\nI've automatically selected the best Vibe and Beat for you!`);
+      }
+    } catch (error) {
+      console.error("Auto-select failed:", error);
+      alert("AI couldn't analyze the vibe. Please select manually.");
+    } finally {
+      setIsGeneratingLyrics(false);
+    }
+  };
+
+  const handleGenerateLyrics = async () => {
+    if (!notes.trim()) return alert("Please enter or scan some notes first!");
+    stopPlayback();
+    if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }
+    setUseBrowserTTS(false);
+    setLyrics("");
+    setIsGeneratingLyrics(true);
+    try {
+      const response = await api.post("/ai/generate", { text: notes, mode: "music", vibe: selectedVibe, title: "AI Study Track" });
       if (response.data.success) setLyrics(response.data.data.generatedText);
     } catch (error) {
       alert("Failed to generate lyrics. Please try again.");
@@ -104,9 +123,7 @@ export default function MusicGenerator() {
     try {
       const res = await api.post("/ai/text-to-speech", { text: lyrics, style: "rap" }, { responseType: 'blob' });
       if (audioUrl) URL.revokeObjectURL(audioUrl);
-      
-      const url = URL.createObjectURL(res.data);
-      setAudioUrl(url);
+      setAudioUrl(URL.createObjectURL(res.data));
       setUseBrowserTTS(false);
     } catch (error) {
       console.warn("ElevenLabs failed, falling back to browser TTS", error);
@@ -125,60 +142,38 @@ export default function MusicGenerator() {
   };
 
   const stopPlayback = () => {
-    if (vocalsRef.current) { 
-      vocalsRef.current.pause(); 
-      vocalsRef.current.currentTime = 0; 
-    }
+    if (vocalsRef.current) { vocalsRef.current.pause(); vocalsRef.current.currentTime = 0; }
     stopBeat();
     window.speechSynthesis.cancel();
     setIsPlaying(false);
   };
 
   const handlePlayFullTrack = async () => {
-    if (isPlaying) { 
-      pausePlayback(); 
-      return; 
-    }
+    if (isPlaying) { pausePlayback(); return; }
 
-    // 1. Start the Background Beat
     const beat = FREE_BEATS.find(b => b.id === selectedBeatId);
-    if (beat) {
-      await playBeat(beat);
-    }
+    if (beat) await playBeat(beat);
 
-    // 2. Start the Vocals (Fixing the sync and fallback issue)
     if (useBrowserTTS) {
-      // If ElevenLabs failed, use the phone's built-in voice
-      window.speechSynthesis.cancel(); // Clear any old voices
+      window.speechSynthesis.cancel();
       const cleanLyrics = lyrics.replace(/\[.*?\]/g, "");
       const utterance = new SpeechSynthesisUtterance(cleanLyrics);
-      
-      // Try to find a good English voice
       const voices = window.speechSynthesis.getVoices();
       const preferredVoice = voices.find(v => v.lang.includes('en-US') || v.name.includes('Google US English'));
       if (preferredVoice) utterance.voice = preferredVoice;
-      
       utterance.rate = 1.1;
       utterance.volume = localVolume;
-      
       utterance.onend = () => stopPlayback();
-      
-      // Crucial for mobile: speak immediately after the user click
       window.speechSynthesis.speak(utterance); 
       setIsPlaying(true);
-      
     } else if (vocalsRef.current) {
-      // If ElevenLabs worked, play the generated audio file
       vocalsRef.current.volume = localVolume;
       vocalsRef.current.onended = () => stopPlayback();
-      
       try {
-        // The .play() promise must be caught to prevent mobile browser crashes
         await vocalsRef.current.play(); 
         setIsPlaying(true);
       } catch (error) {
         console.error("Vocal playback blocked by browser:", error);
-        // Fallback to TTS if the audio file fails to play
         setUseBrowserTTS(true);
         setIsPlaying(false);
       }
@@ -219,12 +214,7 @@ export default function MusicGenerator() {
           )}
 
           {inputMethod === "scan" && (
-            <NoteScanner 
-              onScanComplete={(text) => { 
-                setNotes(prev => prev ? `${prev}\n\n--- 📄 New Page ---\n\n${text}` : text); 
-                setInputMethod("type"); 
-              }} 
-            />
+            <NoteScanner onScanComplete={(text) => { setNotes(prev => prev ? `${prev}\n\n--- 📄 New Page ---\n\n${text}` : text); setInputMethod("type"); }} />
           )}
 
           {(inputMethod === "type" || inputMethod === "library") && (
@@ -241,6 +231,11 @@ export default function MusicGenerator() {
               ))}
             </div>
           </div>
+
+          {/* ✅ NEW: AI Auto-Select Button */}
+          <button onClick={handleAutoSelectVibe} disabled={isGeneratingLyrics || !notes.trim()} className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            <Wand2 className="w-5 h-5" /> ✨ AI Auto-Select Best Vibe & Beat
+          </button>
 
           <button onClick={handleGenerateLyrics} disabled={isGeneratingLyrics || !notes.trim()} className="w-full py-3 rounded-xl bg-brand text-brand-foreground font-bold hover:bg-brand/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             {isGeneratingLyrics ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
@@ -280,28 +275,13 @@ export default function MusicGenerator() {
               <div className="space-y-3 pt-3 border-t border-purple-500/20">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-muted-foreground uppercase">Background Beat</p>
-                  <select 
-                    value={selectedBeatId} 
-                    onChange={(e) => { 
-                      setSelectedBeatId(e.target.value); 
-                      if (isPlaying) stopPlayback(); 
-                    }} 
-                    className="text-xs bg-card border border-border rounded px-2 py-1"
-                  >
+                  <select value={selectedBeatId} onChange={(e) => { setSelectedBeatId(e.target.value); if (isPlaying) stopPlayback(); }} className="text-xs bg-card border border-border rounded px-2 py-1">
                     {FREE_BEATS.map(beat => (<option key={beat.id} value={beat.id}>{beat.name}</option>))}
                   </select>
                 </div>
                 <div className="flex items-center gap-3">
                   <Volume2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="1" 
-                    step="0.05" 
-                    value={localVolume} 
-                    onChange={(e) => setLocalVolume(Number(e.target.value))} 
-                    className="w-full accent-purple-600" 
-                  />
+                  <input type="range" min="0" max="1" step="0.05" value={localVolume} onChange={(e) => setLocalVolume(Number(e.target.value))} className="w-full accent-purple-600" />
                 </div>
               </div>
             </div>
