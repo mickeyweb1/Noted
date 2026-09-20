@@ -161,10 +161,23 @@ const validateVideo = (parsed) => {
 };
 
 const getPodcastInstructions = (length) => {
-  if (length === "medium") return { exchangeCount: "10 to 12 exchanges", detailLevel: "Provide deeper explanations but keep the conversational, punchy energy.", maxTokens: 1500 };
-  if (length === "long") return { exchangeCount: "15 to 18 exchanges", detailLevel: "Go into deep detail, but maintain a natural and engaging conversation.", maxTokens: 2000 };
-  return { exchangeCount: "6 to 8 exchanges", detailLevel: "Keep it brief, high-energy, and fast-paced.", maxTokens: 1000 };
+  if (length === "medium") return { 
+    exchangeCount: "15 to 20 exchanges", 
+    detailLevel: "Provide deeper explanations but keep the conversational, punchy energy.", 
+    maxTokens: 1500 
+  };
+  if (length === "long") return { 
+    exchangeCount: "20 to 25 exchanges", // ✅ Reduced from 15-18 to 12-15
+    detailLevel: "Go into deep detail, but maintain a natural and engaging conversation.", 
+    maxTokens: 1800 // ✅ Reduced from 2000 to 1800 to prevent timeout
+  };
+  return { 
+    exchangeCount: "10 to 15 exchanges", 
+    detailLevel: "Keep it brief, high-energy, and fast-paced.", 
+    maxTokens: 1000 
+  };
 };
+
 
 export const generateContent = async (req, res, next) => {
   try {
