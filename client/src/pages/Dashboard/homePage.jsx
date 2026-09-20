@@ -373,7 +373,33 @@ export default function StudentHome() {
                 {battleTab === "link" && (
                   <div className="space-y-3">
                     <p className="text-xs text-muted-foreground">Generate a secure link and share it via WhatsApp. The receiver will get the exact quiz you set up!</p>
-                    <input type="text" placeholder="Enter topic (e.g., Physics, History)" value={battleTopic} onChange={(e) => setBattleTopic(e.target.value)} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+                   <div className="space-y-2">
+  <label className="text-xs font-medium text-foreground">Select Topic</label>
+  <select 
+    value={battleTopic} 
+    onChange={(e) => setBattleTopic(e.target.value)} 
+    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+  >
+    <option value="">Choose from your library...</option>
+    {libraryData
+      .filter(item => item.type !== "quiz")
+      .map(item => (
+        <option key={item._id} value={item.title}>
+          {item.title}
+        </option>
+      ))}
+    <option value="custom">--- Or enter custom topic ---</option>
+  </select>
+  {battleTopic === "custom" && (
+    <input 
+      type="text" 
+      placeholder="Enter custom topic" 
+      value={battleTopic} 
+      onChange={(e) => setBattleTopic(e.target.value)} 
+      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand mt-2"
+    />
+  )}
+</div>
                     <select value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
                       <option value={3}>3 Questions (Quick)</option>
                       <option value={5}>5 Questions (Standard)</option>
