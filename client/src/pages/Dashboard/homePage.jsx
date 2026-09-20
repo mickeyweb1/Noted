@@ -52,6 +52,7 @@ export default function StudentHome() {
   const [battleTab, setBattleTab] = useState(isPersonalUser ? "link" : "classmate");
   const [selectedOpponent, setSelectedOpponent] = useState("");
   const [battleTopic, setBattleTopic] = useState("");
+  const [isCustomTopic, setIsCustomTopic] = useState(false); // ✅ NEW: Tracks if custom input should be shown
   const [numQuestions, setNumQuestions] = useState(3);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
@@ -142,6 +143,8 @@ export default function StudentHome() {
       if (res.data.success) {
         alert(res.data.message);
         setSelectedOpponent("");
+        setBattleTopic("");
+        setIsCustomTopic(false);
       }
     } catch (error) {
       alert(error.response?.data?.message || "Failed to send challenge.");
@@ -185,6 +188,45 @@ export default function StudentHome() {
     if (index === 1) return <Medal className="w-4 h-4 text-gray-400" />;
     return <Award className="w-4 h-4 text-amber-700" />;
   };
+
+  // ✅ Helper component for the Topic Selector to keep code clean and reusable
+  const TopicSelector = () => (
+    <div className="space-y-2">
+      <label className="text-xs font-medium text-foreground">Select Topic</label>
+      <select 
+        value={isCustomTopic ? "custom" : battleTopic} 
+        onChange={(e) => {
+          if (e.target.value === "custom") {
+            setIsCustomTopic(true);
+            setBattleTopic("");
+          } else {
+            setIsCustomTopic(false);
+            setBattleTopic(e.target.value);
+          }
+        }} 
+        className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+      >
+        <option value="">Choose from your library...</option>
+        {libraryData
+          .filter(item => item.type !== "quiz")
+          .map(item => (
+            <option key={item._id} value={item.title}>
+              {item.title}
+            </option>
+          ))}
+        <option value="custom">--- Or enter custom topic ---</option>
+      </select>
+      {isCustomTopic && (
+        <input 
+          type="text" 
+          placeholder="Enter custom topic (e.g., Biology)" 
+          value={battleTopic} 
+          onChange={(e) => setBattleTopic(e.target.value)} 
+          className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand mt-2"
+        />
+      )}
+    </div>
+  );
 
   return (
     <section className="w-full max-w-7xl mx-auto space-y-5 px-3 py-4 sm:px-5 sm:py-6 lg:space-y-6 lg:px-6">
@@ -357,7 +399,10 @@ export default function StudentHome() {
                       <option value="">Select a classmate...</option>
                       {classmates.map((c) => (<option key={c._id} value={c._id}>{c.fullName} (Lvl {c.level})</option>))}
                     </select>
-                    <input type="text" placeholder="Enter topic (e.g., Biology, World War II)" value={battleTopic} onChange={(e) => setBattleTopic(e.target.value)} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+                    
+                    {/* ✅ UPDATED: Uses the reusable TopicSelector */}
+                    <TopicSelector />
+                    
                     <select value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
                       <option value={3}>3 Questions (Quick)</option>
                       <option value={5}>5 Questions (Standard)</option>
@@ -373,33 +418,10 @@ export default function StudentHome() {
                 {battleTab === "link" && (
                   <div className="space-y-3">
                     <p className="text-xs text-muted-foreground">Generate a secure link and share it via WhatsApp. The receiver will get the exact quiz you set up!</p>
-                   <div className="space-y-2">
-  <label className="text-xs font-medium text-foreground">Select Topic</label>
-  <select 
-    value={battleTopic} 
-    onChange={(e) => setBattleTopic(e.target.value)} 
-    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-  >
-    <option value="">Choose from your library...</option>
-    {libraryData
-      .filter(item => item.type !== "quiz")
-      .map(item => (
-        <option key={item._id} value={item.title}>
-          {item.title}
-        </option>
-      ))}
-    <option value="custom">--- Or enter custom topic ---</option>
-  </select>
-  {battleTopic === "custom" && (
-    <input 
-      type="text" 
-      placeholder="Enter custom topic" 
-      value={battleTopic} 
-      onChange={(e) => setBattleTopic(e.target.value)} 
-      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand mt-2"
-    />
-  )}
-</div>
+                    
+                    {/* ✅ UPDATED: Uses the reusable TopicSelector */}
+                    <TopicSelector />
+                    
                     <select value={numQuestions} onChange={(e) => setNumQuestions(Number(e.target.value))} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
                       <option value={3}>3 Questions (Quick)</option>
                       <option value={5}>5 Questions (Standard)</option>
@@ -431,7 +453,7 @@ export default function StudentHome() {
                         <button onClick={shareToWhatsApp} className="w-full py-2.5 rounded-lg bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
                           <Share2 className="w-4 h-4" /> Share to WhatsApp
                         </button>
-                        <button onClick={() => { setGeneratedLink(""); setBattleTopic(""); }} className="w-full text-xs text-muted-foreground hover:text-foreground underline">
+                        <button onClick={() => { setGeneratedLink(""); setBattleTopic(""); setIsCustomTopic(false); }} className="w-full text-xs text-muted-foreground hover:text-foreground underline">
                           Generate New Link
                         </button>
                       </div>
@@ -472,7 +494,7 @@ export default function StudentHome() {
         </div>
       </div>
       
-      {/* ✅ FLOATING FEEDBACK BUTTON & MODAL (Placed at root level for perfect positioning) */}
+      {/* ✅ FLOATING FEEDBACK BUTTON & MODAL */}
       <button 
         onClick={() => setIsFeedbackOpen(true)}
         className="fixed bottom-6 right-6 p-4 rounded-full bg-brand text-white shadow-lg hover:bg-brand/90 transition-all z-50 flex items-center justify-center group"
