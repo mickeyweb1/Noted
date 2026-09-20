@@ -5,14 +5,11 @@ import {
   Sparkles,
   Film,
   Type,
-  Image,
-  Play,
-  Check,
-  RefreshCw,
   Upload,
   FileText,
   MessageCircle,
   Bell,
+  RefreshCw,
 } from "lucide-react";
 import api from "../utils/api";
 import NoteScanner from "../components/NoteScanner";
@@ -21,7 +18,9 @@ export default function VideoGenerator() {
   const [inputMethod, setInputMethod] = useState("type");
   const [notes, setNotes] = useState("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [outputMode, setOutputMode] = useState("story");
+  
+  // ✅ Locked to "story" mode to prevent server memory crashes
+  const outputMode = "story"; 
 
   const [videoId, setVideoId] = useState(
     () => localStorage.getItem("activeVideoId") || null,
@@ -32,15 +31,11 @@ export default function VideoGenerator() {
   const [progress, setProgress] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [regeneratingScene, setRegeneratingScene] = useState(null);
-  
-  // ✅ NEW: State to hold the secure blob URL
-  const [stitchedVideoUrl, setStitchedVideoUrl] = useState("");
-  const [isFetchingVideo, setIsFetchingVideo] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Generating scenes...");
 
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
-  const pollIntervalRef = useRef(null);
+  const pollRef = useRef(null);
 
   useEffect(() => {
     const fetchLibrary = async () => {
@@ -65,15 +60,6 @@ export default function VideoGenerator() {
     }
   }, []);
 
-  // ✅ CLEANUP: Prevent memory leaks by revoking the blob URL
-  useEffect(() => {
-    return () => {
-      if (stitchedVideoUrl && stitchedVideoUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(stitchedVideoUrl);
-      }
-    };
-  }, [stitchedVideoUrl]);
-
   useEffect(() => {
     let timeoutId;
 
@@ -83,31 +69,12 @@ export default function VideoGenerator() {
       try {
         const res = await api.get(`/ai/video/status/${videoId}`);
         if (res.data.success) {
-          const { videoData, progress: newProgress, isFinished: done, mediaUrl, outputMode: dbOutputMode, statusMessage: newStatusMessage } = res.data.data;
+          const { videoData, progress: newProgress, isFinished: done, statusMessage: newStatusMessage } = res.data.data;
           
           setScenes(videoData.scenes);
           setVideoTitle(videoData.title);
           setProgress(newProgress);
           setStatusMessage(newStatusMessage || "Generating scenes...");
-          
-          if (dbOutputMode) setOutputMode(dbOutputMode);
-
-          // ✅ CRITICAL FIX: Fetch video as a blob using the authenticated 'api' instance
-          if (mediaUrl && !stitchedVideoUrl && !isFetchingVideo) {
-            setIsFetchingVideo(true);
-            const filename = mediaUrl.split(/[\\/]/).pop();
-            try {
-              const response = await api.get(`/ai/video/stream/${filename}`, {
-                responseType: 'blob' // This tells Axios to handle it as a file
-              });
-              const blobUrl = URL.createObjectURL(response.data);
-              setStitchedVideoUrl(blobUrl);
-            } catch (err) {
-              console.error("Failed to fetch authenticated video:", err);
-            } finally {
-              setIsFetchingVideo(false);
-            }
-          }
 
           if (done) {
             setIsFinished(true);
@@ -131,7 +98,7 @@ export default function VideoGenerator() {
     }
 
     return () => clearTimeout(timeoutId);
-  }, [videoId, isFinished, stitchedVideoUrl, isFetchingVideo]);
+  }, [videoId, isFinished]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -160,13 +127,12 @@ export default function VideoGenerator() {
     setIsFinished(false);
     setProgress(0);
     setScenes([]);
-    setStitchedVideoUrl(""); // Reset video URL on new generation
 
     try {
       const res = await api.post("/ai/video/generate-storyboard", {
         text: notes,
         aspectRatio,
-        outputMode,
+        outputMode, // Always "story"
       });
       if (res.data.success) {
         setVideoId(res.data.data._id);
@@ -222,7 +188,7 @@ export default function VideoGenerator() {
         {isFinished && (
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">
             <Bell className="w-4 h-4" />
-            <span className="text-sm font-medium">Video Ready!</span>
+            <span className="text-sm font-medium">Scenes Ready!</span>
           </div>
         )}
       </div>
@@ -305,18 +271,19 @@ export default function VideoGenerator() {
               <option value="9:16">Portrait (9:16) - TikTok/Shorts</option>
             </select>
           </div>
+          
+          {/* ✅ REPLACED: Output Mode dropdown with a static info badge */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
               Output Mode
             </label>
-            <select
-              value={outputMode}
-              onChange={(e) => setOutputMode(e.target.value)}
-              className="flex w-full rounded-lg border border-input bg-background p-3 text-sm"
-            >
-              <option value="story">Story Mode (Instant Play Scenes)</option>
-              <option value="single">Single MP4 (Combined Video)</option>
-            </select>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground">
+              <Film className="w-4 h-4" />
+              <span>Story Mode (Instant Play Scenes)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Scenes play individually for instant, crash-free generation!
+            </p>
           </div>
         </div>
 
@@ -359,47 +326,6 @@ export default function VideoGenerator() {
           <h2 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
             <Film className="w-5 h-5 text-blue-500" /> {videoTitle}
           </h2>
-
-          {/* ✅ SHOW COMBINED VIDEO IF OUTPUT MODE IS SINGLE AND IT'S READY */}
-          {isFinished && outputMode === "single" && stitchedVideoUrl && (
-            <div className="rounded-2xl border-2 border-brand bg-brand/5 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-500">
-              <h3 className="font-bold text-brand flex items-center gap-2">
-                <Check className="w-5 h-5" /> Full Combined Video Ready
-              </h3>
-
-              <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
-                <video
-                  key={stitchedVideoUrl}
-                  controls
-                  preload="auto"
-                  className="w-full h-full"
-                  onLoadedData={() => console.log("✅ Video loaded successfully!")}
-                  onError={(e) => console.error("❌ Video error:", e)}
-                >
-                  <source src={stitchedVideoUrl} type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-              </div>
-
-              <div className="flex gap-2">
-                <a
-                  href={stitchedVideoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download="NotedAI_Video.mp4"
-                  className="flex-1 text-center py-2 bg-brand text-brand-foreground rounded-lg font-bold text-sm hover:bg-brand/90 transition-all"
-                >
-                  Download MP4
-                </a>
-                <button
-                  onClick={() => window.open(stitchedVideoUrl, "_blank")}
-                  className="flex-1 py-2 bg-background border border-border rounded-lg font-bold text-sm hover:bg-accent transition-all"
-                >
-                  Open in New Tab
-                </button>
-              </div>
-            </div>
-          )}
 
           <div className="space-y-4">
             {scenes.map((scene, index) => (
