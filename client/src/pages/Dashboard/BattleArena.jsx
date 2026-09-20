@@ -22,12 +22,16 @@ export default function BattleArena() {
   const [score, setScore] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(15);
+  const [timeLeft, setTimeLeft] = useState(10); // ✅ CHANGED: 15 to 10 seconds
   const [battleResolved, setBattleResolved] = useState(false);
   const [resultData, setResultData] = useState(null);
   
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdownNum, setCountdownNum] = useState(3);
+  
+  // ✅ NEW: Track if opponent is ready
+  const [opponentReady, setOpponentReady] = useState(false);
+  const [userReady, setUserReady] = useState(false);
   
   // Prevents infinite countdown loop
   const hasStartedCountdown = useRef(false);
@@ -62,6 +66,11 @@ export default function BattleArena() {
             const newStatus = res.data.data.status;
             setBattleStatus(newStatus);
             
+            // ✅ NEW: Check if opponent is ready
+            if (res.data.data.opponentReady !== undefined) {
+              setOpponentReady(res.data.data.opponentReady);
+            }
+            
             if (newStatus === "active" && !hasStartedCountdown.current) {
               hasStartedCountdown.current = true;
               startCountdown();
@@ -87,12 +96,26 @@ export default function BattleArena() {
       if (count === 0) {
         clearInterval(countInterval);
         setShowCountdown(false);
-        setTimeLeft(15);
+        setTimeLeft(10); // ✅ CHANGED: 15 to 10
       }
     }, 1000);
   };
  
+  // ✅ NEW: Handle user ready state
+  const handleUserReady = async () => {
+    try {
+      await api.post("/ai/battle/ready", { battleId: battleData.battleId, ready: true });
+      setUserReady(true);
+    } catch (err) {
+      alert("Failed to mark as ready");
+    }
+  };
+ 
   const handleHostStart = async () => {
+    if (!userReady || !opponentReady) {
+      alert("Both players must be ready before starting!");
+      return;
+    }
     try {
       await api.post("/ai/battle/start", { battleId: battleData.battleId });
     } catch (err) {
@@ -136,7 +159,7 @@ export default function BattleArena() {
       setCurrentQIndex((prev) => prev + 1);
       setSelectedOption(null);
       setIsAnswered(false);
-      setTimeLeft(15);
+      setTimeLeft(10); // ✅ CHANGED: 15 to 10
     } else {
       await resolveBattle();
     }
@@ -236,7 +259,21 @@ export default function BattleArena() {
           <Clock className="w-10 h-10 text-muted-foreground" />
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-2">Waiting for Host...</h2>
-        <p className="text-muted-foreground max-w-md">The battle is set up! Waiting for {battleData.challengerName} to click "Start Battle".</p>
+        <p className="text-muted-foreground mb-6 max-w-md">The battle is set up! Waiting for {battleData.challengerName} to click "Start Battle".</p>
+        {/* ✅ NEW: Mark as Ready Button */}
+        {!userReady && (
+          <button 
+            onClick={handleUserReady}
+            className="px-8 py-4 rounded-xl bg-brand text-brand-foreground font-bold text-lg hover:bg-brand/90 transition-all hover:scale-105 shadow-lg shadow-brand/20 flex items-center gap-2"
+          >
+            <UserCheck className="w-5 h-5" /> I'm Ready!
+          </button>
+        )}
+        {userReady && (
+          <div className="flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500/20 text-green-600 font-bold">
+            <CheckCircle2 className="w-5 h-5" /> You are ready!
+          </div>
+        )}
       </div>
     );
   }
@@ -249,8 +286,38 @@ export default function BattleArena() {
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-2">Opponent Connected!</h2>
         <p className="text-muted-foreground mb-8 max-w-md">Your friend is in the arena and ready. Click below to begin!</p>
-        <button onClick={handleHostStart} className="px-8 py-4 rounded-xl bg-brand text-brand-foreground font-bold text-lg hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all hover:scale-105 shadow-lg shadow-brand/20">
-          ⚔️ START BATTLE
+        
+        {/* ✅ UPDATED: Show ready status and require both ready */}
+        <div className="space-y-4 mb-8 w-full max-w-sm">
+          <div className={`p-4 rounded-xl border-2 ${userReady ? 'border-green-500 bg-green-500/10' : 'border-border bg-card'}`}>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-foreground">You</span>
+              {userReady ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <XCircle className="w-5 h-5 text-muted-foreground" />}
+            </div>
+          </div>
+          <div className={`p-4 rounded-xl border-2 ${opponentReady ? 'border-green-500 bg-green-500/10' : 'border-border bg-card'}`}>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-foreground">{battleData.challengerName}</span>
+              {opponentReady ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <XCircle className="w-5 h-5 text-muted-foreground" />}
+            </div>
+          </div>
+        </div>
+        
+        {!userReady && (
+          <button 
+            onClick={handleUserReady}
+            className="w-full max-w-sm py-3 rounded-xl bg-brand text-brand-foreground font-bold text-lg hover:bg-brand/90 transition-all mb-4"
+          >
+            Mark as Ready
+          </button>
+        )}
+        
+        <button 
+          onClick={handleHostStart} 
+          disabled={!userReady || !opponentReady}
+          className="w-full max-w-sm py-4 rounded-xl bg-brand text-brand-foreground font-bold text-lg hover:bg-brand/90 transition-all hover:scale-105 shadow-lg shadow-brand/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+        >
+          {(!userReady || !opponentReady) ? "Wait for Both Players to be Ready" : "⚔️ START BATTLE"}
         </button>
       </div>
     );
