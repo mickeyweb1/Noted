@@ -180,7 +180,7 @@ export default function StudentSetting() {
                             {isSavingProfile ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />} 
                             Save Profile
                         </button>
-                    </div
+                    </div>
                 </div>
 
                 {/* ==========================================
