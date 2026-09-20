@@ -64,14 +64,21 @@ export const getMe = async (req, res, next) => {
 // @route   PUT /api/auth/profile
 export const updateProfile = async (req, res, next) => {
   try {
-    const { schoolName, favoriteSubject, bio } = req.body;
+    const { firstName, lastName, fullName, email, phone, schoolName, favoriteSubject, bio } = req.body;
     const user = await User.findById(req.user._id);
 
     if (!user) {
       const error = new Error("User not found");
-      error.status = 404; throw error;
+      error.status = 404; 
+      throw error;
     }
 
+    // ✅ SAVE ALL FIELDS (not just school/bio)
+    if (firstName !== undefined) user.firstName = firstName;
+    if (lastName !== undefined) user.lastName = lastName;
+    if (fullName !== undefined) user.fullName = fullName; // ✅ THIS WAS MISSING!
+    if (email !== undefined) user.email = email;
+    if (phone !== undefined) user.phone = phone;
     if (schoolName !== undefined) user.schoolName = schoolName;
     if (favoriteSubject !== undefined) user.favoriteSubject = favoriteSubject;
     if (bio !== undefined) user.bio = bio;
