@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Award, Clock, User2, Save, Phone, Mail, Camera, LogOut, Check } from "lucide-react";
+import { Award, Clock, User2, Save, Phone, Mail, Camera, LogOut, Check, BookOpen, School } from "lucide-react";
 import { useUserContext } from "../../context/userContext";
 import { ThemeToggle } from "../../components/themeToggle";
 import api from "../../utils/api";
@@ -7,64 +7,76 @@ import api from "../../utils/api";
 export default function StudentSetting() {
     const { user, updateUser, logout } = useUserContext();
 
-    // 1. PROFILE STATE
+    // 1. PROFILE STATE (Merged from both files)
     const [firstName, setFirstName] = useState(user?.firstName || user?.fullName?.split(' ')[0] || "");
     const [lastName, setLastName] = useState(user?.lastName || user?.fullName?.split(' ')[1] || "");
     const [email, setEmail] = useState(user?.email || "");
     const [phone, setPhone] = useState(user?.phone || "");
+    const [schoolName, setSchoolName] = useState(user?.schoolName === "Global" ? "" : (user?.schoolName || ""));
+    const [favoriteSubject, setFavoriteSubject] = useState(user?.favoriteSubject || "");
+    const [bio, setBio] = useState(user?.bio || "");
+    
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileSuccess, setProfileSuccess] = useState(false);
 
-    // 2. TIMER SETTINGS STATE (Loaded from localStorage)
+    // 2. TIMER SETTINGS STATE
     const [focusTime, setFocusTime] = useState(() => Number(localStorage.getItem("focusTime")) || 25);
     const [shortBreak, setShortBreak] = useState(() => Number(localStorage.getItem("shortBreak")) || 5);
     const [longBreak, setLongBreak] = useState(() => Number(localStorage.getItem("longBreak")) || 15);
     const [timerSuccess, setTimerSuccess] = useState(false);
 
-    // 3. NOTIFICATION STATE (Loaded from localStorage)
+    // 3. NOTIFICATION STATE
     const [emailNotifications, setEmailNotifications] = useState(() => {
         const saved = localStorage.getItem("emailNotifications");
         return saved !== null ? JSON.parse(saved) : true;
     });
 
-    // Save Timer Settings to localStorage
     useEffect(() => {
         localStorage.setItem("focusTime", focusTime);
         localStorage.setItem("shortBreak", shortBreak);
         localStorage.setItem("longBreak", longBreak);
     }, [focusTime, shortBreak, longBreak]);
 
-    // Save Notification Settings to localStorage
     useEffect(() => {
         localStorage.setItem("emailNotifications", JSON.stringify(emailNotifications));
     }, [emailNotifications]);
 
-    // Handlers
+    // ✅ UNIFIED SAVE FUNCTION: Sends ALL profile data to the backend at once
     const handleSaveProfile = async () => {
         setIsSavingProfile(true);
         setProfileSuccess(false);
         const newFullName = `${firstName} ${lastName}`.trim();
 
         try {
-            // Try to save to backend first
-await api.put("/auth/profile", {
-    firstName,
-    lastName,
-    fullName: newFullName,
-    email,
-    phone
-});
+            // Send EVERYTHING to the backend to ensure the database is fully updated
+            await api.put("/auth/profile", {
+                firstName,
+                lastName,
+                fullName: newFullName,
+                email,
+                phone,
+                schoolName: schoolName || "Global",
+                favoriteSubject,
+                bio
+            });
             
-            // Update local context
-            updateUser({ firstName, lastName, fullName: newFullName, email, phone });
+            // Update local context immediately so the UI feels snappy
+            updateUser({ 
+                firstName, 
+                lastName, 
+                fullName: newFullName, 
+                email, 
+                phone,
+                schoolName: schoolName || "Global",
+                favoriteSubject,
+                bio
+            });
+            
             setProfileSuccess(true);
             setTimeout(() => setProfileSuccess(false), 3000);
         } catch (error) {
-            console.warn("Backend update failed, updating local context only:", error);
-            // Fallback: just update local context so the UI still feels responsive
-            updateUser({ firstName, lastName, fullName: newFullName, email, phone });
-            setProfileSuccess(true);
-            setTimeout(() => setProfileSuccess(false), 3000);
+            console.error("Backend update failed:", error);
+            alert("Failed to save profile. Please try again.");
         } finally {
             setIsSavingProfile(false);
         }
@@ -76,14 +88,12 @@ await api.put("/auth/profile", {
     };
 
     const handleAvatarClick = () => {
-        // Triggers the hidden file input
         document.getElementById("avatar-upload")?.click();
     };
 
     const handleAvatarChange = (e) => {
         const file = e.target.files[0];
         if (file) {
-            // TODO: Later, upload this file to your backend/Cloudinary and update user.avatar
             alert(`Selected: ${file.name}. (Avatar upload backend integration pending)`);
         }
     };
@@ -99,7 +109,7 @@ await api.put("/auth/profile", {
                 </div>
 
                 {/* ==========================================
-                    1. PROFILE SECTION
+                    1. COMPLETE PROFILE SECTION (Merged)
                     ========================================== */}
                 <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-6">
                     <div className="flex items-center justify-between border-b border-border pb-4">
@@ -134,54 +144,43 @@ await api.put("/auth/profile", {
                         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-foreground">First Name</label>
-                                <input 
-                                    type="text" 
-                                    value={firstName}
-                                    onChange={(e) => setFirstName(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                                />
+                                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-foreground">Last Name</label>
-                                <input 
-                                    type="text" 
-                                    value={lastName}
-                                    onChange={(e) => setLastName(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                                />
+                                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-foreground flex items-center gap-2"><Mail className="w-4 h-4" /> Email</label>
-                                <input 
-                                    type="email" 
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                                />
+                                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-foreground flex items-center gap-2"><Phone className="w-4 h-4" /> Phone Number</label>
-                                <input 
-                                    type="tel" 
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    placeholder="+1 234 567 890"
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                                />
+                                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 234 567 890" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
+                            </div>
+                            
+                            {/* ✅ NEW: Merged School & Academic Fields */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-foreground flex items-center gap-2"><School className="w-4 h-4" /> School Name</label>
+                                <input type="text" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="e.g., Lincoln High School" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-foreground flex items-center gap-2"><BookOpen className="w-4 h-4" /> Favorite Subject</label>
+                                <input type="text" value={favoriteSubject} onChange={(e) => setFavoriteSubject(e.target.value)} placeholder="e.g., Mathematics, Biology" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
+                            </div>
+                            <div className="space-y-2 md:col-span-2">
+                                <label className="text-sm font-medium text-foreground flex items-center gap-2"><User2 className="w-4 h-4" /> Short Bio</label>
+                                <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell your classmates a bit about yourself..." rows="3" className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand resize-none" />
                             </div>
                         </div>
                     </div>
                     
                     <div className="flex justify-end">
-                        <button 
-                            onClick={handleSaveProfile}
-                            disabled={isSavingProfile}
-                            className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-lg bg-brand text-brand-foreground font-medium text-sm hover:bg-brand/90 transition-colors disabled:opacity-70"
-                        >
+                        <button onClick={handleSaveProfile} disabled={isSavingProfile} className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-lg bg-brand text-brand-foreground font-medium text-sm hover:bg-brand/90 transition-colors disabled:opacity-70">
                             {isSavingProfile ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />} 
                             Save Profile
                         </button>
-                    </div>
+                    </div
                 </div>
 
                 {/* ==========================================
@@ -205,41 +204,20 @@ await api.put("/auth/profile", {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">Focus Duration (mins)</label>
-                            <input 
-                                type="number" 
-                                min="1"
-                                value={focusTime}
-                                onChange={(e) => setFocusTime(Number(e.target.value))}
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-center font-bold text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                            />
+                            <input type="number" min="1" value={focusTime} onChange={(e) => setFocusTime(Number(e.target.value))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-center font-bold text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">Short Break (mins)</label>
-                            <input 
-                                type="number" 
-                                min="1"
-                                value={shortBreak}
-                                onChange={(e) => setShortBreak(Number(e.target.value))}
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-center font-bold text-electric focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric"
-                            />
+                            <input type="number" min="1" value={shortBreak} onChange={(e) => setShortBreak(Number(e.target.value))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-center font-bold text-electric focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric" />
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">Long Break (mins)</label>
-                            <input 
-                                type="number" 
-                                min="1"
-                                value={longBreak}
-                                onChange={(e) => setLongBreak(Number(e.target.value))}
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-center font-bold text-flame focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame"
-                            />
+                            <input type="number" min="1" value={longBreak} onChange={(e) => setLongBreak(Number(e.target.value))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-center font-bold text-flame focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flame" />
                         </div>
                     </div>
 
                     <div className="flex justify-end">
-                        <button 
-                            onClick={handleSaveTimer}
-                            className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-lg bg-electric text-electric-foreground font-medium text-sm hover:bg-electric/90 transition-colors"
-                        >
+                        <button onClick={handleSaveTimer} className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-lg bg-electric text-electric-foreground font-medium text-sm hover:bg-electric/90 transition-colors">
                             <Save className="w-4 h-4" /> Save Timer Settings
                         </button>
                     </div>
@@ -255,7 +233,6 @@ await api.put("/auth/profile", {
                     </div>
 
                     <div className="space-y-4">
-                        {/* Dark Mode */}
                         <div className="flex items-center justify-between p-4 rounded-xl bg-background/50 border border-border">
                             <div>
                                 <h3 className="text-sm font-semibold text-foreground">Dark Mode</h3>
@@ -264,21 +241,13 @@ await api.put("/auth/profile", {
                             <ThemeToggle />
                         </div>
 
-                        {/* Email Notifications */}
                         <div className="flex items-center justify-between p-4 rounded-xl bg-background/50 border border-border">
                             <div>
                                 <h3 className="text-sm font-semibold text-foreground">Email Notifications</h3>
                                 <p className="text-xs text-muted-foreground">Weekly recaps and streak reminders</p>
                             </div>
-                            <button 
-                                onClick={() => setEmailNotifications(!emailNotifications)}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                    emailNotifications ? 'bg-brand' : 'bg-muted'
-                                }`}
-                            >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                    emailNotifications ? 'translate-x-6' : 'translate-x-1'
-                                }`} />
+                            <button onClick={() => setEmailNotifications(!emailNotifications)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${emailNotifications ? 'bg-brand' : 'bg-muted'}`}>
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${emailNotifications ? 'translate-x-6' : 'translate-x-1'}`} />
                             </button>
                         </div>
                     </div>
@@ -292,14 +261,10 @@ await api.put("/auth/profile", {
                         <LogOut className="w-5 h-5" /> Account Actions
                     </h2>
                     <p className="text-sm text-muted-foreground">Sign out of your account on this device.</p>
-                    <button 
-                        onClick={logout}
-                        className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors"
-                    >
+                    <button onClick={logout} className="inline-flex items-center justify-center gap-2 h-10 px-6 rounded-lg bg-destructive text-destructive-foreground font-medium text-sm hover:bg-destructive/90 transition-colors">
                         <LogOut className="w-4 h-4" /> Log Out
                     </button>
                 </div>
-
             </div>
         </div>
     );
