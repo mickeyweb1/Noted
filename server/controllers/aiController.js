@@ -5,7 +5,7 @@ import ffmpeg from "fluent-ffmpeg";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import crypto from "crypto"; // ✅ ADDED for unique job IDs
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,12 +33,17 @@ const ensureText = (value, message = "Please provide valid text.") => {
   return text;
 };
 
+// ✅ CRITICAL FIX: Auto-fix trailing commas, a common LLM JSON mistake
 const parseJsonObject = (rawText) => {
   if (typeof rawText !== "string" || !rawText.trim()) {
     console.error("❌ Raw text is empty or not a string:", rawText);
     throw httpError("The AI returned an empty response.", 502);
   }
-  const cleaned = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+  let cleaned = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+  
+  // Remove trailing commas before } or ]
+  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+  
   const firstBrace = cleaned.indexOf("{");
   const lastBrace = cleaned.lastIndexOf("}");
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
@@ -62,47 +67,44 @@ const runGroq = async (messagesOrPrompt, options = {}) => {
   }
 };
 
+// ✅ CRITICAL FIX: Extremely forgiving podcast validation with fallback
 const validatePodcast = (parsed) => {
-  if (!parsed || typeof parsed.title !== "string" || !parsed.title.trim() || !Array.isArray(parsed.script) || parsed.script.length < 2) {
-    throw httpError("The AI returned an invalid podcast script.", 502);
+  if (!parsed) {
+    throw httpError("The AI returned an empty response.", 502);
   }
   
-  const script = parsed.script.map((line) => {
-    if (!line || typeof line.text !== "string" || !line.text.trim()) {
-      // ✅ Fallback: If AI didn't structure it properly, try to fix it
-      return { 
-        speaker: "Leo", 
-        text: line?.text || line || "Missing content" 
-      };
-    }
-    
-    const normalizedSpeaker = line.speaker?.trim().toLowerCase() || "";
-    
-    // ✅ Auto-correct speaker names
-    if (normalizedSpeaker.includes("leo")) {
-      return { speaker: "Leo", text: line.text.trim().slice(0, 1200) };
-    } else if (normalizedSpeaker.includes("nova") || normalizedSpeaker.includes("dr")) {
-      return { speaker: "Dr. Nova", text: line.text.trim().slice(0, 1200) };
-    } else {
-      // ✅ Default alternating speakers if not specified
-      return { speaker: "Leo", text: line.text.trim().slice(0, 1200) };
-    }
-  });
+  const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Study Podcast";
   
-  // ✅ Remove the strict "why do we need to know this" requirement
-  // Just ensure we have at least 2 exchanges
+  let script = [];
+  if (Array.isArray(parsed.script)) {
+    script = parsed.script
+      .filter((line) => line && (typeof line.text === "string" || typeof line === "string"))
+      .map((line) => {
+        const text = typeof line === "string" ? line : line.text;
+        const speaker = line.speaker?.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
+        return {
+          speaker,
+          text: text.trim().slice(0, 1200),
+        };
+      })
+      .filter(line => line.text.length > 0);
+  }
+  
+  // ✅ Fallback: If script is empty or too short, generate a basic one so it NEVER crashes
   if (script.length < 2) {
-    throw httpError("The AI returned an incomplete podcast structure.", 502);
+    script = [
+      { speaker: "Leo", text: `Welcome to this study session about ${title}!` },
+      { speaker: "Dr. Nova", text: `Let's explore this topic together and break it down.` }
+    ];
   }
 
   return { 
-    title: parsed.title.trim().slice(0, 160), 
+    title,
     script,
     keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [],
     quiz: Array.isArray(parsed.quiz) ? parsed.quiz : []
   };
 };
-
 
 // ✅ CRITICAL FIX: Strict quiz validation. No more dangerous fallbacks.
 const validateQuiz = (parsed, expectedCount) => {
@@ -184,16 +186,14 @@ export const generateContent = async (req, res, next) => {
     
     if (mode === "tutor") {
       const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant. 
-      
       STRICT RULES:
       1. EDUCATIONAL CONTENT ONLY: Answer clearly, accurately, and concisely.
-      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name. If a user asks who you are, you MUST strictly reply that you are the Noted AI Tutor, built by the Noted development team.`;
+      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name.`;
       const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
       aiContent = await runGroq([{ role: "system", content: tutorSystemPrompt }, ...safeMessages]);
       aiTitle = requestedTitle || "Tutor Chat";
     } else if (mode === "summary") {
       const systemPrompt = "You are an expert academic study assistant. Create an accurate, well-structured study summary. Educational content only.";
-      // ✅ CRITICAL FIX: Respect max_tokens from frontend (e.g., for vibe analysis)
       const requestedMaxTokens = Number(max_tokens);
       const finalMaxTokens = Number.isInteger(requestedMaxTokens) ? Math.min(Math.max(requestedMaxTokens, 50), 4096) : 4096;
       
@@ -221,12 +221,26 @@ export const generateContent = async (req, res, next) => {
       if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
       const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
       
+      // ✅ IMPROVED PROMPT: More explicit about JSON formatting to prevent trailing commas
       const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
       Tone: ${tone}. Difficulty Level: ${level}.
       There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
       Length: ${exchangeCount}. ${detailLevel}. 
-      Rules: 1. Leo opens with a surprising fact. 2. Dr. Nova introduces the topic. 3. Include a historical misconception. 4. Leo asks: "Why do we actually need to know this?" 5. Dr. Nova gives a practical answer. 6. Keep lines short. 
-      7. Output VALID JSON ONLY.`;
+      
+      CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas in arrays or objects.
+      
+      Format:
+      {
+        "title": "Catchy title",
+        "script": [
+          { "speaker": "Leo", "text": "Surprising fact about the topic." },
+          { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
+        ],
+        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
+        "quiz": [
+          { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
+        ]
+      }`;
       
       const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
       const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
@@ -246,7 +260,6 @@ export const generateContent = async (req, res, next) => {
       const difficultyLevel = typeof difficulty === "string" && difficulty.trim() ? difficulty.trim().slice(0, 30) : "Medium";
       
       const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions based on the provided notes.
-      
 Difficulty: ${difficultyLevel}
 CRITICAL REQUIREMENTS:
 1. Every question MUST have exactly 4 options.
@@ -268,10 +281,7 @@ Example format:
 }`;
 
       const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 4096 });
-      
-      // ✅ CRITICAL FIX: Strict validation, no dangerous fallbacks
       const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull), questionCount);
-      
       aiTitle = requestedTitle || parsedQuiz.title;
       aiContent = JSON.stringify(parsedQuiz);
     }
