@@ -60,7 +60,6 @@ export default function StudentSideBar({ isOpen, onClose }) {
     { to: "/ai-teacher", icon: GraduationCap, label: "AI Tutor" },
     { to: "/leaderboard", icon: Trophy, label: "Leaderboard" },
     { to: "/directory", icon: Users, label: "Student Directory" }, 
-    { to: "/profile", icon: User, label: "My Profile" },
     { to: "/reminder", icon: Calendar, label: "Schedule" },
     { to: "/studentSetting", icon: Settings, label: "Settings" },
   ];
