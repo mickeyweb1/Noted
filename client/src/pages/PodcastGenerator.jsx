@@ -1,312 +1,547 @@
-import { generateWithGroq } from "../config/grok.js";
-import { Content } from "../models/Content.js";
-import { User } from "../models/User.js";
-import ffmpeg from "fluent-ffmpeg";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import crypto from "crypto";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Camera, Check, Clipboard, Download, FileText, GraduationCap,
+  Headphones, Loader2, MessageCircle, Mic, Pause, Play, Sparkles,
+  Square, User, Brain
+} from "lucide-react";
+import api from "../utils/api";
+import NoteScanner from "../components/NoteScanner";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const SPEEDS = [0.75, 1, 1.25, 1.5];
+const TONES = ["Funny", "Calm", "Energetic", "Serious"];
+const LEVELS = ["Beginner", "Intermediate", "Advanced"];
 
-const ALLOWED_MODES = ["summary", "video", "music", "quiz", "tutor", "podcast"];
-const MAX_INPUT_LENGTH = 50000;
-const MAX_SPEECH_LENGTH = 30000;
-const MAX_IMAGE_PAYLOAD_LENGTH = 12000000;
+const removeCodeFence = (value) => value.replace(/```json/gi, "").replace(/```/g, "").trim();
 
-const httpError = (message, status = 500) => {
-  const error = new Error(message);
-  error.status = status;
-  return error;
-};
-
-const requireUser = (req) => {
-  if (!req.user?._id) throw httpError("Not authorized.", 401);
-  return req.user._id;
-};
-
-const ensureText = (value, message = "Please provide valid text.") => {
-  if (typeof value !== "string") throw httpError(message, 400);
-  const text = value.trim();
-  if (!text) throw httpError(message, 400);
-  return text;
-};
-
-// ✅ CRITICAL FIX: Auto-fix trailing commas, a common LLM JSON mistake
-const parseJsonObject = (rawText) => {
-  if (typeof rawText !== "string" || !rawText.trim()) {
-    console.error("❌ Raw text is empty or not a string:", rawText);
-    throw httpError("The AI returned an empty response.", 502);
-  }
-  let cleaned = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-  
-  // Remove trailing commas before } or ]
-  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
-  
-  const firstBrace = cleaned.indexOf("{");
-  const lastBrace = cleaned.lastIndexOf("}");
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    console.error("❌ No JSON braces found. Cleaned text:", cleaned);
-    throw httpError("The AI did not return valid JSON. Please try again.", 502);
-  }
+// ✅ UPDATED: More flexible parsing that matches backend validation
+const parsePodcastResponse = (generatedText) => {
   try {
-    return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
-  } catch (parseError) {
-    console.error("❌ JSON parse error:", parseError.message);
-    throw httpError("The AI returned malformed JSON. Please try again.", 502);
-  }
-};
-
-const runGroq = async (messagesOrPrompt, options = {}) => {
-  try {
-    return await generateWithGroq(messagesOrPrompt, options);
-  } catch (error) {
-    console.error("Groq generation failed:", error.message);
-    throw httpError("AI generation is temporarily unavailable.", 503);
-  }
-};
-
-// ✅ CRITICAL FIX: Extremely forgiving podcast validation with fallback
-const validatePodcast = (parsed) => {
-  if (!parsed) {
-    throw httpError("The AI returned an empty response.", 502);
-  }
-  
-  const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Study Podcast";
-  
-  let script = [];
-  if (Array.isArray(parsed.script)) {
-    script = parsed.script
-      .filter((line) => line && (typeof line.text === "string" || typeof line === "string"))
-      .map((line) => {
-        const text = typeof line === "string" ? line : line.text;
-        const speaker = line.speaker?.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
-        return {
-          speaker,
-          text: text.trim().slice(0, 1200),
-        };
-      })
-      .filter(line => line.text.length > 0);
-  }
-  
-  // ✅ Fallback: If script is empty or too short, generate a basic one so it NEVER crashes
-  if (script.length < 2) {
-    script = [
-      { speaker: "Leo", text: `Welcome to this study session about ${title}!` },
-      { speaker: "Dr. Nova", text: `Let's explore this topic together and break it down.` }
-    ];
-  }
-
-  return { 
-    title,
-    script,
-    keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [],
-    quiz: Array.isArray(parsed.quiz) ? parsed.quiz : []
-  };
-};
-
-const validateQuiz = (parsed, expectedCount) => {
-  if (!parsed || !Array.isArray(parsed.questions)) {
-    throw httpError("The AI returned an invalid quiz.", 502);
-  }
-  if (parsed.questions.length !== expectedCount) {
-    throw httpError(`The AI returned ${parsed.questions.length} questions, but ${expectedCount} were requested.`, 502);
-  }
-  const questions = parsed.questions.map((q, index) => {
-    if (
-      !q ||
-      typeof q.question !== "string" ||
-      !Array.isArray(q.options) ||
-      q.options.length !== 4 ||
-      q.options.some((option) => typeof option !== "string") ||
-      typeof q.correctAnswer !== "string" ||
-      !q.options.includes(q.correctAnswer) ||
-      typeof q.explanation !== "string"
-    ) {
-      throw httpError(`Invalid quiz question ${index + 1}. Ensure 4 options, valid correctAnswer, and explanation.`, 502);
-    }
-    return q;
-  });
-  return {
-    title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Quiz",
-    questions,
-  };
-};
-
-const validateVideo = (parsed) => {
-  if (!parsed || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
-    throw httpError("The AI returned an invalid video storyboard.", 502);
-  }
-  const scenes = parsed.scenes.map((scene, index) => {
-    if (
-      typeof scene.narration !== "string" ||
-      typeof scene.visualPrompt !== "string" ||
-      !scene.narration.trim() ||
-      !scene.visualPrompt.trim()
-    ) {
-      throw httpError(`Invalid video scene ${index + 1}.`, 502);
-    }
-    return {
-      sceneNumber: index + 1,
-      narration: scene.narration.trim().slice(0, 500),
-      visualPrompt: scene.visualPrompt.trim().slice(0, 500),
-    };
-  });
-  return {
-    title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Video Storyboard",
-    scenes,
-  };
-};
-
-const getPodcastInstructions = (length) => {
-  if (length === "medium") return { exchangeCount: "10 to 12 exchanges", detailLevel: "Provide deeper explanations but keep the conversational, punchy energy.", maxTokens: 1500 };
-  if (length === "long") return { exchangeCount: "15 to 18 exchanges", detailLevel: "Go into deep detail, but maintain a natural and engaging conversation.", maxTokens: 2000 };
-  return { exchangeCount: "6 to 8 exchanges", detailLevel: "Keep it brief, high-energy, and fast-paced.", maxTokens: 1000 };
-};
-
-export const generateContent = async (req, res, next) => {
-  try {
-    const userId = requireUser(req);
-    const { text, mode, vibe, title, subject, numQuestions, difficulty, messages, max_tokens } = req.body || {};
-
-    if (!ALLOWED_MODES.includes(mode)) throw httpError("Invalid generation mode.", 400);
-
-    const inputToCheck = mode === "tutor" ? (Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.content : "") : text;
-    const cleanInput = ensureText(inputToCheck, "Please provide some text.");
-    if (cleanInput.length < 1) throw httpError("Please provide some text.", 400);
-    if (cleanInput.length > MAX_INPUT_LENGTH) throw httpError("Your notes are too long. Please use fewer than 50,000 characters.", 413);
-
-    const requestedTitle = typeof title === "string" && title.trim() ? title.trim().slice(0, 160) : "";
-    const cleanSubject = typeof subject === "string" && subject.trim() ? subject.trim().slice(0, 100) : "General";
-
-    let aiTitle = requestedTitle || `${mode.charAt(0).toUpperCase()}${mode.slice(1)} Notes`;
-    let aiContent = "";
+    if (generatedText && typeof generatedText === "object") return generatedText;
+    if (typeof generatedText !== "string") throw new Error("The podcast response was empty.");
     
-    if (mode === "tutor") {
-      const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant. 
-      STRICT RULES:
-      1. EDUCATIONAL CONTENT ONLY: Answer clearly, accurately, and concisely.
-      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name.`;
-      const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
-      aiContent = await runGroq([{ role: "system", content: tutorSystemPrompt }, ...safeMessages]);
-      aiTitle = requestedTitle || "Tutor Chat";
-    } else if (mode === "summary") {
-      const systemPrompt = "You are an expert academic study assistant. Create an accurate, well-structured study summary. Educational content only.";
-      const requestedMaxTokens = Number(max_tokens);
-      const finalMaxTokens = Number.isInteger(requestedMaxTokens) ? Math.min(Math.max(requestedMaxTokens, 50), 4096) : 4096;
-      
-      const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`, { max_tokens: finalMaxTokens });
-      const lines = generatedTextFull.split("\n");
-      const firstLine = lines.find((line) => line.trim().length > 0);
-      if (firstLine && !firstLine.trim().startsWith("-") && !firstLine.trim().startsWith("*") && !firstLine.trim().startsWith("**") && !firstLine.trim().startsWith("📚")) {
-        aiTitle = requestedTitle || firstLine.trim().replace(/^#+\s*/, "").substring(0, 160);
-        aiContent = generatedTextFull.replace(firstLine, "").trim();
-      } else {
-        aiTitle = requestedTitle || cleanInput.substring(0, 40) + (cleanInput.length > 40 ? "..." : "");
-        aiContent = generatedTextFull.trim();
-      }
-    } else if (mode === "video") {
-      const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
-      const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 500 });
-      const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
-      aiTitle = requestedTitle || parsedVideo.title;
-      aiContent = JSON.stringify(parsedVideo);
-    } else if (mode === "podcast") {
-      const podcastLength = req.body?.length || "short";
-      const tone = req.body?.tone || "engaging";
-      const level = req.body?.level || "beginner";
-      
-      if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
-      const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
-      
-      // ✅ IMPROVED PROMPT: More explicit about JSON formatting
-      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
-      Tone: ${tone}. Difficulty Level: ${level}.
-      There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
-      Length: ${exchangeCount}. ${detailLevel}. 
-      
-      CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas.
-      
-      Format:
-      {
-        "title": "Catchy title",
-        "script": [
-          { "speaker": "Leo", "text": "Surprising fact about the topic." },
-          { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
-        ],
-        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
-        "quiz": [
-          { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
-        ]
-      }`;
-      
-      const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
-      const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
-      aiTitle = requestedTitle || parsedPodcast.title;
-      aiContent = JSON.stringify(parsedPodcast);
-    } else if (mode === "music") {
-      const musicVibe = vibe || "Hip-Hop and Afrobeat";
-      const musicSystemPrompt = `You are a professional educational ${musicVibe} lyricist. Turn the notes into an accurate study song. 
-      Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. 
-      Keep content 85% educational, 15% hype. 
-      CRITICAL: Use commas (,) and ellipses (...) frequently to create natural breathing pauses for the text-to-speech engine. Keep lines to 6-10 words. Do not output markdown.`;
-      aiContent = await runGroq(`${musicSystemPrompt}\n\nNotes:\n${cleanInput}`);
-      aiTitle = requestedTitle || `${musicVibe} Study Track`;
-    } else if (mode === "quiz") {
-      const parsedQuestionCount = Number(numQuestions || 5);
-      const questionCount = Math.min(Math.max(Number.isInteger(parsedQuestionCount) ? parsedQuestionCount : 5, 3), 15);
-      const difficultyLevel = typeof difficulty === "string" && difficulty.trim() ? difficulty.trim().slice(0, 30) : "Medium";
-      
-      const quizSystemPrompt = `You are a strict academic examiner. Generate exactly ${questionCount} multiple-choice questions based on the provided notes.
-Difficulty: ${difficultyLevel}
-CRITICAL REQUIREMENTS:
-1. Every question MUST have exactly 4 options.
-2. The "correctAnswer" field MUST contain the EXACT TEXT of one of the options.
-3. Every question MUST have an explanation.
-4. Output VALID JSON ONLY - no markdown, no extra text.
-
-Example format:
-{
-  "title": "Quiz Title",
-  "questions": [
-    {
-      "question": "What is 2+2?",
-      "options": ["3", "4", "5", "6"],
-      "correctAnswer": "4",
-      "explanation": "2+2 equals 4"
+    const cleanText = removeCodeFence(generatedText);
+    const firstBrace = cleanText.indexOf("{");
+    const lastBrace = cleanText.lastIndexOf("}");
+    const jsonText = firstBrace >= 0 && lastBrace > firstBrace ? cleanText.slice(firstBrace, lastBrace + 1) : cleanText;
+    
+    const parsed = JSON.parse(jsonText);
+    
+    // ✅ More flexible validation - just check we have SOMETHING
+    if (!parsed) throw new Error("Empty response");
+    
+    const title = parsed.title?.trim() || "Study Podcast";
+    
+    // ✅ Handle script flexibly
+    let script = [];
+    if (Array.isArray(parsed.script)) {
+      script = parsed.script
+        .filter((line) => line && (typeof line.text === "string" || typeof line === "string"))
+        .map((line) => {
+          const text = typeof line === "string" ? line : line.text;
+          const speaker = line.speaker?.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
+          return {
+            speaker,
+            text: text.trim(),
+          };
+        })
+        .filter(line => line.text.length > 0);
     }
-  ]
-}`;
-
-      const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 4096 });
-      const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull), questionCount);
-      aiTitle = requestedTitle || parsedQuiz.title;
-      aiContent = JSON.stringify(parsedQuiz);
+    
+    // ✅ If no script, create a simple one from the title
+    if (script.length === 0) {
+      script = [
+        { speaker: "Leo", text: `Welcome to this study session about ${title}!` },
+        { speaker: "Dr. Nova", text: `Let's explore this topic together.` }
+      ];
     }
-
-    if (!aiContent.trim()) throw httpError("The AI returned empty content.", 502);
-
-    const newContent = await Content.create({ userId, title: aiTitle, subject: cleanSubject, type: mode, rawText: cleanInput, generatedText: aiContent });
-
-    const xpGained = mode === "summary" ? 10 : mode === "quiz" ? 25 : mode === "tutor" ? 5 : 15;
-    try {
-      const updatedUser = await User.findByIdAndUpdate(userId, { $inc: { xp: xpGained } }, { new: true });
-      if (updatedUser) {
-        const newLevel = Math.floor(updatedUser.xp / 100) + 1;
-        if (updatedUser.level !== newLevel) await User.findByIdAndUpdate(userId, { $set: { level: newLevel } });
-        res.locals.xpGained = xpGained;
-        res.locals.newLevel = newLevel;
-      }
-    } catch (xpError) {
-      console.error("XP update failed:", xpError.message);
-    }
-
-    return res.status(201).json({ success: true, message: "Content generated!", data: newContent });
+    
+    return {
+      title,
+      script,
+      keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [],
+      quiz: Array.isArray(parsed.quiz) ? parsed.quiz : [],
+    };
   } catch (error) {
-    console.error("AI generation error:", error.message);
-    return next(error);
+    console.error("Podcast parsing error:", error);
+    throw new Error("The AI returned an invalid podcast format. Please try again with different notes.");
   }
 };
 
-// ... (Keep the rest of your file exactly as it was: generateSpeech, generateSceneVisual, getSceneAudio, stitchVideos, generateVideoStoryboard, processVideoScenes, checkVideoStatus, regenerateScene, rebuildStitchedVideo, streamGeneratedVideo, generateAIVideoScene, searchStockVideos, searchStockImages, extractTextFromImage)
+export default function PodcastGenerator() {
+  const [inputMethod, setInputMethod] = useState("type");
+  const [topic, setTopic] = useState("");
+  const [length, setLength] = useState("short");
+  const [tone, setTone] = useState("Funny");
+  const [level, setLevel] = useState("Beginner");
+  
+  const [script, setScript] = useState([]);
+  const [keyTakeaways, setKeyTakeaways] = useState([]);
+  const [quiz, setQuiz] = useState([]);
+  const [podcastTitle, setPodcastTitle] = useState("");
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [currentLineIndex, setCurrentLineIndex] = useState(-1);
+  const [voices, setVoices] = useState([]);
+  
+  const [libraryNotes, setLibraryNotes] = useState([]);
+  const [selectedNoteId, setSelectedNoteId] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [studioAudioUrl, setStudioAudioUrl] = useState("");
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+
+  const speechRunId = useRef(0);
+  const currentIndexRef = useRef(0);
+  const scriptRef = useRef([]);
+  const playbackSpeedRef = useRef(1);
+
+  useEffect(() => { scriptRef.current = script; }, [script]);
+  useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchLibrary = async () => {
+      try {
+        const response = await api.get("/ai/library", { signal: controller.signal });
+        if (response.data?.success) {
+          const notes = response.data.data.filter((item) => item.type === "summary" || item.type === "tutor");
+          setLibraryNotes(notes);
+        }
+      } catch (requestError) {
+        if (requestError.name !== "CanceledError") console.error("Failed to fetch library:", requestError);
+      }
+    };
+    fetchLibrary();
+    return () => controller.abort();
+  }, []);
+
+  const stopAudio = useCallback(() => {
+    speechRunId.current += 1;
+    window.speechSynthesis?.cancel();
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentLineIndex(-1);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      speechRunId.current += 1;
+      window.speechSynthesis?.cancel();
+      if (studioAudioUrl) URL.revokeObjectURL(studioAudioUrl);
+    };
+  }, [studioAudioUrl]);
+
+  const chooseVoices = () => {
+    const allVoices = window.speechSynthesis.getVoices();
+    
+    const leoVoice = allVoices.find(v => /Daniel|Alex/i.test(v.name)) 
+                  || allVoices.find(v => /Google US English/i.test(v.name)) 
+                  || allVoices[0];
+                  
+    const novaVoice = allVoices.find(v => /Samantha|Karen/i.test(v.name)) 
+                   || allVoices.find(v => /Google UK English Female/i.test(v.name) && v !== leoVoice) 
+                   || allVoices.find(v => v !== leoVoice) 
+                   || allVoices[0];
+                   
+    return { leoVoice, novaVoice };
+  };
+
+  const speakCurrentLine = useCallback((runId) => {
+    const activeScript = scriptRef.current;
+    const currentIndex = currentIndexRef.current;
+    if (runId !== speechRunId.current || currentIndex >= activeScript.length) {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setCurrentLineIndex(-1);
+      return;
+    }
+    const line = activeScript[currentIndex];
+    const { leoVoice, novaVoice } = chooseVoices();
+    const utterance = new SpeechSynthesisUtterance(line.text);
+    utterance.voice = line.speaker.toLowerCase() === "leo" ? leoVoice : novaVoice;
+    utterance.rate = playbackSpeedRef.current;
+    utterance.pitch = line.speaker.toLowerCase() === "leo" ? 1.08 : 0.92;
+    setCurrentLineIndex(currentIndex);
+    
+    utterance.onend = () => {
+      if (runId !== speechRunId.current) return;
+      currentIndexRef.current += 1;
+      setTimeout(() => speakCurrentLine(runId), 100);
+    };
+    utterance.onerror = () => {
+      if (runId !== speechRunId.current) return;
+      setIsPlaying(false);
+      setIsPaused(false);
+      setCurrentLineIndex(-1);
+      setError("Audio playback failed. Please try again.");
+    };
+    window.speechSynthesis.speak(utterance);
+  }, [voices]);
+
+  const startAudio = () => {
+    if (!window.speechSynthesis || scriptRef.current.length === 0) {
+      setError("Audio playback is not supported in this browser.");
+      return;
+    }
+    speechRunId.current += 1;
+    const runId = speechRunId.current;
+    currentIndexRef.current = 0;
+    window.speechSynthesis.cancel();
+    setError("");
+    setIsPlaying(true);
+    setIsPaused(false);
+    speakCurrentLine(runId);
+  };
+
+  const toggleAudio = () => {
+    if (isPaused) {
+      window.speechSynthesis.resume();
+      setIsPaused(false);
+      setIsPlaying(true);
+      return;
+    }
+    if (isPlaying) {
+      window.speechSynthesis.pause();
+      setIsPlaying(false);
+      setIsPaused(true);
+      return;
+    }
+    startAudio();
+  };
+
+  const changeSpeed = (speed) => {
+    setPlaybackSpeed(speed);
+    if (isPlaying && !isPaused) {
+      const runId = ++speechRunId.current;
+      window.speechSynthesis.cancel();
+      setIsPlaying(true);
+      speakCurrentLine(runId);
+    }
+  };
+
+  const handleLibrarySelect = (event) => {
+    const noteId = event.target.value;
+    setSelectedNoteId(noteId);
+    const note = libraryNotes.find((item) => item._id === noteId);
+    if (note) setTopic((note.generatedText || note.title).slice(0, 50000));
+  };
+
+  const handleGenerate = async () => {
+    const cleanTopic = topic.trim();
+    if (cleanTopic.length < 5) {
+      setError("Add at least 5 characters of notes or a topic.");
+      return;
+    }
+    if (cleanTopic.length > 50000) {
+      setError("Your notes are too long. Please use fewer notes.");
+      return;
+    }
+    stopAudio();
+    setIsLoading(true);
+    setError("");
+    setNotice("");
+    setScript([]);
+    setKeyTakeaways([]);
+    setQuiz([]);
+    setPodcastTitle("");
+    setStudioAudioUrl("");
+    
+    try {
+      const response = await api.post("/ai/generate", {
+        text: cleanTopic,
+        mode: "podcast",
+        length,
+        tone,
+        level,
+        subject: "General",
+      });
+      const generatedText = response.data?.data?.generatedText;
+      const podcast = parsePodcastResponse(generatedText);
+      
+      setPodcastTitle(podcast.title);
+      setScript(podcast.script);
+      setKeyTakeaways(podcast.keyTakeaways);
+      setQuiz(podcast.quiz);
+      setNotice("Your study podcast is ready.");
+    } catch (requestError) {
+      console.error("Generation failed:", requestError);
+      setError(requestError.response?.data?.message || requestError.message || "Failed to generate podcast. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const transcriptText = script.map((line) => `${line.speaker}: ${line.text}`).join("\n\n");
+
+  const copyTranscript = async () => {
+    try {
+      await navigator.clipboard.writeText(transcriptText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError("Could not copy the transcript.");
+    }
+  };
+
+  const downloadTranscript = () => {
+    const blob = new Blob([transcriptText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${podcastTitle || "study-podcast"}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const generateStudioAudio = async () => {
+    if (!transcriptText || isAudioLoading) return;
+    setIsAudioLoading(true);
+    setError("");
+    try {
+      const response = await api.post("/ai/text-to-speech", { text: transcriptText, style: "podcast" }, { responseType: "blob" });
+      const nextAudioUrl = URL.createObjectURL(response.data);
+      setStudioAudioUrl((previousUrl) => {
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        return nextAudioUrl;
+      });
+      setNotice("Studio audio is ready.");
+    } catch (requestError) {
+      console.error("Studio audio failed:", requestError);
+      setError(requestError.response?.data?.message || "Studio audio could not be created. Browser playback is still available.");
+    } finally {
+      setIsAudioLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-muted transition-colors duration-300 dark:bg-background">
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <header className="space-y-2 text-center">
+          <h1 className="flex items-center justify-center gap-3 text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            <Mic className="h-8 w-8 text-brand" /> AI Study Podcast
+          </h1>
+          <p className="text-base text-muted-foreground md:text-lg">
+            Turn your notes into a natural conversation you can listen to, pause, replay, and study from.
+          </p>
+          <p className="text-xs text-muted-foreground italic bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 py-1 px-3 rounded-full inline-block">
+            ⚠️ AI-generated content — review important facts before using for exams.
+          </p>
+        </header>
+
+        <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <div className="mx-auto flex w-fit max-w-full overflow-x-auto rounded-lg bg-muted p-1 md:mx-0" role="tablist">
+            <button type="button" onClick={() => { setInputMethod("type"); setSelectedNoteId(""); }} className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all ${inputMethod === "type" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+              <FileText className="mr-2 inline h-4 w-4" /> Type Topic
+            </button>
+            <button type="button" onClick={() => setInputMethod("scan")} className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all ${inputMethod === "scan" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+              <Camera className="mr-2 inline h-4 w-4" /> Scan Notes
+            </button>
+            <button type="button" onClick={() => setInputMethod("library")} className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all ${inputMethod === "library" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+              <MessageCircle className="mr-2 inline h-4 w-4" /> From Library
+            </button>
+          </div>
+
+          {inputMethod === "scan" && (
+            <NoteScanner 
+              onScanComplete={(text) => { 
+                setTopic(prev => prev ? `${prev}\n\n--- 📄 New Page ---\n\n${text}` : text); 
+                setInputMethod("type"); 
+              }} 
+            />
+          )}
+          
+          {inputMethod === "library" && (
+            <div className="space-y-2">
+              <label htmlFor="saved-note" className="text-sm font-medium text-foreground">Select a saved note</label>
+              <select id="saved-note" value={selectedNoteId} onChange={handleLibrarySelect} className="flex w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+                <option value="">Choose a note</option>
+                {libraryNotes.map((note) => (<option key={note._id} value={note._id}>{note.title} ({new Date(note.createdAt).toLocaleDateString()})</option>))}
+              </select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label htmlFor="podcast-topic" className="text-sm font-medium text-foreground">{inputMethod === "type" ? "What should they discuss?" : "Review or edit your notes"}</label>
+            <textarea id="podcast-topic" value={topic} onChange={(event) => setTopic(event.target.value)} rows={inputMethod === "scan" ? 7 : 5} maxLength={50000} placeholder="Example: The water cycle, black holes, or photosynthesis..." className="flex w-full resize-none rounded-lg border border-input bg-background p-4 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand" />
+            <div className="flex justify-end text-xs text-muted-foreground">{topic.length.toLocaleString()} / 50,000</div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-foreground">Tone</span>
+              <div className="flex flex-wrap gap-2">
+                {TONES.map((t) => (
+                  <button key={t} type="button" onClick={() => setTone(t)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${tone === t ? "border-brand bg-brand text-brand-foreground" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-foreground">Study Level</span>
+              <div className="flex flex-wrap gap-2">
+                {LEVELS.map((l) => (
+                  <button key={l} type="button" onClick={() => setLevel(l)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${level === l ? "border-brand bg-brand text-brand-foreground" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-foreground">Podcast length</span>
+            <div className="grid grid-cols-3 gap-2">
+              {["short", "medium", "long"].map((option) => (
+                <button type="button" key={option} onClick={() => setLength(option)} className={`rounded-lg border py-2 text-sm font-medium transition-all ${length === option ? "border-brand bg-brand text-brand-foreground" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                  <span className="block text-[10px] opacity-80">{option === "short" ? "~3-5 mins" : option === "medium" ? "~5-8 mins" : "~10-12 mins"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button type="button" onClick={handleGenerate} disabled={topic.trim().length < 5 || isLoading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-base font-semibold text-brand-foreground shadow-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">
+            {isLoading ? (<><Loader2 className="h-5 w-5 animate-spin" /> Writing your podcast...</>) : (<><Sparkles className="h-5 w-5" /> Generate Podcast</>)}
+          </button>
+          
+          {error && (<div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-center text-sm text-red-500">{error}</div>)}
+        </section>
+
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center space-y-4 py-12 text-muted-foreground">
+            <Loader2 className="h-10 w-10 animate-spin text-brand" />
+            <p className="text-sm font-medium">Planning the conversation and writing the script...</p>
+          </div>
+        )}
+
+        {!isLoading && script.length > 0 && (
+          <section className="animate-in space-y-6 fade-in slide-in-from-bottom-4 duration-500">
+            {notice && (<div className="rounded-xl border border-brand/20 bg-brand/10 p-3 text-center text-sm text-brand">{notice}</div>)}
+            
+            <div className="sticky top-4 z-10 flex flex-col gap-4 rounded-2xl border border-brand/20 bg-gradient-to-r from-brand/10 to-brand/5 p-4 shadow-sm backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="truncate text-xl font-bold text-foreground">{podcastTitle}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">Featuring Leo and Dr. Nova {currentLineIndex >= 0 ? ` · Line ${currentLineIndex + 1} of ${script.length}` : ""}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center rounded-lg border border-border bg-background p-1">
+                  {SPEEDS.map((speed) => (
+                    <button type="button" key={speed} onClick={() => changeSpeed(speed)} className={`rounded px-2 py-1 text-xs font-bold transition-all ${playbackSpeed === speed ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`} aria-label={`Set playback speed to ${speed} times`}>
+                      {speed}x
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={toggleAudio} className="rounded-full bg-brand p-3 text-brand-foreground shadow-lg transition-all hover:bg-brand/90" aria-label={isPaused ? "Resume podcast" : isPlaying ? "Pause podcast" : "Play podcast"}>
+                  {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                </button>
+                {(isPlaying || isPaused) && (
+                  <button type="button" onClick={stopAudio} className="rounded-full border border-border bg-background p-3 text-muted-foreground transition hover:text-foreground" aria-label="Stop podcast">
+                    <Square className="h-4 w-4 fill-current" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={generateStudioAudio} disabled={isAudioLoading} className="inline-flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-medium text-brand transition hover:bg-brand/20 disabled:opacity-60">
+                {isAudioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Headphones className="h-4 w-4" />}
+                {isAudioLoading ? "Creating audio..." : "Create studio audio"}
+              </button>
+              <button type="button" onClick={copyTranscript} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Clipboard className="h-4 w-4" />}
+                {copied ? "Copied" : "Copy transcript"}
+              </button>
+              <button type="button" onClick={downloadTranscript} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                <Download className="h-4 w-4" /> Download
+              </button>
+            </div>
+
+            {studioAudioUrl && (
+              <div className="rounded-xl border border-brand/20 bg-brand/5 p-4">
+                <p className="mb-2 text-sm font-semibold text-foreground">Studio narration</p>
+                <audio controls preload="metadata" src={studioAudioUrl} className="w-full">Your browser does not support audio playback.</audio>
+              </div>
+            )}
+
+            {keyTakeaways.length > 0 && (
+              <div className="rounded-xl border border-border bg-card p-5">
+                <h3 className="flex items-center gap-2 text-lg font-bold text-foreground mb-3">
+                  <Sparkles className="h-5 w-5 text-brand" /> Key Takeaways
+                </h3>
+                <ul className="space-y-2">
+                  {keyTakeaways.map((takeaway, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand" />
+                      {takeaway}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {quiz.length > 0 && (
+              <div className="rounded-xl border border-brand/20 bg-brand/5 p-5">
+                <h3 className="flex items-center gap-2 text-lg font-bold text-foreground mb-4">
+                  <Brain className="h-5 w-5 text-brand" /> Test Yourself
+                </h3>
+                <div className="space-y-6">
+                  {quiz.map((q, qIdx) => (
+                    <div key={qIdx} className="space-y-3 rounded-lg bg-background p-4 border border-border">
+                      <p className="font-semibold text-foreground">{qIdx + 1}. {q.question}</p>
+                      <div className="space-y-2">
+                        {q.options.map((opt, optIdx) => (
+                          <div key={optIdx} className="text-sm text-muted-foreground flex items-center gap-2">
+                            <span className="font-bold text-foreground">{String.fromCharCode(65 + optIdx)}.</span> {opt}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-3 border-t border-border">
+                        <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Answer:</span> {q.answer}</p>
+                        <p className="text-xs text-muted-foreground mt-1"><span className="font-semibold text-foreground">Why:</span> {q.explanation}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4 pb-10">
+              {script.map((line, index) => {
+                const isLeo = line.speaker.toLowerCase() === "leo";
+                const isActive = currentLineIndex === index;
+                return (
+                  <div key={`${index}-${line.text.slice(0, 20)}`} className={`flex gap-3 transition-all duration-300 ${isLeo ? "flex-row" : "flex-row-reverse"} ${isActive ? "scale-[1.02]" : "opacity-90"}`}>
+                    <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full shadow-sm ${isLeo ? "bg-muted text-muted-foreground" : "bg-brand/10 text-brand"}`}>
+                      {isLeo ? <User className="h-4 w-4" /> : <GraduationCap className="h-4 w-4" />}
+                    </div>
+                    <div className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed shadow-sm transition-all duration-300 ${isLeo ? `rounded-tl-sm border bg-card text-foreground ${isActive ? "border-brand ring-2 ring-brand/20" : "border-border"}` : `rounded-tr-sm bg-brand text-brand-foreground ${isActive ? "shadow-xl ring-4 ring-brand/40" : ""}`}`}>
+                      <p className="mb-1 text-xs font-bold opacity-80">{line.speaker}</p>
+                      <p>{line.text}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
