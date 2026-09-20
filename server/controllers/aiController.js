@@ -227,39 +227,52 @@ export const generateContent = async (req, res, next) => {
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
     } else if (mode === "podcast") {
-      const podcastLength = req.body?.length || "short";
-      const tone = req.body?.tone || "engaging";
-      const level = req.body?.level || "beginner";
-      
-      if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
-      const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
-      
-      // ✅ IMPROVED PROMPT: More explicit about JSON formatting to prevent trailing commas
-      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
-      Tone: ${tone}. Difficulty Level: ${level}.
-      There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
-      Length: ${exchangeCount}. ${detailLevel}. 
-      
-      CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas in arrays or objects.
-      
-      Format:
-      {
-        "title": "Catchy title",
-        "script": [
-          { "speaker": "Leo", "text": "Surprising fact about the topic." },
-          { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
-        ],
-        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
-        "quiz": [
-          { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
-        ]
-      }`;
-      
+  const podcastLength = req.body?.length || "short";
+  const tone = req.body?.tone || "engaging";
+  const level = req.body?.level || "beginner";
+  
+  if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
+  const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
+  
+  const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
+  Tone: ${tone}. Difficulty Level: ${level}.
+  There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
+  Length: ${exchangeCount}. ${detailLevel}. 
+  
+  CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas in arrays or objects.
+  
+  Format:
+  {
+    "title": "Catchy title",
+    "script": [
+      { "speaker": "Leo", "text": "Surprising fact about the topic." },
+      { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
+    ],
+    "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
+    "quiz": [
+      { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
+    ]
+  }`;
+  
+  // ✅ RETRY LOGIC: Try up to 2 times if JSON parsing fails
+  let attempts = 0;
+  let parsedPodcast = null;
+  
+  while (attempts < 2 && !parsedPodcast) {
+    try {
       const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
-      const parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
-      aiTitle = requestedTitle || parsedPodcast.title;
-      aiContent = JSON.stringify(parsedPodcast);
-    } else if (mode === "music") {
+      parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
+    } catch (parseError) {
+      attempts++;
+      console.warn(`Podcast JSON parse attempt ${attempts} failed, retrying...`);
+      if (attempts >= 2) throw parseError;
+    }
+  }
+  
+  aiTitle = requestedTitle || parsedPodcast.title;
+  aiContent = JSON.stringify(parsedPodcast);
+}
+else if (mode === "music") {
       const musicVibe = vibe || "Hip-Hop and Afrobeat";
       const musicSystemPrompt = `You are a professional educational ${musicVibe} lyricist. Turn the notes into an accurate study song. 
       Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. 
