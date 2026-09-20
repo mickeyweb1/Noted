@@ -1,4 +1,3 @@
-// check-models.js
 import Groq from "groq-sdk";
 import dotenv from "dotenv";
 
@@ -8,19 +7,20 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-async function checkModels() {
+async function checkAvailableModels() {
   try {
-    console.log("🔍 Fetching available models from Groq...");
-    const models = await groq.models.list();
+    console.log("🔍 Fetching available models from Groq...\n");
+    const list = await groq.models.list();
     
-    console.log("✅ Available models for your account:");
-    models.data.forEach((model) => {
+    console.log("✅ Here are the models currently available to your API key:");
+    list.data.forEach(model => {
       console.log(`- ${model.id}`);
     });
     
+    console.log("\n💡 Recommendation: Look for 'llama3-70b', 'llama3-8b', or 'qwen' in this list.");
   } catch (error) {
-    console.error("❌ Failed to fetch models:", error.message);
+    console.error("❌ Error fetching models:", error.message);
   }
 }
 
-checkModels();
+checkAvailableModels();

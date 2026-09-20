@@ -28,7 +28,6 @@ import StudentSchedule from "./pages/Dashboard/reminder";
 import StudentSetting from "./pages/Dashboard/setting";
 import MusicGenerator from "./pages/MusicGenerator";
 import StudentDirectorys from "./pages/Dashboard/StudentDirectory";
-import StudentProfile from "./pages/Dashboard/StudentProfile";
 import BattleArena from "./pages/Dashboard/BattleArena";
 import VideoGenerator from "./pages/VideoGenerator";
 import PodcastGenerator from "./pages/PodcastGenerator";
@@ -98,7 +97,6 @@ function App() {
         <Route path="/studentSetting" element={<StudentSetting />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/directory" element={<StudentDirectorys />} />
-        <Route path="/profile" element={<StudentProfile />} />
         <Route path="/music-studio" element={<MusicGenerator />} />
         <Route path="/video-studio" element={<VideoGenerator />} />
       </Route>
