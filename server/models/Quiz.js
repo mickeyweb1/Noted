@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 const quizSchema = new mongoose.Schema({
   title: { type: String, required: true },
   difficulty: { type: String, enum: ['Basic', 'Intermediate', 'Hard', 'Max'], required: true },
-  timeLimit: { type: Number, required: true }, // in minutes
+  timeLimit: { type: Number, required: true },
+  timeUnit: { type: String, enum: ['minutes', 'seconds'], default: 'minutes' }, // ✅ NEW
   timeType: { type: String, enum: ['perQuestion', 'total'], default: 'total' },
   numberOfStudents: { type: Number, required: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -11,9 +12,10 @@ const quizSchema = new mongoose.Schema({
     question: { type: String, required: true },
     options: [{ type: String, required: true }],
     correctAnswer: { type: String, required: true },
-    explanation: { type: String }
+    explanation: { type: String },
+    imageUrl: { type: String } // ✅ NEW
   }],
-  accessCodes: [{ type: String }], // 10-digit codes
+  accessCodes: [{ type: String }],
   createdAt: { type: Date, default: Date.now }
 });
 

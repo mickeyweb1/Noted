@@ -2,29 +2,65 @@ import express from 'express';
 import { Quiz } from '../models/Quiz.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { generateWithGroq } from '../config/grok.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
 
-// ✅ Define requireUser directly here to avoid missing file errors
-const requireUser = (req) => {
-  if (!req.user?._id) {
-    const error = new Error("Not authorized.");
-    error.status = 401;
-    throw error;
+// ✅ Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = './public/uploads/quizzes';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'question-' + uniqueSuffix + path.extname(file.originalname));
   }
-  return req.user._id;
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (extname && mimetype) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
+});
+
+// ✅ Define requireUser directly here to avoid missing file errors
+const requireUser = (req, res, next) => {
+  if (!req.user?._id) {
+    return res.status(401).json({ success: false, message: "Not authorized." });
+  }
+  next();
 };
 
-// ✅ Generate access codes helper
+// ✅ Generate alphanumeric access codes (e.g., "A7K9M2P4Q1")
 const generateAccessCode = () => {
-  return Math.floor(1000000000 + Math.random() * 9000000000).toString();
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 10; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 };
 
 // 🎯 AI Generate Questions
-router.post('/generate-ai', async (req, res, next) => {
+router.post('/generate-ai', requireUser, async (req, res, next) => {
   try {
-    const userId = requireUser(req);
-    const { notes, difficulty, numQuestions, numStudents, timeLimit, timeType, title } = req.body;
+    const userId = req.user._id;
+    const { notes, difficulty, numQuestions, numStudents, timeLimit, timeUnit, timeType, title } = req.body;
     
     const systemPrompt = `You are an expert examiner. Generate ${numQuestions} multiple-choice questions based on the provided notes.
     Difficulty: ${difficulty}
@@ -49,7 +85,7 @@ router.post('/generate-ai', async (req, res, next) => {
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     
-    // Generate unique access codes
+    // Generate unique alphanumeric access codes
     const accessCodes = [];
     for (let i = 0; i < numStudents; i++) {
       let code = generateAccessCode();
@@ -63,6 +99,7 @@ router.post('/generate-ai', async (req, res, next) => {
       title,
       difficulty,
       timeLimit,
+      timeUnit, // 'minutes' or 'seconds'
       timeType,
       numberOfStudents: numStudents,
       questions: parsed.questions,
@@ -78,10 +115,10 @@ router.post('/generate-ai', async (req, res, next) => {
 });
 
 // 🎯 Manual Questions (with AI autocomplete)
-router.post('/create-manual', async (req, res, next) => {
+router.post('/create-manual', requireUser, async (req, res, next) => {
   try {
-    const userId = requireUser(req);
-    const { title, difficulty, numQuestions, numStudents, timeLimit, timeType, questions, useAIAutocomplete } = req.body;
+    const userId = req.user._id;
+    const { title, difficulty, numQuestions, numStudents, timeLimit, timeUnit, timeType, questions, useAIAutocomplete } = req.body;
     
     let finalQuestions = questions || [];
     
@@ -113,7 +150,7 @@ router.post('/create-manual', async (req, res, next) => {
       finalQuestions = [...finalQuestions, ...parsed.questions];
     }
 
-    // Generate access codes
+    // Generate alphanumeric access codes
     const accessCodes = [];
     for (let i = 0; i < numStudents; i++) {
       let code = generateAccessCode();
@@ -127,6 +164,7 @@ router.post('/create-manual', async (req, res, next) => {
       title,
       difficulty,
       timeLimit,
+      timeUnit,
       timeType,
       numberOfStudents: numStudents,
       questions: finalQuestions,
@@ -141,12 +179,27 @@ router.post('/create-manual', async (req, res, next) => {
   }
 });
 
+// 🎯 Image Upload Endpoint
+router.post('/upload/quiz-image', requireUser, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    
+    // Return the public URL
+    const imageUrl = `/uploads/quizzes/${req.file.filename}`;
+    res.json({ success: true, imageUrl });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // 🎯 Validate access code and get quiz (NO AUTH REQUIRED for students)
 router.post('/validate-code', async (req, res, next) => {
   try {
     const { code } = req.body;
     
-    const quiz = await Quiz.findOne({ accessCodes: code });
+    const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
     
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Invalid access code' });
@@ -155,7 +208,7 @@ router.post('/validate-code', async (req, res, next) => {
     // Check if this code has already been used
     const existingSubmission = await QuizSubmission.findOne({ 
       quiz: quiz._id, 
-      accessCode: code 
+      accessCode: code.toUpperCase() 
     });
 
     if (existingSubmission) {
@@ -171,11 +224,13 @@ router.post('/validate-code', async (req, res, next) => {
         title: quiz.title,
         difficulty: quiz.difficulty,
         timeLimit: quiz.timeLimit,
+        timeUnit: quiz.timeUnit,
         timeType: quiz.timeType,
         questions: quiz.questions.map(q => ({
           _id: q._id,
           question: q.question,
-          options: q.options
+          options: q.options,
+          imageUrl: q.imageUrl
         }))
       }
     });
@@ -189,7 +244,7 @@ router.post('/submit', async (req, res, next) => {
   try {
     const { code, studentName, studentSurname, studentClass, answers, timeTaken } = req.body;
     
-    const quiz = await Quiz.findOne({ accessCodes: code });
+    const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Invalid access code' });
     }
@@ -213,7 +268,7 @@ router.post('/submit', async (req, res, next) => {
       studentName,
       studentSurname,
       studentClass,
-      accessCode: code,
+      accessCode: code.toUpperCase(),
       answers: submissionAnswers,
       score,
       totalQuestions: quiz.questions.length,
@@ -226,29 +281,27 @@ router.post('/submit', async (req, res, next) => {
   }
 });
 
-// 🎯 Get quiz results (Admin only)
-router.get('/:id/results', async (req, res, next) => {
+// 🎯 Get all quizzes for admin (Admin only)
+router.get('/admin/quizzes', requireUser, async (req, res, next) => {
   try {
-    requireUser(req); // Ensure only logged-in admins can see this
-    const submissions = await QuizSubmission.find({ quiz: req.params.id })
-      .populate('quiz', 'title')
-      .sort({ submittedAt: -1 });
-
-    res.json({ success: true, data: submissions });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// 🎯 Get all quizzes (Admin only)
-router.get('/admin/quizzes', async (req, res, next) => {
-  try {
-    const userId = requireUser(req);
+    const userId = req.user._id;
     const quizzes = await Quiz.find({ createdBy: userId })
       .select('title difficulty numberOfStudents createdAt')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: quizzes });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🎯 Get quiz results by quiz ID (Admin only)
+router.get('/:id/results', requireUser, async (req, res, next) => {
+  try {
+    const submissions = await QuizSubmission.find({ quiz: req.params.id })
+      .sort({ submittedAt: -1 });
+
+    res.json({ success: true, data: submissions });
   } catch (error) {
     next(error);
   }

@@ -5,6 +5,7 @@ import {
   CreditCard,
   Settings,
   LogOut,
+  Brain,
   Building2,
   UserPlus,
   FileQuestion, // ✅ ADDED: Icon for Quizzes
@@ -27,7 +28,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
     { to: "/admin/admissions", icon: UserCheck, label: "Admissions" }, 
     { to: "/admin/students", icon: Users, label: "My Students" },
     { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
-    { to: "/admin/quizzes", icon: FileQuestion, label: "Quizzes" }, // ✅ ADDED: New Quizzes Link
+    { to: "/admin/quizzes", icon: Brain, label: "Quizzes" }, // ✅ ADDED: New Quizzes Link
     { to: "/admin/billing", icon: CreditCard, label: "Billing & Plans" },
     { to: "/admin/settings", icon: Settings, label: "Settings" },
   ];
