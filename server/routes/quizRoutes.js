@@ -2,18 +2,28 @@ import express from 'express';
 import { Quiz } from '../models/Quiz.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { generateWithGroq } from '../config/grok.js';
-import { requireUser } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// ✅ Generate access codes
+// ✅ Define requireUser directly here to avoid missing file errors
+const requireUser = (req) => {
+  if (!req.user?._id) {
+    const error = new Error("Not authorized.");
+    error.status = 401;
+    throw error;
+  }
+  return req.user._id;
+};
+
+// ✅ Generate access codes helper
 const generateAccessCode = () => {
   return Math.floor(1000000000 + Math.random() * 9000000000).toString();
 };
 
 // 🎯 AI Generate Questions
-router.post('/generate-ai', requireUser, async (req, res) => {
+router.post('/generate-ai', async (req, res, next) => {
   try {
+    const userId = requireUser(req);
     const { notes, difficulty, numQuestions, numStudents, timeLimit, timeType, title } = req.body;
     
     const systemPrompt = `You are an expert examiner. Generate ${numQuestions} multiple-choice questions based on the provided notes.
@@ -36,7 +46,8 @@ router.post('/generate-ai', requireUser, async (req, res) => {
       { role: 'user', content: `Notes:\n${notes}` }
     ], { max_tokens: 4096 });
 
-    const parsed = JSON.parse(response.replace(/```json/g, '').replace(/```/g, '').trim());
+    const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
     
     // Generate unique access codes
     const accessCodes = [];
@@ -56,19 +67,20 @@ router.post('/generate-ai', requireUser, async (req, res) => {
       numberOfStudents: numStudents,
       questions: parsed.questions,
       accessCodes,
-      createdBy: req.user._id
+      createdBy: userId
     });
 
     res.json({ success: true, data: quiz, accessCodes });
   } catch (error) {
     console.error('AI generation error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 });
 
-//  Manual Questions (with AI autocomplete)
-router.post('/create-manual', requireUser, async (req, res) => {
+// 🎯 Manual Questions (with AI autocomplete)
+router.post('/create-manual', async (req, res, next) => {
   try {
+    const userId = requireUser(req);
     const { title, difficulty, numQuestions, numStudents, timeLimit, timeType, questions, useAIAutocomplete } = req.body;
     
     let finalQuestions = questions || [];
@@ -96,7 +108,8 @@ router.post('/create-manual', requireUser, async (req, res) => {
         { role: 'system', content: systemPrompt }
       ], { max_tokens: 4096 });
 
-      const parsed = JSON.parse(response.replace(/```json/g, '').replace(/```/g, '').trim());
+      const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
       finalQuestions = [...finalQuestions, ...parsed.questions];
     }
 
@@ -118,18 +131,18 @@ router.post('/create-manual', requireUser, async (req, res) => {
       numberOfStudents: numStudents,
       questions: finalQuestions,
       accessCodes,
-      createdBy: req.user._id
+      createdBy: userId
     });
 
     res.json({ success: true, data: quiz, accessCodes });
   } catch (error) {
     console.error('Manual creation error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 });
 
-//  Validate access code and get quiz
-router.post('/validate-code', async (req, res) => {
+// 🎯 Validate access code and get quiz (NO AUTH REQUIRED for students)
+router.post('/validate-code', async (req, res, next) => {
   try {
     const { code } = req.body;
     
@@ -167,12 +180,12 @@ router.post('/validate-code', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 });
 
-// 🎯 Submit quiz answers
-router.post('/submit', async (req, res) => {
+// 🎯 Submit quiz answers (NO AUTH REQUIRED for students)
+router.post('/submit', async (req, res, next) => {
   try {
     const { code, studentName, studentSurname, studentClass, answers, timeTaken } = req.body;
     
@@ -185,7 +198,7 @@ router.post('/submit', async (req, res) => {
     let score = 0;
     const submissionAnswers = answers.map(ans => {
       const question = quiz.questions.id(ans.questionId);
-      const isCorrect = question.correctAnswer === ans.selectedAnswer;
+      const isCorrect = question && question.correctAnswer === ans.selectedAnswer;
       if (isCorrect) score++;
       
       return {
@@ -209,33 +222,35 @@ router.post('/submit', async (req, res) => {
 
     res.json({ success: true, message: 'Quiz submitted successfully!', score, totalQuestions: quiz.questions.length });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 });
 
 // 🎯 Get quiz results (Admin only)
-router.get('/:id/results', requireUser, async (req, res) => {
+router.get('/:id/results', async (req, res, next) => {
   try {
+    requireUser(req); // Ensure only logged-in admins can see this
     const submissions = await QuizSubmission.find({ quiz: req.params.id })
       .populate('quiz', 'title')
       .sort({ submittedAt: -1 });
 
     res.json({ success: true, data: submissions });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 });
 
-// 🎯 Get all quizzes (Admin)
-router.get('/admin/quizzes', requireUser, async (req, res) => {
+// 🎯 Get all quizzes (Admin only)
+router.get('/admin/quizzes', async (req, res, next) => {
   try {
-    const quizzes = await Quiz.find({ createdBy: req.user._id })
+    const userId = requireUser(req);
+    const quizzes = await Quiz.find({ createdBy: userId })
       .select('title difficulty numberOfStudents createdAt')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: quizzes });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 });
 
