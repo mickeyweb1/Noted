@@ -227,66 +227,70 @@ export const generateContent = async (req, res, next) => {
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
-    } else if (mode === "podcast") {
-  const podcastLength = req.body?.length || "short";
-  const tone = req.body?.tone || "engaging";
-  const level = req.body?.level || "beginner";
-  
-  if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
-  const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
-  
-  const podcastSystemPrompt = You are a scriptwriter for a highly engaging educational podcast. 
-  Tone: ${tone}. Difficulty Level: ${level}.
-  There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
-  Length: ${exchangeCount}. ${detailLevel}. 
-  
-  CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \\\json. Ensure there are NO trailing commas in arrays or objects.
-  
-  Format:
-  {
-    "title": "Catchy title",
-    "script": [
-      { "speaker": "Leo", "text": "Surprising fact about the topic." },
-      { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
-    ],
-    "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
-    "quiz": [
-      { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
-    ]
-  };
-  
-  // ✅ RETRY LOGIC: Try up to 3 times with different strategies
-  let attempts = 0;
-  let parsedPodcast = null;
-  let lastError = null;
-  
-  while (attempts < 3 && !parsedPodcast) {
-    try {
-      const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: Topic/Notes for the podcast:\n${cleanInput} }], { max_tokens: maxTokens });
-      parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
-    } catch (parseError) {
-      attempts++;
-      lastError = parseError;
-      console.warn(Podcast JSON parse attempt ${attempts} failed, retrying...);
+    }    } else if (mode === "podcast") {
+      const podcastLength = req.body?.length || "short";
+      const tone = req.body?.tone || "engaging";
+      const level = req.body?.level || "beginner";
       
-      // ✅ On 2nd attempt, use a simpler prompt with fewer exchanges
-      if (attempts === 2) {
-        const simplerPrompt = podcastSystemPrompt.replace(exchangeCount, "8 to 10 exchanges");
+      if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
+      const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
+      
+      // ✅ FIXED: Added missing backticks (`) around the template literal
+      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
+      Tone: ${tone}. Difficulty Level: ${level}.
+      There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
+      Length: ${exchangeCount}. ${detailLevel}. 
+      
+      CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas in arrays or objects.
+      
+      Format:
+      {
+        "title": "Catchy title",
+        "script": [
+          { "speaker": "Leo", "text": "Surprising fact about the topic." },
+          { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
+        ],
+        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
+        "quiz": [
+          { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
+        ]
+      }`;
+      
+      // ✅ RETRY LOGIC: Try up to 3 times with different strategies
+      let attempts = 0;
+      let parsedPodcast = null;
+      let lastError = null;
+      
+      while (attempts < 3 && !parsedPodcast) {
         try {
-          const generatedTextFull = await runGroq([{ role: "system", content: simplerPrompt }, { role: "user", content: Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: Math.floor(maxTokens * 0.7) });
+          // ✅ FIXED: Added missing backticks around the user content string
+          const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
           parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
-        } catch (e) {
-          lastError = e;
+        } catch (parseError) {
+          attempts++;
+          lastError = parseError;
+          // ✅ FIXED: Added missing backticks around the console.warn string
+          console.warn(`Podcast JSON parse attempt ${attempts} failed, retrying...`);
+          
+          // ✅ On 2nd attempt, use a simpler prompt with fewer exchanges
+          if (attempts === 2) {
+            const simplerPrompt = podcastSystemPrompt.replace(exchangeCount, "8 to 10 exchanges");
+            try {
+              // ✅ FIXED: Added missing opening backtick
+              const generatedTextFull = await runGroq([{ role: "system", content: simplerPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: Math.floor(maxTokens * 0.7) });
+              parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
+            } catch (e) {
+              lastError = e;
+            }
+          }
         }
       }
+      
+      if (!parsedPodcast) throw lastError || httpError("Failed to generate valid podcast after multiple attempts.", 502);
+      
+      aiTitle = requestedTitle || parsedPodcast.title;
+      aiContent = JSON.stringify(parsedPodcast);
     }
-  }
-  
-  if (!parsedPodcast) throw lastError || httpError("Failed to generate valid podcast after multiple attempts.", 502);
-  
-  aiTitle = requestedTitle || parsedPodcast.title;
-  aiContent = JSON.stringify(parsedPodcast);
-}
 
 else if (mode === "music") {
       const musicVibe = vibe || "Hip-Hop and Afrobeat";
