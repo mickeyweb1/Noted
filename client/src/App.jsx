@@ -9,6 +9,7 @@ import StudentPage from "./pages/marketing/StudentPage";
 import PersonalPage from "./pages/marketing/PersonalPage";
 import ContactPage from "./pages/marketing/ContactPage";
 import StudioHub from "./pages/StudioHub";
+
 // Auth Pages
 import LoginPage from "./auth/LoginPage";
 import RoleSelectionPage from "./auth/RoleSelectionPage";
@@ -17,7 +18,7 @@ import SchoolAdminRegisterPage from "./auth/SchoolAdminRegisterPage";
 import PersonalUserRegisterPage from "./auth/PersonalUserRegisterPage";
 
 // Student Dashboard Pages
-import StudentDashboardLayout from "./hooks/isSidebarOpen"; // Ensure this component renders <Outlet />
+import StudentDashboardLayout from "./hooks/isSidebarOpen"; 
 import StudentHome from "./pages/Dashboard/homePage";
 import StudentAiGenerator from "./pages/Dashboard/aiGenerator";
 import AiTeacher from "./pages/Dashboard/AiTeacher";
@@ -31,23 +32,22 @@ import StudentDirectorys from "./pages/Dashboard/StudentDirectory";
 import BattleArena from "./pages/Dashboard/BattleArena";
 import VideoGenerator from "./pages/VideoGenerator";
 import PodcastGenerator from "./pages/PodcastGenerator";
+
 // Admin Dashboard Pages
 import AdminDashboardLayout from "./components/layouts/AdminDashboardLayout";
 import AdminDashboard from "./pages/schoolAdmin/AdminDashboard";
 import AddStudent from "./pages/schoolAdmin/AddStudentPage";
 import StudentDirectory from "./pages/schoolAdmin/StudentManagementPage";
 import AdminBillingPage from "./pages/schoolAdmin/AdminBillingPage";
-import TakeQuiz from "./pages/TakeQuiz";
 import AdminQuizGenerator from "./pages/AdminQuizGenerator";
+import QuizResultsPage from "./pages/QuizResultsPage"; // ✅ ADDED: Import Results Page
+import SuperAdminFeedback from "./pages/schoolAdmin/SuperAdminFeedback";
 
 // Shared Pages
 import CheckoutPage from "./components/CheckoutPage";
 import SettingsPage from "./pages/SettingsPage";
 import Leaderboard from "./pages/Dashboard/Leaderboard";
-import SuperAdminFeedback from "./pages/schoolAdmin/SuperAdminFeedback"; // Add this import at the top
-
-// ... inside your <Routes> ...
-
+import TakeQuiz from "./pages/TakeQuiz";
 
 function App() {
   return (
@@ -64,14 +64,8 @@ function App() {
       {/* ================= AUTH ROUTES ================= */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<RoleSelectionPage />} />
-      <Route
-        path="/signup/school-student"
-        element={<SchoolStudentRegisterPage />}
-      />
-      <Route
-        path="/signup/school-admin"
-        element={<SchoolAdminRegisterPage />}
-      />
+      <Route path="/signup/school-student" element={<SchoolStudentRegisterPage />} />
+      <Route path="/signup/school-admin" element={<SchoolAdminRegisterPage />} />
       <Route path="/signup/personal" element={<PersonalUserRegisterPage />} />
 
       {/* ================= SHARED ROUTES ================= */}
@@ -82,8 +76,7 @@ function App() {
       <Route
         element={
           <ProtectedRoute allowedRoles={["student", "personal_user"]}>
-            <StudentDashboardLayout />{" "}
-            {/* Ensure this file exists and has <Outlet /> */}
+            <StudentDashboardLayout />
           </ProtectedRoute>
         }
       >
@@ -93,7 +86,7 @@ function App() {
         <Route path="/aiGenerator" element={<StudentAiGenerator />} />
         <Route path="/myLibrary" element={<StudentLibrary />} />
         <Route path="/quiz" element={<StudentQuiz />} />
-<Route path="/ai" element={<StudioHub />} /> 
+        <Route path="/ai" element={<StudioHub />} /> 
         <Route path="/podcast" element={<PodcastGenerator />} />
         <Route path="/focusTime" element={<FocusTime />} />
         <Route path="/reminder" element={<StudentSchedule />} />
@@ -104,10 +97,9 @@ function App() {
         <Route path="/video-studio" element={<VideoGenerator />} />
       </Route>
 
-        {/* ================= ADMIN DASHBOARD ROUTES ================= */}
+      {/* ================= ADMIN DASHBOARD ROUTES ================= */}
       <Route
         element={
-          // ✅ ADDED "super_admin" TO THE ALLOWED ROLES
           <ProtectedRoute allowedRoles={["school_admin", "super_admin"]}>
             <AdminDashboardLayout />
           </ProtectedRoute>
@@ -117,7 +109,8 @@ function App() {
         <Route path="/admin/students" element={<StudentDirectory />} />
         <Route path="/admin/add-student" element={<AddStudent />} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
-<Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
+        <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
+        <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} /> {/* ✅ ADDED: Results Route */}
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
       </Route>
