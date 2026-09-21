@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   BrainCircuit,
@@ -13,6 +15,7 @@ import {
   Headphones,
   BookOpen,
   Zap,
+  KeyRound,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
@@ -35,8 +38,8 @@ const features = [
   },
   {
     icon: Users,
-    title: "Student progress tracking", // ✅ UPDATED from "School + parent visibility"
-    description: "Empower students with clear insights into their study habits, revision patterns, and daily activity to boost confidence.", // ✅ UPDATED
+    title: "Student progress tracking",
+    description: "Empower students with clear insights into their study habits, revision patterns, and daily activity to boost confidence.",
   },
 ];
 
@@ -48,9 +51,9 @@ const audienceCards = [
     accent: "from-brand/15 to-electric/10",
   },
   {
-    title: "For students", // ✅ UPDATED from "For parents"
-    text: "Master any subject with AI-generated summaries, audio podcasts, and interactive quizzes tailored to your unique learning style.", // ✅ UPDATED
-    link: "/student", // ✅ UPDATED (Ensure this route exists, or change to "/signup")
+    title: "For students",
+    text: "Master any subject with AI-generated summaries, audio podcasts, and interactive quizzes tailored to your unique learning style.",
+    link: "/student",
     accent: "from-flame/15 to-brand/10",
   },
   {
@@ -67,7 +70,6 @@ const stats = [
   { value: "24/7", label: "access to your revision engine" },
 ];
 
-// ✅ ENSURED: howItWorks is defined here so it doesn't throw a ReferenceError
 const howItWorks = [
   {
     step: "01",
@@ -90,6 +92,17 @@ const howItWorks = [
 ];
 
 export default function LandingPage() {
+  const navigate = useNavigate();
+  const [quizCode, setQuizCode] = useState("");
+
+  const handleJoinQuiz = (e) => {
+    e.preventDefault();
+    if (quizCode.length === 10) {
+      // Navigate to the quiz taking page with the code
+      navigate("/take-quiz", { state: { code: quizCode } });
+    }
+  };
+
   return (
     <MarketingLayout>
       {/* ================= HERO SECTION ================= */}
@@ -199,6 +212,49 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ================= QUICK QUIZ ACCESS SECTION ================= */}
+      <section className="border-y border-border bg-muted/30">
+        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-sm font-medium text-brand mb-6">
+            <KeyRound className="h-4 w-4" />
+            Quick Access
+          </div>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            Have a quiz code?
+          </h2>
+          <p className="mt-3 text-lg text-muted-foreground">
+            Jump straight into your assessment. No account or login required.
+          </p>
+
+          <form onSubmit={handleJoinQuiz} className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-lg mx-auto">
+            <div className="relative w-full">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={quizCode}
+                onChange={(e) => setQuizCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Enter 10-digit code"
+                className="w-full rounded-full border border-border bg-background px-6 py-4 text-center text-lg font-mono tracking-widest text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={quizCode.length !== 10}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 text-sm font-medium text-primary-foreground shadow-soft transition hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Join Quiz
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </form>
+          
+          {quizCode.length > 0 && quizCode.length < 10 && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {10 - quizCode.length} character{10 - quizCode.length !== 1 ? 's' : ''} remaining
+            </p>
+          )}
         </div>
       </section>
 
@@ -383,7 +439,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
     </MarketingLayout>
   );
 }
