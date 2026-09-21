@@ -1,3 +1,4 @@
+import path from 'path'; // ✅ ADD THIS LINE RIGHT HERE
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
