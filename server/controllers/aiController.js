@@ -235,12 +235,12 @@ export const generateContent = async (req, res, next) => {
   if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
   const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
   
-  const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
+  const podcastSystemPrompt = You are a scriptwriter for a highly engaging educational podcast. 
   Tone: ${tone}. Difficulty Level: ${level}.
   There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
   Length: ${exchangeCount}. ${detailLevel}. 
   
-  CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas in arrays or objects.
+  CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \\\json. Ensure there are NO trailing commas in arrays or objects.
   
   Format:
   {
@@ -253,26 +253,41 @@ export const generateContent = async (req, res, next) => {
     "quiz": [
       { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
     ]
-  }`;
+  };
   
-  // ✅ RETRY LOGIC: Try up to 2 times if JSON parsing fails
+  // ✅ RETRY LOGIC: Try up to 3 times with different strategies
   let attempts = 0;
   let parsedPodcast = null;
+  let lastError = null;
   
-  while (attempts < 2 && !parsedPodcast) {
+  while (attempts < 3 && !parsedPodcast) {
     try {
-      const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
+      const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: Topic/Notes for the podcast:\n${cleanInput} }], { max_tokens: maxTokens });
       parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
     } catch (parseError) {
       attempts++;
-      console.warn(`Podcast JSON parse attempt ${attempts} failed, retrying...`);
-      if (attempts >= 2) throw parseError;
+      lastError = parseError;
+      console.warn(Podcast JSON parse attempt ${attempts} failed, retrying...);
+      
+      // ✅ On 2nd attempt, use a simpler prompt with fewer exchanges
+      if (attempts === 2) {
+        const simplerPrompt = podcastSystemPrompt.replace(exchangeCount, "8 to 10 exchanges");
+        try {
+          const generatedTextFull = await runGroq([{ role: "system", content: simplerPrompt }, { role: "user", content: Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: Math.floor(maxTokens * 0.7) });
+          parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
+        } catch (e) {
+          lastError = e;
+        }
+      }
     }
   }
+  
+  if (!parsedPodcast) throw lastError || httpError("Failed to generate valid podcast after multiple attempts.", 502);
   
   aiTitle = requestedTitle || parsedPodcast.title;
   aiContent = JSON.stringify(parsedPodcast);
 }
+
 else if (mode === "music") {
       const musicVibe = vibe || "Hip-Hop and Afrobeat";
       const musicSystemPrompt = `You are a professional educational ${musicVibe} lyricist. Turn the notes into an accurate study song. 
