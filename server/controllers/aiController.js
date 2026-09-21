@@ -227,7 +227,7 @@ export const generateContent = async (req, res, next) => {
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
-    }    } else if (mode === "podcast") {
+    } else if (mode === "podcast") {
       const podcastLength = req.body?.length || "short";
       const tone = req.body?.tone || "engaging";
       const level = req.body?.level || "beginner";
@@ -235,7 +235,6 @@ export const generateContent = async (req, res, next) => {
       if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
       const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
       
-      // ✅ FIXED: Added missing backticks (`) around the template literal
       const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
       Tone: ${tone}. Difficulty Level: ${level}.
       There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
@@ -256,27 +255,22 @@ export const generateContent = async (req, res, next) => {
         ]
       }`;
       
-      // ✅ RETRY LOGIC: Try up to 3 times with different strategies
       let attempts = 0;
       let parsedPodcast = null;
       let lastError = null;
       
       while (attempts < 3 && !parsedPodcast) {
         try {
-          // ✅ FIXED: Added missing backticks around the user content string
           const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
           parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
         } catch (parseError) {
           attempts++;
           lastError = parseError;
-          // ✅ FIXED: Added missing backticks around the console.warn string
           console.warn(`Podcast JSON parse attempt ${attempts} failed, retrying...`);
           
-          // ✅ On 2nd attempt, use a simpler prompt with fewer exchanges
           if (attempts === 2) {
             const simplerPrompt = podcastSystemPrompt.replace(exchangeCount, "8 to 10 exchanges");
             try {
-              // ✅ FIXED: Added missing opening backtick
               const generatedTextFull = await runGroq([{ role: "system", content: simplerPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: Math.floor(maxTokens * 0.7) });
               parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
             } catch (e) {
@@ -290,9 +284,7 @@ export const generateContent = async (req, res, next) => {
       
       aiTitle = requestedTitle || parsedPodcast.title;
       aiContent = JSON.stringify(parsedPodcast);
-    }
-
-else if (mode === "music") {
+    } else if (mode === "music") {
       const musicVibe = vibe || "Hip-Hop and Afrobeat";
       const musicSystemPrompt = `You are a professional educational ${musicVibe} lyricist. Turn the notes into an accurate study song. 
       Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. 
