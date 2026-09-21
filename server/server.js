@@ -10,6 +10,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import feedbackRoutes from './routes/feedbackRoutes.js';
 import { submitContactForm } from './controllers/contactController.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import quizRoutes from './routes/quizRoutes.js';
 
 dotenv.config();
 
@@ -69,6 +70,7 @@ app.post('/api/contact', submitContactForm);
 app.use('/api/ai/generate', aiLimiter);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/quiz', quizRoutes);
 
 // 5. Test Route
 app.get('/', (req, res) => {

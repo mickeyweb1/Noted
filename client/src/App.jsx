@@ -37,6 +37,8 @@ import AdminDashboard from "./pages/schoolAdmin/AdminDashboard";
 import AddStudent from "./pages/schoolAdmin/AddStudentPage";
 import StudentDirectory from "./pages/schoolAdmin/StudentManagementPage";
 import AdminBillingPage from "./pages/schoolAdmin/AdminBillingPage";
+import TakeQuiz from "./pages/TakeQuiz";
+import AdminQuizGenerator from "./pages/AdminQuizGenerator";
 
 // Shared Pages
 import CheckoutPage from "./components/CheckoutPage";
@@ -57,6 +59,7 @@ function App() {
       <Route path="/student" element={<StudentPage />} />
       <Route path="/personal" element={<PersonalPage />} />
       <Route path="/contact" element={<ContactPage />} />
+      <Route path="/take-quiz" element={<TakeQuiz />} />
 
       {/* ================= AUTH ROUTES ================= */}
       <Route path="/login" element={<LoginPage />} />
@@ -114,6 +117,7 @@ function App() {
         <Route path="/admin/students" element={<StudentDirectory />} />
         <Route path="/admin/add-student" element={<AddStudent />} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
+<Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
       </Route>
