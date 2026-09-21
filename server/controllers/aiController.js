@@ -1,4 +1,4 @@
-import { generateWithGroq } from "../config/grok.js";
+ import { generateWithGroq } from "../config/grok.js";
 import { Content } from "../models/Content.js";
 import { User } from "../models/User.js";
 import ffmpeg from "fluent-ffmpeg";
@@ -160,21 +160,22 @@ const validateVideo = (parsed) => {
   };
 };
 
+
 const getPodcastInstructions = (length) => {
   if (length === "medium") return { 
     exchangeCount: "15 to 20 exchanges", 
     detailLevel: "Provide deeper explanations but keep the conversational, punchy energy.", 
-    maxTokens: 1500 
+    maxTokens: 2500 // ✅ Increased from 1500 to handle more exchanges
   };
   if (length === "long") return { 
-    exchangeCount: "20 to 25 exchanges", // ✅ Reduced from 15-18 to 12-15
+    exchangeCount: "20 to 25 exchanges",
     detailLevel: "Go into deep detail, but maintain a natural and engaging conversation.", 
-    maxTokens: 1800 // ✅ Reduced from 2000 to 1800 to prevent timeout
+    maxTokens: 3500 // ✅ Increased from 1800 to handle more exchanges
   };
   return { 
     exchangeCount: "10 to 15 exchanges", 
     detailLevel: "Keep it brief, high-energy, and fast-paced.", 
-    maxTokens: 1000 
+    maxTokens: 1500 // ✅ Increased from 1000
   };
 };
 
