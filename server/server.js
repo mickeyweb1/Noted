@@ -1,4 +1,5 @@
-import path from 'path'; // ✅ ADD THIS LINE RIGHT HERE
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -16,7 +17,8 @@ import quizRoutes from './routes/quizRoutes.js';
 dotenv.config();
 
 const app = express();
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 // 2. Security & Global Middleware
 app.use(helmet());
 app.use(cors({
