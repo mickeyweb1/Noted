@@ -233,10 +233,10 @@ export default function LandingPage() {
             <div className="relative w-full">
               <input
                 type="text"
-                inputMode="numeric"
                 value={quizCode}
-                onChange={(e) => setQuizCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="Enter 10-digit code"
+                // ✅ FIXED: Now allows letters AND numbers, and auto-capitalizes
+                onChange={(e) => setQuizCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10))}
+                placeholder="Enter 10-character code (e.g., A7K9M2P4Q1)"
                 className="w-full rounded-full border border-border bg-background px-6 py-4 text-center text-lg font-mono tracking-widest text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
               />
             </div>
