@@ -5,6 +5,7 @@ import { generateWithGroq } from '../config/grok.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { protect } from '../middleware/protect.js'; // ✅ CRITICAL FIX: Import the protect middleware
 
 const router = express.Router();
 
@@ -38,14 +39,6 @@ const upload = multer({
   }
 });
 
-// ✅ Define requireUser directly here to avoid missing file errors
-const requireUser = (req, res, next) => {
-  if (!req.user?._id) {
-    return res.status(401).json({ success: false, message: "Not authorized." });
-  }
-  next();
-};
-
 // ✅ Generate alphanumeric access codes (e.g., "A7K9M2P4Q1")
 const generateAccessCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -56,10 +49,10 @@ const generateAccessCode = () => {
   return code;
 };
 
-// 🎯 AI Generate Questions
-router.post('/generate-ai', requireUser, async (req, res, next) => {
+// 🎯 AI Generate Questions (✅ ADDED protect middleware)
+router.post('/generate-ai', protect, async (req, res, next) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id; // ✅ Now this will work because 'protect' ran first!
     const { notes, difficulty, numQuestions, numStudents, timeLimit, timeUnit, timeType, title } = req.body;
     
     const systemPrompt = `You are an expert examiner. Generate ${numQuestions} multiple-choice questions based on the provided notes.
@@ -85,7 +78,6 @@ router.post('/generate-ai', requireUser, async (req, res, next) => {
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     
-    // Generate unique alphanumeric access codes
     const accessCodes = [];
     for (let i = 0; i < numStudents; i++) {
       let code = generateAccessCode();
@@ -99,7 +91,7 @@ router.post('/generate-ai', requireUser, async (req, res, next) => {
       title,
       difficulty,
       timeLimit,
-      timeUnit, // 'minutes' or 'seconds'
+      timeUnit,
       timeType,
       numberOfStudents: numStudents,
       questions: parsed.questions,
@@ -114,32 +106,17 @@ router.post('/generate-ai', requireUser, async (req, res, next) => {
   }
 });
 
-// 🎯 Manual Questions (with AI autocomplete)
-router.post('/create-manual', requireUser, async (req, res, next) => {
+// 🎯 Manual Questions (✅ ADDED protect middleware)
+router.post('/create-manual', protect, async (req, res, next) => {
   try {
     const userId = req.user._id;
     const { title, difficulty, numQuestions, numStudents, timeLimit, timeUnit, timeType, questions, useAIAutocomplete } = req.body;
     
     let finalQuestions = questions || [];
     
-    // If using AI autocomplete and questions array is incomplete
     if (useAIAutocomplete && finalQuestions.length < numQuestions) {
       const remainingCount = numQuestions - finalQuestions.length;
-      
-      const systemPrompt = `Generate ${remainingCount} additional multiple-choice questions.
-      Difficulty: ${difficulty}
-      
-      Output format (VALID JSON ONLY):
-      {
-        "questions": [
-          {
-            "question": "Question text?",
-            "options": ["Option A", "Option B", "Option C", "Option D"],
-            "correctAnswer": "Option A",
-            "explanation": "Why this is correct"
-          }
-        ]
-      }`;
+      const systemPrompt = `Generate ${remainingCount} additional multiple-choice questions. Difficulty: ${difficulty}. Output VALID JSON ONLY with "questions" array.`;
 
       const response = await generateWithGroq([
         { role: 'system', content: systemPrompt }
@@ -150,7 +127,6 @@ router.post('/create-manual', requireUser, async (req, res, next) => {
       finalQuestions = [...finalQuestions, ...parsed.questions];
     }
 
-    // Generate alphanumeric access codes
     const accessCodes = [];
     for (let i = 0; i < numStudents; i++) {
       let code = generateAccessCode();
@@ -179,14 +155,12 @@ router.post('/create-manual', requireUser, async (req, res, next) => {
   }
 });
 
-// 🎯 Image Upload Endpoint
-router.post('/upload/quiz-image', requireUser, upload.single('image'), (req, res) => {
+// 🎯 Image Upload Endpoint (✅ ADDED protect middleware)
+router.post('/upload/quiz-image', protect, upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
-    
-    // Return the public URL
     const imageUrl = `/uploads/quizzes/${req.file.filename}`;
     res.json({ success: true, imageUrl });
   } catch (error) {
@@ -198,14 +172,12 @@ router.post('/upload/quiz-image', requireUser, upload.single('image'), (req, res
 router.post('/validate-code', async (req, res, next) => {
   try {
     const { code } = req.body;
-    
     const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
     
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Invalid access code' });
     }
 
-    // Check if this code has already been used
     const existingSubmission = await QuizSubmission.findOne({ 
       quiz: quiz._id, 
       accessCode: code.toUpperCase() 
@@ -249,7 +221,6 @@ router.post('/submit', async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Invalid access code' });
     }
 
-    // Calculate score
     let score = 0;
     const submissionAnswers = answers.map(ans => {
       const question = quiz.questions.id(ans.questionId);
@@ -281,8 +252,8 @@ router.post('/submit', async (req, res, next) => {
   }
 });
 
-// 🎯 Get all quizzes for admin (Admin only)
-router.get('/admin/quizzes', requireUser, async (req, res, next) => {
+// 🎯 Get all quizzes for admin (✅ ADDED protect middleware)
+router.get('/admin/quizzes', protect, async (req, res, next) => {
   try {
     const userId = req.user._id;
     const quizzes = await Quiz.find({ createdBy: userId })
@@ -295,8 +266,8 @@ router.get('/admin/quizzes', requireUser, async (req, res, next) => {
   }
 });
 
-// 🎯 Get quiz results by quiz ID (Admin only)
-router.get('/:id/results', requireUser, async (req, res, next) => {
+// 🎯 Get quiz results by quiz ID (✅ ADDED protect middleware)
+router.get('/:id/results', protect, async (req, res, next) => {
   try {
     const submissions = await QuizSubmission.find({ quiz: req.params.id })
       .sort({ submittedAt: -1 });
