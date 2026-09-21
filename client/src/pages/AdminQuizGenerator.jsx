@@ -5,7 +5,7 @@ import api from "../utils/api";
 
 export default function AdminQuizGenerator() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("ai"); // 'ai' | 'manual' | 'results'
+  const [activeTab, setActiveTab] = useState("ai"); // 'ai' | 'manual'
   
   // Shared Metadata State
   const [metadata, setMetadata] = useState({
@@ -31,10 +31,6 @@ export default function AdminQuizGenerator() {
   const [isAutocompleting, setIsAutocompleting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(null);
 
-  // Results State
-  const [selectedQuizId, setSelectedQuizId] = useState("");
-  const [submissions, setSubmissions] = useState([]);
-
   const handleMetadataChange = (field, value) => {
     setMetadata(prev => ({ ...prev, [field]: value }));
   };
@@ -48,8 +44,7 @@ export default function AdminQuizGenerator() {
       const formData = new FormData();
       formData.append('image', file);
       
-      // Upload to your backend (you'll need to create this endpoint)
-      const res = await api.post('/upload/quiz-image', formData, {
+      const res = await api.post('/quiz/upload/quiz-image', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
@@ -63,11 +58,13 @@ export default function AdminQuizGenerator() {
     }
   };
 
-  // --- AI GENERATION ---
   const handleAIGenerate = async () => {
     if (!notes.trim() || !metadata.title) return alert("Please enter a title and notes.");
     setIsGenerating(true);
     try {
+      const token = localStorage.getItem("userToken");
+      console.log("Using token:", token ? "Exists" : "Missing");
+      
       const res = await api.post("/quiz/generate-ai", {
         ...metadata,
         notes
@@ -75,7 +72,13 @@ export default function AdminQuizGenerator() {
       setGeneratedQuiz(res.data.data);
       setAccessCodes(res.data.accessCodes);
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to generate quiz.");
+      console.error("Error details:", err.response?.data);
+      if (err.response?.status === 401) {
+        alert("Your session expired. Please log in again.");
+        setTimeout(() => navigate("/login"), 2000);
+      } else {
+        alert(err.response?.data?.message || "Failed to generate quiz.");
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -137,17 +140,6 @@ export default function AdminQuizGenerator() {
     }
   };
 
-  // --- VIEW RESULTS ---
-  const fetchResults = async () => {
-    if (!selectedQuizId) return;
-    try {
-      const res = await api.get(`/quiz/${selectedQuizId}/results`);
-      setSubmissions(res.data.data);
-    } catch (err) {
-      alert("Failed to fetch results.");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-muted p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -163,9 +155,6 @@ export default function AdminQuizGenerator() {
           </button>
           <button onClick={() => setActiveTab("manual")} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === "manual" ? "bg-brand text-brand-foreground" : "text-muted-foreground"}`}>
             <FileText className="w-4 h-4 inline mr-2" /> Manual
-          </button>
-          <button onClick={() => setActiveTab("results")} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === "results" ? "bg-brand text-brand-foreground" : "text-muted-foreground"}`}>
-            <BarChart3 className="w-4 h-4 inline mr-2" /> Results
           </button>
         </div>
 
@@ -220,22 +209,31 @@ export default function AdminQuizGenerator() {
               </select>
             </div>
 
-            <input 
-              type="number" 
-              min="1" 
-              value={metadata.numQuestions} 
-              onChange={(e) => handleMetadataChange("numQuestions", Number(e.target.value))} 
-              className="border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" 
-              placeholder="Number of Questions" 
-            />
-            <input 
-              type="number" 
-              min="1" 
-              value={metadata.numStudents} 
-              onChange={(e) => handleMetadataChange("numStudents", Number(e.target.value))} 
-              className="border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" 
-              placeholder="Number of Students (Access Codes)" 
-            />
+            {/* ✅ Number of Questions - WITH CLEAR LABEL */}
+            <div className="relative">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Number of Questions</label>
+              <input 
+                type="number" 
+                min="1" 
+                value={metadata.numQuestions} 
+                onChange={(e) => handleMetadataChange("numQuestions", Number(e.target.value))} 
+                className="w-full border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" 
+                placeholder="e.g., 5" 
+              />
+            </div>
+            
+            {/* ✅ Number of Students - WITH CLEAR LABEL */}
+            <div className="relative">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Number of Students (Access Codes)</label>
+              <input 
+                type="number" 
+                min="1" 
+                value={metadata.numStudents} 
+                onChange={(e) => handleMetadataChange("numStudents", Number(e.target.value))} 
+                className="w-full border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" 
+                placeholder="e.g., 30" 
+              />
+            </div>
           </div>
         </div>
 
@@ -384,6 +382,14 @@ export default function AdminQuizGenerator() {
               </p>
             </div>
 
+            {/* ✅ NEW: Button to view the dedicated results page */}
+            <button 
+              onClick={() => navigate(`/admin/quiz/${generatedQuiz._id}/results`)}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-brand/10 text-brand border border-brand/20 rounded-xl font-semibold hover:bg-brand/20 transition"
+            >
+              <BarChart3 className="w-5 h-5" /> View Detailed Results & Stats
+            </button>
+
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold flex items-center gap-2">
@@ -407,55 +413,6 @@ export default function AdminQuizGenerator() {
                 Share these codes with your students. Each code can only be used once.
               </p>
             </div>
-          </div>
-        )}
-
-        {/* Results Tab */}
-        {activeTab === "results" && (
-          <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">View Quiz Results</h2>
-            <div className="flex gap-4">
-              <input 
-                type="text" 
-                placeholder="Paste Quiz ID to search" 
-                value={selectedQuizId} 
-                onChange={(e) => setSelectedQuizId(e.target.value)} 
-                className="flex-1 border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" 
-              />
-              <button 
-                onClick={fetchResults} 
-                className="px-6 py-3 bg-brand text-brand-foreground rounded-lg font-semibold hover:bg-brand/90"
-              >
-                Fetch Results
-              </button>
-            </div>
-            
-            {submissions.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-muted-foreground uppercase bg-muted">
-                    <tr>
-                      <th className="px-4 py-3">Student</th>
-                      <th className="px-4 py-3">Class</th>
-                      <th className="px-4 py-3">Score</th>
-                      <th className="px-4 py-3">Time Taken</th>
-                      <th className="px-4 py-3">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {submissions.map((sub, idx) => (
-                      <tr key={idx} className="border-b border-border hover:bg-muted/50">
-                        <td className="px-4 py-3 font-medium">{sub.studentName} {sub.studentSurname}</td>
-                        <td className="px-4 py-3">{sub.studentClass || "-"}</td>
-                        <td className="px-4 py-3 font-bold text-brand">{sub.score} / {sub.totalQuestions}</td>
-                        <td className="px-4 py-3">{Math.floor(sub.timeTaken / 60)}m {sub.timeTaken % 60}s</td>
-                        <td className="px-4 py-3 text-muted-foreground">{new Date(sub.submittedAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         )}
       </div>
