@@ -5,9 +5,9 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  AudioLines,
   Building2,
   UserPlus,
+  FileQuestion, // ✅ ADDED: Icon for Quizzes
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -27,7 +27,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
     { to: "/admin/admissions", icon: UserCheck, label: "Admissions" }, 
     { to: "/admin/students", icon: Users, label: "My Students" },
     { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
-    // { to: "/admin/students", icon: Users, label: "Student Directory" }, // ✅ REMOVED DUPLICATE
+    { to: "/admin/quizzes", icon: FileQuestion, label: "Quizzes" }, // ✅ ADDED: New Quizzes Link
     { to: "/admin/billing", icon: CreditCard, label: "Billing & Plans" },
     { to: "/admin/settings", icon: Settings, label: "Settings" },
   ];
@@ -84,14 +84,13 @@ export default function AdminSideBar({ isOpen, onClose }) {
       <div className="p-4 border-t border-sidebar-border space-y-2">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent/50 transition-colors">
           <div className="flex items-center justify-center w-9 h-9 rounded-full bg-sidebar-accent text-sidebar-accent-foreground shrink-0">
-{userData.avatar ? (
-  <img src={userData.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
-) : (
-  // ✅ Shows the first letter of their name (e.g., "A" for Admin)
-  <span className="font-bold text-sm">
-    {(userData.fullName || "A").charAt(0).toUpperCase()}
-  </span>
-)}
+            {userData.avatar ? (
+              <img src={userData.avatar} alt="Profile" className="w-full h-full object-cover rounded-full" />
+            ) : (
+              <span className="font-bold text-sm">
+                {(userData.fullName || "A").charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-sm font-semibold text-sidebar-foreground truncate">
