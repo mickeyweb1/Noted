@@ -4,7 +4,7 @@ import { Calendar,FileText, ArrowRight , BarChart3, Clock, User, Trophy, ArrowLe
 import api from "../utils/api";
 
 
-export default function QuizResultsDashboard() {
+export function QuizResultsDashboard() {
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
