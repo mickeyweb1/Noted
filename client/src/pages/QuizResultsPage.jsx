@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Calendar,FileText, ArrowRight , BarChart3, Clock, User, Trophy, ArrowLeft, Download } from "lucide-react";
+// ✅ FIXED: Added "Users" to the import list below!
+import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download } from "lucide-react";
 import api from "../utils/api";
 
-
+// ================= DASHBOARD (List of Quizzes) =================
 export function QuizResultsDashboard() {
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
@@ -82,11 +83,11 @@ export function QuizResultsDashboard() {
   );
 }
 
-
+// ================= DETAILED RESULTS PAGE =================
 export default function QuizResultsPage() {
   const { quizId } = useParams();
   const navigate = useNavigate();
-  const [quiz, setQuiz] = useState(null);
+  const [quizTitle, setQuizTitle] = useState("Quiz Results"); // ✅ Changed to just store the title string
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -98,10 +99,8 @@ export default function QuizResultsPage() {
     try {
       const res = await api.get(`/quiz/${quizId}/results`);
       setSubmissions(res.data.data);
-      // Get quiz info from first submission
-      if (res.data.data.length > 0) {
-        setQuiz(res.data.data[0].quiz);
-      }
+      // The backend doesn't send the full quiz object, so we just use a generic title or fetch it later
+      setQuizTitle("Quiz Results"); 
     } catch (err) {
       alert("Failed to fetch results.");
     } finally {
@@ -125,7 +124,7 @@ export default function QuizResultsPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${quiz?.title || "Quiz"}-Results.csv`;
+    a.download = `${quizTitle}-Results.csv`;
     a.click();
   };
 
@@ -143,11 +142,11 @@ export default function QuizResultsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate("/admin/quizzes")} className="p-2 hover:bg-accent rounded-lg">
+            <button onClick={() => navigate("/admin/quiz-results")} className="p-2 hover:bg-accent rounded-lg">
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">{quiz?.title || "Quiz Results"}</h1>
+              <h1 className="text-3xl font-bold text-foreground">{quizTitle}</h1>
               <p className="text-muted-foreground">{submissions.length} submission{submissions.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
