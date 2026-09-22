@@ -1,4 +1,4 @@
- import { generateWithGroq } from "../config/grok.js";
+import { generateWithGroq } from "../config/grok.js";
 import { Content } from "../models/Content.js";
 import { User } from "../models/User.js";
 import ffmpeg from "fluent-ffmpeg";
@@ -112,7 +112,7 @@ const validateQuiz = (parsed, expectedCount) => {
     throw httpError("The AI returned an invalid quiz.", 502);
   }
   if (parsed.questions.length !== expectedCount) {
-    throw httpError(`The AI returned ${parsed.questions.length} questions, but ${expectedCount} were requested.`, 502);
+    throw httpError(`The AI returned <LaTex>id_1</LaTex>{expectedCount} were requested.`, 502);
   }
   const questions = parsed.questions.map((q, index) => {
     if (
@@ -125,28 +125,7 @@ const validateQuiz = (parsed, expectedCount) => {
       !q.options.includes(q.correctAnswer) ||
       typeof q.explanation !== "string"
     ) {
-      throw httpError(`Invalid quiz question ${index + 1}. Ensure 4 options, valid correctAnswer, and explanation.`, 502);
-    }
-    return q;
-  });
-  return {
-    title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Quiz",
-    questions,
-  };
-};
-
-const validateVideo = (parsed) => {
-  if (!parsed || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
-    throw httpError("The AI returned an invalid video storyboard.", 502);
-  }
-  const scenes = parsed.scenes.map((scene, index) => {
-    if (
-      typeof scene.narration !== "string" ||
-      typeof scene.visualPrompt !== "string" ||
-      !scene.narration.trim() ||
-      !scene.visualPrompt.trim()
-    ) {
-      throw httpError(`Invalid video scene ${index + 1}.`, 502);
+      throw httpError(`Invalid quiz question <LaTex>id_2</LaTex>{index + 1}.`, 502);
     }
     return {
       sceneNumber: index + 1,
@@ -160,25 +139,23 @@ const validateVideo = (parsed) => {
   };
 };
 
-
 const getPodcastInstructions = (length) => {
   if (length === "medium") return { 
     exchangeCount: "15 to 20 exchanges", 
     detailLevel: "Provide deeper explanations but keep the conversational, punchy energy.", 
-    maxTokens: 2500 // ✅ Increased from 1500 to handle more exchanges
+    maxTokens: 2500 
   };
   if (length === "long") return { 
     exchangeCount: "20 to 25 exchanges",
     detailLevel: "Go into deep detail, but maintain a natural and engaging conversation.", 
-    maxTokens: 3500 // ✅ Increased from 1800 to handle more exchanges
+    maxTokens: 3500 
   };
   return { 
     exchangeCount: "10 to 15 exchanges", 
     detailLevel: "Keep it brief, high-energy, and fast-paced.", 
-    maxTokens: 1500 // ✅ Increased from 1000
+    maxTokens: 1500 
   };
 };
-
 
 export const generateContent = async (req, res, next) => {
   try {
@@ -195,7 +172,7 @@ export const generateContent = async (req, res, next) => {
     const requestedTitle = typeof title === "string" && title.trim() ? title.trim().slice(0, 160) : "";
     const cleanSubject = typeof subject === "string" && subject.trim() ? subject.trim().slice(0, 100) : "General";
 
-    let aiTitle = requestedTitle || `${mode.charAt(0).toUpperCase()}${mode.slice(1)} Notes`;
+    let aiTitle = requestedTitle || `<LaTex>id_3</LaTex>{mode.slice(1)} Notes`;
     let aiContent = "";
     
     if (mode === "tutor") {
@@ -211,7 +188,7 @@ export const generateContent = async (req, res, next) => {
       const requestedMaxTokens = Number(max_tokens);
       const finalMaxTokens = Number.isInteger(requestedMaxTokens) ? Math.min(Math.max(requestedMaxTokens, 50), 4096) : 4096;
       
-      const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`, { max_tokens: finalMaxTokens });
+      const generatedTextFull = await runGroq(`<LaTex>id_4</LaTex>{cleanInput}`, { max_tokens: finalMaxTokens });
       const lines = generatedTextFull.split("\n");
       const firstLine = lines.find((line) => line.trim().length > 0);
       if (firstLine && !firstLine.trim().startsWith("-") && !firstLine.trim().startsWith("*") && !firstLine.trim().startsWith("**") && !firstLine.trim().startsWith("📚")) {
@@ -223,45 +200,7 @@ export const generateContent = async (req, res, next) => {
       }
     } else if (mode === "video") {
       const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
-      const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 500 });
-      const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
-      aiTitle = requestedTitle || parsedVideo.title;
-      aiContent = JSON.stringify(parsedVideo);
-    } else if (mode === "podcast") {
-      const podcastLength = req.body?.length || "short";
-      const tone = req.body?.tone || "engaging";
-      const level = req.body?.level || "beginner";
-      
-      if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
-      const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
-      
-      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
-      Tone: ${tone}. Difficulty Level: ${level}.
-      There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
-      Length: ${exchangeCount}. ${detailLevel}. 
-      
-      CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas in arrays or objects.
-      
-      Format:
-      {
-        "title": "Catchy title",
-        "script": [
-          { "speaker": "Leo", "text": "Surprising fact about the topic." },
-          { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
-        ],
-        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
-        "quiz": [
-          { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
-        ]
-      }`;
-      
-      let attempts = 0;
-      let parsedPodcast = null;
-      let lastError = null;
-      
-      while (attempts < 3 && !parsedPodcast) {
-        try {
-          const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
+      const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n<LaTex>id_5</LaTex>{tone}. Difficulty Level: <LaTex>id_6</LaTex>{exchangeCount}. <LaTex>id_7</LaTex>{cleanInput}` }], { max_tokens: maxTokens });
           parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
         } catch (parseError) {
           attempts++;
@@ -333,25 +272,8 @@ Example format:
       const updatedUser = await User.findByIdAndUpdate(userId, { $inc: { xp: xpGained } }, { new: true });
       if (updatedUser) {
         const newLevel = Math.floor(updatedUser.xp / 100) + 1;
-        if (updatedUser.level !== newLevel) await User.findByIdAndUpdate(userId, { $set: { level: newLevel } });
-        res.locals.xpGained = xpGained;
-        res.locals.newLevel = newLevel;
-      }
-    } catch (xpError) {
-      console.error("XP update failed:", xpError.message);
-    }
-
-    return res.status(201).json({ success: true, message: "Content generated!", data: newContent });
-  } catch (error) {
-    console.error("AI generation error:", error.message);
-    return next(error);
-  }
-};
-
-const prepareLyricsForSpeech = (text) => {
-  return text
-    .replace(/\[.*?\]/g, "... \n\n") 
-    .replace(/\n{3,}/g, "\n\n")
+        if (updatedUser.level !== newLevel) await User.findByIdAndUpdate(userId, { <LaTex>id_8</LaTex>1  ") // Add extra space after punctuation for pauses
+    .replace(/,\s*/g, ", ") // Ensure commas have proper spacing
     .trim();
 };
 
@@ -362,10 +284,11 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
   finally { clearTimeout(timeout); }
 };
 
+// ✅ UPDATED: Premium ElevenLabs Voice Settings
 export const generateSpeech = async (req, res, next) => {
   try {
     requireUser(req);
-    const { text, style } = req.body || {};
+    const { text, style, useCase } = req.body || {}; // Added useCase parameter
     let cleanText = ensureText(text, "Text is required.");
     
     if (cleanText.includes("Leo:") || cleanText.includes("Dr. Nova:")) {
@@ -375,15 +298,46 @@ export const generateSpeech = async (req, res, next) => {
     if (cleanText.length > MAX_SPEECH_LENGTH) throw httpError("The audio text is too long.", 413);
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw httpError("Audio generation is not configured.", 503);
+    
+    // ✅ PREMIUM VOICE SETTINGS
     const isRap = style === "rap";
+    const isPodcast = useCase === "podcast";
+    
+    // Format text for better rhythm
     const speechText = isRap ? prepareLyricsForSpeech(cleanText) : cleanText;
-    const voiceId = process.env.ELEVENLABS_VOICE_ID || "TxGEqnHWrfWFTfGW9XjX";
+    
+    // ✅ PREMIUM VOICE IDs (Change these in your .env or use these defaults)
+    let voiceId = process.env.ELEVENLABS_VOICE_ID;
+    
+    if (!voiceId) {
+      if (isPodcast) {
+        voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel - warm, natural, conversational
+      } else if (isRap) {
+        voiceId = "onwK4e9ZLuTAKqWW03F9"; // Callum - rhythmic, expressive, great for music
+      } else {
+        voiceId = "pNInz6obpgDQGcFmaJgB"; // Adam - professional, clear
+      }
+    }
+    
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+    
+    // ✅ OPTIMIZED VOICE SETTINGS FOR PREMIUM QUALITY
     const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: { Accept: "audio/mpeg", "Content-Type": "application/json", "xi-api-key": apiKey },
-      body: JSON.stringify({ text: speechText, model_id: "eleven_turbo_v2_5", voice_settings: { stability: isRap ? 0.25 : 0.5, similarity_boost: isRap ? 0.9 : 0.75, style: isRap ? 0.75 : 0, use_speaker_boost: true } }),
+      body: JSON.stringify({ 
+        text: speechText, 
+        model_id: "eleven_monolingual_v1", // Higher quality than turbo
+        voice_settings: { 
+          // For Music/Rap: More expressive and rhythmic
+          stability: isRap ? 0.35 : isPodcast ? 0.40 : 0.45, // Lower = more emotional variation
+          similarity_boost: isRap ? 0.85 : 0.80, // Higher = clearer voice
+          style: isRap ? 0.65 : isPodcast ? 0.50 : 0.30, // Higher = more exaggerated/emotional
+          use_speaker_boost: true, // Makes voice clearer and more present
+        }
+      }),
     });
+    
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw httpError(errorData?.detail?.message || "Audio generation failed.", 503);
@@ -553,8 +507,7 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
         continue; 
       }
 
-      const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?$/i);
-      const rawPath = path.join(tempDir, `raw_${i}${isImage ? '.jpg' : '.mp4'}`);
+      const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?<LaTex>id_9</LaTex>{i}${isImage ? '.jpg' : '.mp4'}`);
       fs.writeFileSync(rawPath, Buffer.from(buffer));
 
       const audioPath = await getSceneAudio(scene.narration, tempDir, i);
@@ -944,23 +897,4 @@ export const extractTextFromImage = async (req, res, next) => {
   try {
     requireUser(req);
     const imageUrl = ensureText(req.body?.imageUrl, "Image data is required.");
-    if (imageUrl.length > MAX_IMAGE_PAYLOAD_LENGTH) throw httpError("The image is too large to process.", 413);
-    const apiKey = process.env.OCR_SPACE_API_KEY;
-    if (!apiKey) throw httpError("OCR is not configured.", 503);
-    const formData = new URLSearchParams();
-    formData.append("apikey", apiKey);
-    formData.append("base64Image", imageUrl);
-    formData.append("language", "eng");
-    formData.append("isOverlayRequired", "false");
-    formData.append("OCREngine", "2");
-    const response = await fetchWithTimeout("https://api.ocr.space/parse/image", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Noted-App/1.0" }, body: formData.toString() }, 60000);
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data) throw httpError("OCR service failed.", 503);
-    if (data.IsErroredOnProcessing) throw httpError(data.ErrorMessage?.[0] || "OCR could not process this image.", 422);
-    const extractedText = data.ParsedResults?.[0]?.ParsedText || "";
-    return res.status(200).json({ success: true, text: extractedText.trim(), message: extractedText.trim() ? "Text extracted." : "No text detected.", method: "ocr-space" });
-  } catch (error) {
-    console.error("OCR extraction error:", error.message);
-    return next(error);
-  }
-};
+    if (imageUrl
