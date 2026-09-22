@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Brain, FileText, Plus, Trash2, Sparkles, Loader2, CheckCircle2, Copy, Users, Clock, Image as ImageIcon } from "lucide-react";
+import { Brain, FileText, Plus, Trash2, Sparkles, Loader2, CheckCircle2, Copy, Users, Clock, Image as ImageIcon, Upload } from "lucide-react";
 import api from "../utils/api";
 
 export default function AdminQuizGenerator() {
@@ -25,15 +25,58 @@ export default function AdminQuizGenerator() {
   const [manualQuestions, setManualQuestions] = useState([{
     question: "", options: ["", "", "", ""], correctAnswer: "", explanation: "", imageUrl: ""
   }]);
-  const [uploadingImage, setUploadingImage] = useState(null);
+  
+  // ✅ Separated loading states to prevent conflicts
+  const [uploadingQuestionImage, setUploadingQuestionImage] = useState(null);
+  const [isUploadingNotes, setIsUploadingNotes] = useState(false);
 
   const handleMetadataChange = (field, value) => {
     setMetadata(prev => ({ ...prev, [field]: value }));
   };
 
+  // ✅ NEW: Handle File/Image Upload for AI Notes
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // 1. Handle Text Files (.txt)
+    if (file.type === "text/plain") {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setNotes((prev) => prev + (prev ? "\n\n--- 📄 File Content ---\n\n" : "") + event.target.result);
+      };
+      reader.readAsText(file);
+    } 
+    // 2. Handle Images (JPG, PNG) using your existing Backend OCR
+    else if (file.type.startsWith("image/")) {
+      setIsUploadingNotes(true);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const base64Image = event.target.result;
+          // Call your existing OCR backend endpoint!
+          const res = await api.post("/ai/ocr/extract-text", { imageUrl: base64Image });
+          if (res.data.success) {
+            setNotes((prev) => prev + (prev ? "\n\n--- 📷 Extracted from Image ---\n\n" : "") + res.data.text);
+          }
+        } catch (err) {
+          alert("Failed to extract text from image. Please try a clearer picture.");
+        } finally {
+          setIsUploadingNotes(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert("Please upload a .txt file or an image (JPG, PNG).");
+    }
+    
+    // Clear the input so the same file can be selected again
+    e.target.value = "";
+  };
+
   const handleImageUpload = async (questionIndex, file) => {
     if (!file) return;
-    setUploadingImage(questionIndex);
+    setUploadingQuestionImage(questionIndex);
     try {
       const formData = new FormData();
       formData.append('image', file);
@@ -46,7 +89,7 @@ export default function AdminQuizGenerator() {
     } catch (err) {
       alert("Failed to upload image.");
     } finally {
-      setUploadingImage(null);
+      setUploadingQuestionImage(null);
     }
   };
 
@@ -85,7 +128,6 @@ export default function AdminQuizGenerator() {
     setManualQuestions(updated);
   };
 
-  // ✅ NEW: Strict validation before creating manual quiz
   const handleCreateManualQuiz = async () => {
     if (!metadata.title) return alert("Please enter a quiz title.");
     
@@ -159,13 +201,66 @@ export default function AdminQuizGenerator() {
           </div>
         </div>
 
-        {/* AI Tab */}
+        {/* ✅ UPDATED AI Tab with File Upload */}
         {activeTab === "ai" && !generatedQuiz && (
           <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2"><Sparkles className="w-5 h-5 text-brand" /> AI Question Generator</h2>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={8} placeholder="Paste your notes, textbook text, or lecture summary here." className="w-full border border-border rounded-lg p-4 focus:ring-2 focus:ring-brand focus:outline-none" />
-            <button onClick={handleAIGenerate} disabled={isGenerating} className="w-full py-3 bg-brand text-brand-foreground rounded-xl font-semibold hover:bg-brand/90 transition flex items-center justify-center gap-2 disabled:opacity-50">
-              {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} Generate Quiz & Codes
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-brand" /> AI Question Generator
+            </h2>
+            
+            {/* File Upload Dropzone */}
+            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-accent/50 transition-colors">
+              <input 
+                type="file" 
+                accept=".txt, image/png, image/jpeg, image/jpg" 
+                onChange={handleFileUpload}
+                disabled={isUploadingNotes}
+                className="hidden" 
+                id="quiz-file-upload" 
+              />
+              <label htmlFor="quiz-file-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                {isUploadingNotes ? (
+                  <>
+                    <Loader2 className="w-8 h-8 text-brand animate-spin" />
+                    <span className="text-sm font-medium text-foreground">Extracting text from image...</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-3 bg-brand/10 rounded-full text-brand">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">Click to upload e-notes (.txt or Image)</span>
+                    <span className="text-xs text-muted-foreground">The AI will automatically read the text from your file</span>
+                  </>
+                )}
+              </label>
+            </div>
+
+            <div className="relative">
+              <textarea 
+                value={notes} 
+                onChange={(e) => setNotes(e.target.value)} 
+                rows={8} 
+                placeholder="Or paste your notes, textbook text, or lecture summary here..." 
+                className="w-full border border-border rounded-lg p-4 focus:ring-2 focus:ring-brand focus:outline-none" 
+              />
+              {notes && (
+                <button 
+                  onClick={() => setNotes("")} 
+                  className="absolute top-2 right-2 text-xs text-muted-foreground hover:text-destructive px-2 py-1 rounded bg-background border border-border"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <button 
+              onClick={handleAIGenerate} 
+              disabled={isGenerating || !notes.trim()} 
+              className="w-full py-3 bg-brand text-brand-foreground rounded-xl font-semibold hover:bg-brand/90 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} 
+              Generate Quiz & Codes
             </button>
           </div>
         )}
@@ -186,7 +281,7 @@ export default function AdminQuizGenerator() {
                     <ImageIcon className="w-4 h-4" /><span className="text-sm">Upload Image</span>
                     <input type="file" accept="image/*" onChange={(e) => handleImageUpload(idx, e.target.files[0])} className="hidden" />
                   </label>
-                  {uploadingImage === idx && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {uploadingQuestionImage === idx && <Loader2 className="w-4 h-4 animate-spin" />}
                   {q.imageUrl && <span className="text-xs text-green-500">✓ Image attached</span>}
                 </div>
                 <input type="text" placeholder="Question text" value={q.question} onChange={(e) => updateManualQuestion(idx, "question", e.target.value)} className="w-full border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" />
