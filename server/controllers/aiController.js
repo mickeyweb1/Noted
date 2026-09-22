@@ -33,15 +33,12 @@ const ensureText = (value, message = "Please provide valid text.") => {
   return text;
 };
 
-// ✅ CRITICAL FIX: Auto-fix trailing commas, a common LLM JSON mistake
 const parseJsonObject = (rawText) => {
   if (typeof rawText !== "string" || !rawText.trim()) {
     console.error("❌ Raw text is empty or not a string:", rawText);
     throw httpError("The AI returned an empty response.", 502);
   }
   let cleaned = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
-  
-  // Remove trailing commas before } or ]
   cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
   
   const firstBrace = cleaned.indexOf("{");
@@ -67,7 +64,6 @@ const runGroq = async (messagesOrPrompt, options = {}) => {
   }
 };
 
-// ✅ CRITICAL FIX: Extremely forgiving podcast validation with fallback
 const validatePodcast = (parsed) => {
   if (!parsed) {
     throw httpError("The AI returned an empty response.", 502);
@@ -90,7 +86,6 @@ const validatePodcast = (parsed) => {
       .filter(line => line.text.length > 0);
   }
   
-  // ✅ Fallback: If script is empty or too short, generate a basic one so it NEVER crashes
   if (script.length < 2) {
     script = [
       { speaker: "Leo", text: `Welcome to this study session about ${title}!` },
@@ -106,13 +101,12 @@ const validatePodcast = (parsed) => {
   };
 };
 
-// ✅ CRITICAL FIX: Strict quiz validation. No more dangerous fallbacks.
 const validateQuiz = (parsed, expectedCount) => {
   if (!parsed || !Array.isArray(parsed.questions)) {
     throw httpError("The AI returned an invalid quiz.", 502);
   }
   if (parsed.questions.length !== expectedCount) {
-    throw httpError(`The AI returned <LaTex>id_1</LaTex>{expectedCount} were requested.`, 502);
+    throw httpError(`The AI returned ${parsed.questions.length} questions, but ${expectedCount} were requested.`, 502);
   }
   const questions = parsed.questions.map((q, index) => {
     if (
@@ -125,7 +119,28 @@ const validateQuiz = (parsed, expectedCount) => {
       !q.options.includes(q.correctAnswer) ||
       typeof q.explanation !== "string"
     ) {
-      throw httpError(`Invalid quiz question <LaTex>id_2</LaTex>{index + 1}.`, 502);
+      throw httpError(`Invalid quiz question ${index + 1}. Ensure 4 options, valid correctAnswer, and explanation.`, 502);
+    }
+    return q;
+  });
+  return {
+    title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim().slice(0, 160) : "Quiz",
+    questions,
+  };
+};
+
+const validateVideo = (parsed) => {
+  if (!parsed || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
+    throw httpError("The AI returned an invalid video storyboard.", 502);
+  }
+  const scenes = parsed.scenes.map((scene, index) => {
+    if (
+      typeof scene.narration !== "string" ||
+      typeof scene.visualPrompt !== "string" ||
+      !scene.narration.trim() ||
+      !scene.visualPrompt.trim()
+    ) {
+      throw httpError(`Invalid video scene ${index + 1}.`, 502);
     }
     return {
       sceneNumber: index + 1,
@@ -172,7 +187,7 @@ export const generateContent = async (req, res, next) => {
     const requestedTitle = typeof title === "string" && title.trim() ? title.trim().slice(0, 160) : "";
     const cleanSubject = typeof subject === "string" && subject.trim() ? subject.trim().slice(0, 100) : "General";
 
-    let aiTitle = requestedTitle || `<LaTex>id_3</LaTex>{mode.slice(1)} Notes`;
+    let aiTitle = requestedTitle || `${mode.charAt(0).toUpperCase()}${mode.slice(1)} Notes`;
     let aiContent = "";
     
     if (mode === "tutor") {
@@ -188,7 +203,7 @@ export const generateContent = async (req, res, next) => {
       const requestedMaxTokens = Number(max_tokens);
       const finalMaxTokens = Number.isInteger(requestedMaxTokens) ? Math.min(Math.max(requestedMaxTokens, 50), 4096) : 4096;
       
-      const generatedTextFull = await runGroq(`<LaTex>id_4</LaTex>{cleanInput}`, { max_tokens: finalMaxTokens });
+      const generatedTextFull = await runGroq(`${systemPrompt}\n\nNotes/Topic:\n${cleanInput}`, { max_tokens: finalMaxTokens });
       const lines = generatedTextFull.split("\n");
       const firstLine = lines.find((line) => line.trim().length > 0);
       if (firstLine && !firstLine.trim().startsWith("-") && !firstLine.trim().startsWith("*") && !firstLine.trim().startsWith("**") && !firstLine.trim().startsWith("📚")) {
@@ -200,7 +215,45 @@ export const generateContent = async (req, res, next) => {
       }
     } else if (mode === "video") {
       const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
-      const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n<LaTex>id_5</LaTex>{tone}. Difficulty Level: <LaTex>id_6</LaTex>{exchangeCount}. <LaTex>id_7</LaTex>{cleanInput}` }], { max_tokens: maxTokens });
+      const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 500 });
+      const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
+      aiTitle = requestedTitle || parsedVideo.title;
+      aiContent = JSON.stringify(parsedVideo);
+    } else if (mode === "podcast") {
+      const podcastLength = req.body?.length || "short";
+      const tone = req.body?.tone || "engaging";
+      const level = req.body?.level || "beginner";
+      
+      if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
+      const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
+      
+      const podcastSystemPrompt = `You are a scriptwriter for a highly engaging educational podcast. 
+      Tone: ${tone}. Difficulty Level: ${level}.
+      There are two hosts: "Leo" (curious student) and "Dr. Nova" (expert teacher). 
+      Length: ${exchangeCount}. ${detailLevel}. 
+      
+      CRITICAL: You MUST output ONLY valid JSON. Do not include any markdown formatting like \`\`\`json. Ensure there are NO trailing commas in arrays or objects.
+      
+      Format:
+      {
+        "title": "Catchy title",
+        "script": [
+          { "speaker": "Leo", "text": "Surprising fact about the topic." },
+          { "speaker": "Dr. Nova", "text": "Introduction to the topic." }
+        ],
+        "keyTakeaways": ["Takeaway 1", "Takeaway 2"],
+        "quiz": [
+          { "question": "Q?", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "Why A is correct." }
+        ]
+      }`;
+      
+      let attempts = 0;
+      let parsedPodcast = null;
+      let lastError = null;
+      
+      while (attempts < 3 && !parsedPodcast) {
+        try {
+          const generatedTextFull = await runGroq([{ role: "system", content: podcastSystemPrompt }, { role: "user", content: `Topic/Notes for the podcast:\n${cleanInput}` }], { max_tokens: maxTokens });
           parsedPodcast = validatePodcast(parseJsonObject(generatedTextFull));
         } catch (parseError) {
           attempts++;
@@ -272,8 +325,27 @@ Example format:
       const updatedUser = await User.findByIdAndUpdate(userId, { $inc: { xp: xpGained } }, { new: true });
       if (updatedUser) {
         const newLevel = Math.floor(updatedUser.xp / 100) + 1;
-        if (updatedUser.level !== newLevel) await User.findByIdAndUpdate(userId, { <LaTex>id_8</LaTex>1  ") // Add extra space after punctuation for pauses
-    .replace(/,\s*/g, ", ") // Ensure commas have proper spacing
+        if (updatedUser.level !== newLevel) await User.findByIdAndUpdate(userId, { $set: { level: newLevel } });
+        res.locals.xpGained = xpGained;
+        res.locals.newLevel = newLevel;
+      }
+    } catch (xpError) {
+      console.error("XP update failed:", xpError.message);
+    }
+
+    return res.status(201).json({ success: true, message: "Content generated!", data: newContent });
+  } catch (error) {
+    console.error("AI generation error:", error.message);
+    return next(error);
+  }
+};
+
+const prepareLyricsForSpeech = (text) => {
+  return text
+    .replace(/\[.*?\]/g, "... \n\n") 
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/([.!?])\s+/g, "$1  ")
+    .replace(/,\s*/g, ", ")
     .trim();
 };
 
@@ -284,11 +356,10 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
   finally { clearTimeout(timeout); }
 };
 
-// ✅ UPDATED: Premium ElevenLabs Voice Settings
 export const generateSpeech = async (req, res, next) => {
   try {
     requireUser(req);
-    const { text, style, useCase } = req.body || {}; // Added useCase parameter
+    const { text, style, useCase } = req.body || {};
     let cleanText = ensureText(text, "Text is required.");
     
     if (cleanText.includes("Leo:") || cleanText.includes("Dr. Nova:")) {
@@ -299,41 +370,36 @@ export const generateSpeech = async (req, res, next) => {
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw httpError("Audio generation is not configured.", 503);
     
-    // ✅ PREMIUM VOICE SETTINGS
     const isRap = style === "rap";
     const isPodcast = useCase === "podcast";
     
-    // Format text for better rhythm
     const speechText = isRap ? prepareLyricsForSpeech(cleanText) : cleanText;
     
-    // ✅ PREMIUM VOICE IDs (Change these in your .env or use these defaults)
     let voiceId = process.env.ELEVENLABS_VOICE_ID;
     
     if (!voiceId) {
       if (isPodcast) {
-        voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel - warm, natural, conversational
+        voiceId = "21m00Tcm4TlvDq8ikWAM";
       } else if (isRap) {
-        voiceId = "onwK4e9ZLuTAKqWW03F9"; // Callum - rhythmic, expressive, great for music
+        voiceId = "onwK4e9ZLuTAKqWW03F9";
       } else {
-        voiceId = "pNInz6obpgDQGcFmaJgB"; // Adam - professional, clear
+        voiceId = "pNInz6obpgDQGcFmaJgB";
       }
     }
     
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
     
-    // ✅ OPTIMIZED VOICE SETTINGS FOR PREMIUM QUALITY
     const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: { Accept: "audio/mpeg", "Content-Type": "application/json", "xi-api-key": apiKey },
       body: JSON.stringify({ 
         text: speechText, 
-        model_id: "eleven_monolingual_v1", // Higher quality than turbo
+        model_id: "eleven_monolingual_v1",
         voice_settings: { 
-          // For Music/Rap: More expressive and rhythmic
-          stability: isRap ? 0.35 : isPodcast ? 0.40 : 0.45, // Lower = more emotional variation
-          similarity_boost: isRap ? 0.85 : 0.80, // Higher = clearer voice
-          style: isRap ? 0.65 : isPodcast ? 0.50 : 0.30, // Higher = more exaggerated/emotional
-          use_speaker_boost: true, // Makes voice clearer and more present
+          stability: isRap ? 0.35 : isPodcast ? 0.40 : 0.45,
+          similarity_boost: isRap ? 0.85 : 0.80,
+          style: isRap ? 0.65 : isPodcast ? 0.50 : 0.30,
+          use_speaker_boost: true,
         }
       }),
     });
@@ -351,10 +417,6 @@ export const generateSpeech = async (req, res, next) => {
     return next(error);
   }
 };
-
-// ==========================================
-// 🎬 COMPLETE VIDEO GENERATION LOGIC
-// ==========================================
 
 const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
   const cleanPrompt = ensureText(visualPrompt, "Visual prompt is required.").slice(0, 500);
@@ -474,7 +536,6 @@ const getSceneAudio = async (narration, tempDir, index) => {
   }
 };
 
-// ✅ CRITICAL FIX: Unique temp directories and mixed audio stream fix
 const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
   if (outputMode !== "single") return null;
   
@@ -507,7 +568,8 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
         continue; 
       }
 
-      const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?<LaTex>id_9</LaTex>{i}${isImage ? '.jpg' : '.mp4'}`);
+      const isImage = url.match(/\.(jpeg|jpg|png|webp)(\?.*)?$/i);
+      const rawPath = path.join(tempDir, `raw_${i}${isImage ? '.jpg' : '.mp4'}`);
       fs.writeFileSync(rawPath, Buffer.from(buffer));
 
       const audioPath = await getSceneAudio(scene.narration, tempDir, i);
@@ -525,7 +587,6 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
         if (audioPath) {
           ffmpegCmd.input(audioPath);
         } else {
-          // ✅ CRITICAL FIX: Add silent audio track so ALL inputs have an audio stream for concat
           ffmpegCmd.input('anullsrc=channel_layout=stereo:sample_rate=44100', { f: 'lavfi' });
         }
 
@@ -539,7 +600,6 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
 
         ffmpegCmd
           .outputOptions(outputOpts)
-          // ✅ CRITICAL FIX: Always map video from 0, and audio from 1 (real or silent)
           .outputOptions(['-map 0:v:0', '-map 1:a:0', '-c:a aac'])
           .output(mergedPath)
           .on('end', () => {
@@ -624,7 +684,6 @@ export const generateVideoStoryboard = async (req, res, next) => {
   }
 };
 
-// ✅ CRITICAL FIX: Persist ALL background job failures
 const processVideoScenes = async (contentId) => {
   try {
     const content = await Content.findById(contentId);
@@ -669,7 +728,6 @@ const processVideoScenes = async (contentId) => {
     }
   } catch (error) {
     console.error("Background processing error:", error);
-    // ✅ CRITICAL FIX: Persist unexpected failures so frontend stops polling
     try {
       await Content.findByIdAndUpdate(contentId, {
         generatedText: JSON.stringify({ status: "failed", error: error.message || "Video processing failed" }),
@@ -728,7 +786,6 @@ export const checkVideoStatus = async (req, res, next) => {
   }
 };
 
-// ✅ CRITICAL FIX: Only regenerate the specific scene, don't loop all scenes
 export const regenerateScene = async (req, res, next) => {
   try {
     const userId = requireUser(req);
@@ -762,7 +819,6 @@ export const regenerateScene = async (req, res, next) => {
   }
 };
 
-// ✅ NEW: Targeted rebuild function
 const rebuildStitchedVideo = async (contentId) => {
   try {
     const content = await Content.findById(contentId);
@@ -801,7 +857,6 @@ export const streamGeneratedVideo = async (req, res) => {
     if (!req.user?._id) return res.status(401).json({ error: "Not authorized." });
     
     const { filename } = req.params;
-    // ✅ CRITICAL FIX: Allow relative paths but prevent directory traversal
     if (!filename || !/^[a-zA-Z0-9._\-\/]+$/.test(filename) || filename.includes('..')) {
       return res.status(400).json({ error: "Invalid filename." });
     }
@@ -897,4 +952,23 @@ export const extractTextFromImage = async (req, res, next) => {
   try {
     requireUser(req);
     const imageUrl = ensureText(req.body?.imageUrl, "Image data is required.");
-    if (imageUrl
+    if (imageUrl.length > MAX_IMAGE_PAYLOAD_LENGTH) throw httpError("The image is too large to process.", 413);
+    const apiKey = process.env.OCR_SPACE_API_KEY;
+    if (!apiKey) throw httpError("OCR is not configured.", 503);
+    const formData = new URLSearchParams();
+    formData.append("apikey", apiKey);
+    formData.append("base64Image", imageUrl);
+    formData.append("language", "eng");
+    formData.append("isOverlayRequired", "false");
+    formData.append("OCREngine", "2");
+    const response = await fetchWithTimeout("https://api.ocr.space/parse/image", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Noted-App/1.0" }, body: formData.toString() }, 60000);
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data) throw httpError("OCR service failed.", 503);
+    if (data.IsErroredOnProcessing) throw httpError(data.ErrorMessage?.[0] || "OCR could not process this image.", 422);
+    const extractedText = data.ParsedResults?.[0]?.ParsedText || "";
+    return res.status(200).json({ success: true, text: extractedText.trim(), message: extractedText.trim() ? "Text extracted." : "No text detected.", method: "ocr-space" });
+  } catch (error) {
+    console.error("OCR extraction error:", error.message);
+    return next(error);
+  }
+};
