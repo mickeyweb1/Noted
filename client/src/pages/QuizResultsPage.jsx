@@ -1,7 +1,87 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { BarChart3, Clock, User, Trophy, ArrowLeft, Download } from "lucide-react";
+import { Calendar,FileText, ArrowRight , BarChart3, Clock, User, Trophy, ArrowLeft, Download } from "lucide-react";
 import api from "../utils/api";
+
+
+export default function QuizResultsDashboard() {
+  const navigate = useNavigate();
+  const [quizzes, setQuizzes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchQuizzes();
+  }, []);
+
+  const fetchQuizzes = async () => {
+    try {
+      const res = await api.get("/quiz/admin/quizzes");
+      setQuizzes(res.data.data);
+    } catch (err) {
+      console.error("Failed to fetch quizzes:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-muted p-4 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-foreground">Quiz Results Dashboard</h1>
+        </div>
+
+        {quizzes.length === 0 ? (
+          <div className="text-center py-12 bg-card border border-border rounded-2xl">
+            <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground">No quizzes created yet</h3>
+            <p className="text-muted-foreground mt-1">Create a quiz to start seeing student results.</p>
+            <button onClick={() => navigate("/admin/quizzes")} className="mt-4 px-4 py-2 bg-brand text-brand-foreground rounded-lg font-medium hover:bg-brand/90">
+              Go to Quiz Generator
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {quizzes.map((quiz) => (
+              <div 
+                key={quiz._id}
+                onClick={() => navigate(`/admin/quiz/${quiz._id}/results`)}
+                className="bg-card border border-border rounded-xl p-6 cursor-pointer hover:border-brand hover:shadow-md transition-all group"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="p-2 bg-brand/10 rounded-lg text-brand">
+                    <BarChart3 className="w-6 h-6" />
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-brand transition-colors" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-2 line-clamp-2">{quiz.title}</h3>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    <span>{new Date(quiz.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    <span>{quiz.numberOfStudents} Access Codes Generated</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 export default function QuizResultsPage() {
   const { quizId } = useParams();
