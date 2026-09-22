@@ -41,7 +41,7 @@ import StudentDirectory from "./pages/schoolAdmin/StudentManagementPage";
 import AdminBillingPage from "./pages/schoolAdmin/AdminBillingPage";
 import AdminQuizGenerator from "./pages/AdminQuizGenerator";
 // Add this import at the top with the other Admin pages:
-import QuizResultsDashboard from "./pages/QuizResultsPage";
+import {QuizResultsDashboard} from "./pages/QuizResultsPage";
 import QuizResultsPage from "./pages/QuizResultsPage";
 
 // ... inside your Admin Dashboard Routes, add these two:
