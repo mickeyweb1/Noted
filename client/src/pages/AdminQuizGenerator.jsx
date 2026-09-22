@@ -34,44 +34,49 @@ export default function AdminQuizGenerator() {
     setMetadata(prev => ({ ...prev, [field]: value }));
   };
 
-  // ✅ NEW: Handle File/Image Upload for AI Notes
+  // ✅ UPDATED: Handle Multiple File/Image Uploads for AI Notes
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files); // Convert FileList to Array
+    if (files.length === 0) return;
 
-    // 1. Handle Text Files (.txt)
-    if (file.type === "text/plain") {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setNotes((prev) => prev + (prev ? "\n\n--- 📄 File Content ---\n\n" : "") + event.target.result);
-      };
-      reader.readAsText(file);
-    } 
-    // 2. Handle Images (JPG, PNG) using your existing Backend OCR
-    else if (file.type.startsWith("image/")) {
-      setIsUploadingNotes(true);
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const base64Image = event.target.result;
-          // Call your existing OCR backend endpoint!
+    setIsUploadingNotes(true);
+    let extractedText = "";
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        if (file.type === "text/plain") {
+          const text = await file.text();
+          extractedText += `\n\n--- 📄 File: ${file.name} ---\n${text}`;
+        } 
+        else if (file.type.startsWith("image/")) {
+          const base64Image = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => resolve(event.target.result);
+            reader.readAsDataURL(file);
+          });
+
+          // Call your existing OCR backend endpoint for each image
           const res = await api.post("/ai/ocr/extract-text", { imageUrl: base64Image });
           if (res.data.success) {
-            setNotes((prev) => prev + (prev ? "\n\n--- 📷 Extracted from Image ---\n\n" : "") + res.data.text);
+            extractedText += `\n\n--- 📷 Image ${i + 1}: ${file.name} ---\n${res.data.text}`;
           }
-        } catch (err) {
-          alert("Failed to extract text from image. Please try a clearer picture.");
-        } finally {
-          setIsUploadingNotes(false);
         }
-      };
-      reader.readAsDataURL(file);
-    } else {
-      alert("Please upload a .txt file or an image (JPG, PNG).");
+      }
+
+      // Append all extracted text to the notes
+      if (extractedText) {
+        setNotes((prev) => prev + (prev ? "\n" : "") + extractedText);
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert("Failed to extract text from one or more files. Please try clearer pictures.");
+    } finally {
+      setIsUploadingNotes(false);
+      e.target.value = ""; // Clear input so the same files can be selected again
     }
-    
-    // Clear the input so the same file can be selected again
-    e.target.value = "";
   };
 
   const handleImageUpload = async (questionIndex, file) => {
@@ -201,7 +206,7 @@ export default function AdminQuizGenerator() {
           </div>
         </div>
 
-        {/* ✅ UPDATED AI Tab with File Upload */}
+        {/* ✅ UPDATED AI Tab with Multiple File Upload */}
         {activeTab === "ai" && !generatedQuiz && (
           <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -212,6 +217,7 @@ export default function AdminQuizGenerator() {
             <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:bg-accent/50 transition-colors">
               <input 
                 type="file" 
+                multiple // ✅ THIS ALLOWS SELECTING MULTIPLE FILES AT ONCE
                 accept=".txt, image/png, image/jpeg, image/jpg" 
                 onChange={handleFileUpload}
                 disabled={isUploadingNotes}
@@ -222,15 +228,15 @@ export default function AdminQuizGenerator() {
                 {isUploadingNotes ? (
                   <>
                     <Loader2 className="w-8 h-8 text-brand animate-spin" />
-                    <span className="text-sm font-medium text-foreground">Extracting text from image...</span>
+                    <span className="text-sm font-medium text-foreground">Processing multiple files...</span>
                   </>
                 ) : (
                   <>
                     <div className="p-3 bg-brand/10 rounded-full text-brand">
                       <Upload className="w-6 h-6" />
                     </div>
-                    <span className="text-sm font-medium text-foreground">Click to upload e-notes (.txt or Image)</span>
-                    <span className="text-xs text-muted-foreground">The AI will automatically read the text from your file</span>
+                    <span className="text-sm font-medium text-foreground">Click to upload e-notes (Select Multiple)</span>
+                    <span className="text-xs text-muted-foreground">Supports multiple images or .txt files at once</span>
                   </>
                 )}
               </label>
