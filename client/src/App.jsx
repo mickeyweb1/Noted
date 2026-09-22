@@ -40,7 +40,12 @@ import AddStudent from "./pages/schoolAdmin/AddStudentPage";
 import StudentDirectory from "./pages/schoolAdmin/StudentManagementPage";
 import AdminBillingPage from "./pages/schoolAdmin/AdminBillingPage";
 import AdminQuizGenerator from "./pages/AdminQuizGenerator";
-import QuizResultsPage from "./pages/QuizResultsPage"; // ✅ ADDED: Import Results Page
+// Add this import at the top with the other Admin pages:
+import QuizResultsDashboard from "./pages/QuizResultsPage";
+import QuizResultsPage from "./pages/QuizResultsPage";
+
+// ... inside your Admin Dashboard Routes, add these two:
+
 import SuperAdminFeedback from "./pages/schoolAdmin/SuperAdminFeedback";
 
 // Shared Pages
@@ -110,7 +115,8 @@ function App() {
         <Route path="/admin/add-student" element={<AddStudent />} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
-        <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} /> {/* ✅ ADDED: Results Route */}
+        <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
+<Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
       </Route>
