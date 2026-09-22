@@ -23,15 +23,18 @@ export default function AdminSideBar({ isOpen, onClose }) {
     avatar: null,
   };
 
-  const navItems = [
-    { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" },
-    { to: "/admin/admissions", icon: UserCheck, label: "Admissions" }, 
-    { to: "/admin/students", icon: Users, label: "My Students" },
-    { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
-    { to: "/admin/quizzes", icon: Brain, label: "Quizzes" }, // ✅ ADDED: New Quizzes Link
-    { to: "/admin/billing", icon: CreditCard, label: "Billing & Plans" },
-    { to: "/admin/settings", icon: Settings, label: "Settings" },
-  ];
+  // Add this to your navItems array:
+const navItems = [
+  { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" },
+  { to: "/admin/admissions", icon: UserCheck, label: "Admissions" }, 
+  { to: "/admin/students", icon: Users, label: "My Students" },
+  { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
+  { to: "/admin/quizzes", icon: Brain, label: "Quiz Generator" }, 
+  { to: "/admin/quiz-results", icon: BarChart3, label: "Quiz Results" }, // ✅ NEW LINK
+  { to: "/admin/billing", icon: CreditCard, label: "Billing & Plans" },
+  { to: "/admin/settings", icon: Settings, label: "Settings" },
+];
+
 
   const handleLogout = () => {
     if (typeof logout === "function") logout();
