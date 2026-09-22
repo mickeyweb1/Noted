@@ -7,6 +7,7 @@ import {
   LogOut,
   Brain,
   Building2,
+  BarChart3,
   UserPlus,
   FileQuestion, // ✅ ADDED: Icon for Quizzes
 } from "lucide-react";
