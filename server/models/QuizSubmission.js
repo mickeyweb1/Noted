@@ -13,7 +13,8 @@ const submissionSchema = new mongoose.Schema({
   }],
   score: { type: Number, required: true },
   totalQuestions: { type: Number, required: true },
-  timeTaken: { type: Number }, // in seconds
+  timeTaken: { type: Number, required: true }, // in seconds
+  tabSwitchCount: { type: Number, default: 0 }, // ✅ NEW
   submittedAt: { type: Date, default: Date.now }
 });
 

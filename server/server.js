@@ -32,7 +32,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 // 3. Rate Limiting
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5, 
+  max: 15, 
   message: { success: false, message: "Too many login attempts, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
