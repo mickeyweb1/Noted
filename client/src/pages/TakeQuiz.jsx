@@ -1,7 +1,58 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, AlertTriangle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, AlertTriangle, Check, ListChecks } from "lucide-react";
 import api from "../utils/api";
+
+/* ---------- Presentational helpers (no logic) ---------- */
+
+const focusRing =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const inputCls =
+  "w-full rounded-xl border border-input bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-brand";
+const primaryBtn = `w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+const shell = "min-h-screen flex items-center justify-center bg-muted p-4";
+const panel = "w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-xl sm:p-8";
+
+function Stepper({ current }) {
+  const steps = ["Code", "Your details", "Quiz"];
+  return (
+    <ol className="mb-6 flex items-center justify-center gap-2 text-xs font-medium">
+      {steps.map((label, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <li key={label} className="flex items-center gap-2" aria-current={active ? "step" : undefined}>
+            <span
+              className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+                done
+                  ? "bg-brand text-brand-foreground"
+                  : active
+                  ? "bg-brand-soft text-brand ring-2 ring-brand"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+            </span>
+            <span className={`${active ? "text-foreground" : "hidden text-muted-foreground sm:inline"}`}>{label}</span>
+            {i < steps.length - 1 && <span className="h-px w-4 bg-border" aria-hidden="true" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ErrorNote({ children }) {
+  if (!children) return null;
+  return (
+    <p role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-left text-sm text-destructive">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+/* ---------- Component ---------- */
 
 export default function TakeQuiz() {
   const location = useLocation();
@@ -134,95 +185,213 @@ export default function TakeQuiz() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  // Presentation-only derived values
+  const totalQuestions = quizData ? quizData.questions.length : 0;
+  const answeredCount = quizData ? quizData.questions.filter((q) => answers[q._id]).length : 0;
+  const progress = totalQuestions ? (answeredCount / totalQuestions) * 100 : 0;
+
+  /* ---------- Step 1: Enter code ---------- */
   if (step === "validate") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-        <div className="w-full max-w-md bg-card rounded-2xl border border-border p-8 shadow-lg text-center">
-          <div className="w-16 h-16 bg-brand/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Clock className="w-8 h-8 text-brand" />
+      <div className={shell}>
+        <div className={`${panel} text-center`}>
+          <Stepper current={0} />
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-soft">
+            <ListChecks className="h-8 w-8 text-brand" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Join Quiz</h1>
-          <p className="text-muted-foreground mb-6">Enter the 10-character code provided by your teacher.</p>
+          <h1 className="mb-2 text-2xl font-bold text-foreground">Join a quiz</h1>
+          <p className="mb-6 text-muted-foreground">Enter the 10-character code your teacher gave you.</p>
           <form onSubmit={handleValidateCode} className="space-y-4">
-            <input type="text" value={code} onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10))} placeholder="0000000000" className="w-full text-center text-2xl font-mono tracking-widest border border-border rounded-xl p-4 focus:ring-2 focus:ring-brand focus:outline-none" />
-            {error && <p className="text-sm text-red-500">{error}</p>}
-            <button type="submit" disabled={code.length !== 10} className="w-full py-3 bg-brand text-brand-foreground rounded-xl font-semibold hover:bg-brand/90 disabled:opacity-50 transition">Continue</button>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10))}
+              placeholder="0000000000"
+              aria-label="Quiz code"
+              className="w-full rounded-2xl border-2 border-input bg-background p-4 text-center font-mono text-2xl tracking-[0.3em] text-foreground placeholder:text-muted-foreground/50 transition focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-soft"
+            />
+            <div className="flex gap-1.5" aria-hidden="true">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <span key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i < code.length ? "bg-brand" : "bg-border"}`} />
+              ))}
+            </div>
+            <ErrorNote>{error}</ErrorNote>
+            <button type="submit" disabled={code.length !== 10} className={primaryBtn}>
+              Continue <ArrowRight className="h-4 w-4" />
+            </button>
           </form>
         </div>
       </div>
     );
   }
 
+  /* ---------- Step 2: Student details ---------- */
   if (step === "info") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-        <div className="w-full max-w-md bg-card rounded-2xl border border-border p-8 shadow-lg">
-          <h1 className="text-2xl font-bold text-foreground mb-1">{quizData.title}</h1>
-          <p className="text-sm text-muted-foreground mb-6">Difficulty: {quizData.difficulty}</p>
+      <div className={shell}>
+        <div className={panel}>
+          <Stepper current={1} />
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <h1 className="min-w-0 break-words text-2xl font-bold text-foreground">{quizData.title}</h1>
+            <span className="shrink-0 rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium capitalize text-brand">
+              {quizData.difficulty}
+            </span>
+          </div>
+
+          <div className="mb-6 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-muted p-3">
+              <ListChecks className="mb-1 h-4 w-4 text-muted-foreground" />
+              <p className="text-lg font-bold text-foreground">{totalQuestions}</p>
+              <p className="text-xs text-muted-foreground">Questions</p>
+            </div>
+            <div className="rounded-2xl bg-muted p-3">
+              <Clock className="mb-1 h-4 w-4 text-muted-foreground" />
+              <p className="font-mono text-lg font-bold text-foreground">{formatTime(timeLeft)}</p>
+              <p className="text-xs text-muted-foreground">Time to finish</p>
+            </div>
+          </div>
+
           <form onSubmit={handleStartQuiz} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-1"><User className="w-4 h-4" /> First Name</label>
-              <input type="text" value={studentInfo.name} onChange={(e) => setStudentInfo({...studentInfo, name: e.target.value})} className="w-full border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" required />
+              <label htmlFor="first-name" className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground">
+                <User className="h-4 w-4 text-muted-foreground" /> First name
+              </label>
+              <input id="first-name" type="text" value={studentInfo.name} onChange={(e) => setStudentInfo({...studentInfo, name: e.target.value})} className={inputCls} required />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-1"><User className="w-4 h-4" /> Surname</label>
-              <input type="text" value={studentInfo.surname} onChange={(e) => setStudentInfo({...studentInfo, surname: e.target.value})} className="w-full border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" required />
+              <label htmlFor="surname" className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground">
+                <User className="h-4 w-4 text-muted-foreground" /> Surname
+              </label>
+              <input id="surname" type="text" value={studentInfo.surname} onChange={(e) => setStudentInfo({...studentInfo, surname: e.target.value})} className={inputCls} required />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-1"><School className="w-4 h-4" /> Class (Optional)</label>
-              <input type="text" value={studentInfo.className} onChange={(e) => setStudentInfo({...studentInfo, className: e.target.value})} className="w-full border border-border rounded-lg p-3 focus:ring-2 focus:ring-brand focus:outline-none" placeholder="e.g., Grade 10A" />
+              <label htmlFor="class-name" className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground">
+                <School className="h-4 w-4 text-muted-foreground" /> Class <span className="font-normal text-muted-foreground">(optional)</span>
+              </label>
+              <input id="class-name" type="text" value={studentInfo.className} onChange={(e) => setStudentInfo({...studentInfo, className: e.target.value})} className={inputCls} placeholder="e.g., Grade 10A" />
             </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
-            <button type="submit" className="w-full py-3 bg-brand text-brand-foreground rounded-xl font-semibold hover:bg-brand/90 transition flex items-center justify-center gap-2">Start Quiz <ArrowRight className="w-4 h-4" /></button>
+            <ErrorNote>{error}</ErrorNote>
+            <button type="submit" className={primaryBtn}>
+              Start quiz <ArrowRight className="h-4 w-4" />
+            </button>
           </form>
         </div>
       </div>
     );
   }
 
+  /* ---------- Step 3: Quiz ---------- */
   if (step === "quiz") {
+    const lowTime = timeLeft < 60;
+    const nearTabLimit = maxTabSwitches && tabSwitchCount >= maxTabSwitches - 2;
+
     return (
       <div className="min-h-screen bg-muted p-4 md:p-8">
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 sticky top-4 z-10 shadow-lg">
-            <div>
-              <h1 className="text-xl font-bold text-foreground">{quizData.title}</h1>
-              <p className="text-sm text-muted-foreground">{studentInfo.name} {studentInfo.surname}</p>
-              {maxTabSwitches && (
-                <p className={`text-xs mt-1 flex items-center gap-1 ${tabSwitchCount >= maxTabSwitches - 2 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
-                  <AlertTriangle className="w-3 h-3" /> Tab switches: {tabSwitchCount} / {maxTabSwitches}
-                </p>
-              )}
-            </div>
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-full font-mono text-lg font-bold ${timeLeft < 60 ? 'bg-red-500/10 text-red-600 animate-pulse' : 'bg-brand/10 text-brand'}`}>
-              <Clock className="w-5 h-5" /> {formatTime(timeLeft)}
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {quizData.questions.map((q, idx) => (
-              <div key={q._id} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                {q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="w-full max-h-64 object-contain rounded-lg mb-4 border border-border" />}
-                <h3 className="text-lg font-semibold text-foreground mb-4">
-                  <span className="text-brand mr-2">{idx + 1}.</span> {q.question}
-                </h3>
-                <div className="space-y-3">
-                  {q.options.map((opt, optIdx) => {
-                    const isSelected = answers[q._id] === opt;
-                    return (
-                      <button key={optIdx} onClick={() => handleSelectAnswer(q._id, opt)} className={`w-full text-left p-4 rounded-xl border-2 transition-all ${isSelected ? 'border-brand bg-brand/5 text-foreground' : 'border-border bg-background hover:border-brand/30'}`}>
-                        <span className="font-bold mr-3 text-muted-foreground">{String.fromCharCode(65 + optIdx)}.</span>{opt}
-                      </button>
-                    );
-                  })}
-                </div>
+        <div className="mx-auto max-w-3xl space-y-6">
+          {/* Sticky status bar */}
+          <div className="sticky top-4 z-10 rounded-2xl border border-border bg-card p-4 shadow-lg">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold text-foreground sm:text-xl">{quizData.title}</h1>
+                <p className="truncate text-sm text-muted-foreground">{studentInfo.name} {studentInfo.surname}</p>
               </div>
-            ))}
+              <div
+                role="timer"
+                className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 font-mono text-base font-bold sm:px-4 sm:text-lg ${
+                  lowTime ? "bg-destructive/10 text-destructive motion-safe:animate-pulse" : "bg-brand-soft text-brand"
+                }`}
+              >
+                <Clock className="h-5 w-5" /> {formatTime(timeLeft)}
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-3">
+              <div
+                className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={totalQuestions}
+                aria-valuenow={answeredCount}
+                aria-label="Questions answered"
+              >
+                <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                {answeredCount}/{totalQuestions} answered
+              </span>
+            </div>
+
+            {maxTabSwitches && (
+              <p className={`mt-3 flex items-center gap-1.5 text-xs ${nearTabLimit ? "font-semibold text-destructive" : "text-muted-foreground"}`}>
+                <AlertTriangle className="h-3.5 w-3.5" /> Tab switches: {tabSwitchCount} / {maxTabSwitches}
+              </p>
+            )}
           </div>
 
-          <div className="flex justify-center pb-8">
-            <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting} className="px-8 py-4 bg-brand text-brand-foreground rounded-xl font-bold text-lg hover:bg-brand/90 transition shadow-lg flex items-center gap-2 disabled:opacity-50">
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Submit Quiz"}
+          {/* Questions */}
+          <div className="space-y-6">
+            {quizData.questions.map((q, idx) => {
+              const isAnswered = !!answers[q._id];
+              return (
+                <section key={q._id} className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby={`q-${q._id}`}>
+                  {q.imageUrl && (
+                    <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" />
+                  )}
+                  <div className="mb-4 flex items-start gap-3">
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
+                        isAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                    <h3 id={`q-${q._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground">
+                      {q.question}
+                    </h3>
+                  </div>
+                  <div className="space-y-3" role="group" aria-labelledby={`q-${q._id}`}>
+                    {q.options.map((opt, optIdx) => {
+                      const isSelected = answers[q._id] === opt;
+                      return (
+                        <button
+                          key={optIdx}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => handleSelectAnswer(q._id, opt)}
+                          className={`flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${focusRing} ${
+                            isSelected
+                              ? "border-brand bg-brand-soft text-foreground"
+                              : "border-border bg-background text-foreground hover:border-brand/40 hover:bg-muted"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors ${
+                              isSelected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {String.fromCharCode(65 + optIdx)}
+                          </span>
+                          <span className="min-w-0 flex-1 break-words">{opt}</span>
+                          {isSelected && <Check className="h-5 w-5 shrink-0 text-brand" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+
+          {/* Submit */}
+          <div className="space-y-4 rounded-2xl border border-border bg-card p-5 pb-6 text-center shadow-sm sm:p-6">
+            <p className="text-sm text-muted-foreground">
+              {answeredCount === totalQuestions
+                ? "You've answered every question. Ready when you are."
+                : `${totalQuestions - answeredCount} ${totalQuestions - answeredCount === 1 ? "question" : "questions"} still unanswered.`}
+            </p>
+            <ErrorNote>{error}</ErrorNote>
+            <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting} className={`${primaryBtn} text-lg`}>
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit quiz"}
             </button>
           </div>
         </div>
@@ -230,33 +399,61 @@ export default function TakeQuiz() {
     );
   }
 
+  /* ---------- Step 4: Result ---------- */
   if (step === "result") {
     const percentage = Math.round((result.score / result.totalQuestions) * 100);
     const isPassing = percentage >= 50;
+    const radius = 52;
+    const circumference = 2 * Math.PI * radius;
     
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-        <div className="w-full max-w-md bg-card rounded-2xl border border-border p-8 shadow-lg text-center">
-          <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 ${isPassing ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-            {isPassing ? <CheckCircle2 className="w-12 h-12 text-green-600" /> : <XCircle className="w-12 h-12 text-red-600" />}
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Quiz Submitted!</h1>
-          <p className="text-muted-foreground mb-6">Great effort, {studentInfo.name}.</p>
-          
-          <div className="bg-muted rounded-xl p-6 mb-6">
-            <p className="text-sm text-muted-foreground uppercase tracking-wider mb-2">Your Score</p>
-            <div className="flex items-baseline justify-center gap-2">
-              <span className={`text-5xl font-black ${isPassing ? 'text-green-600' : 'text-red-600'}`}>{percentage}%</span>
-              <span className="text-xl text-muted-foreground">({result.score}/{result.totalQuestions})</span>
+      <div className={shell}>
+        <div className={`${panel} text-center`}>
+          <div className="relative mx-auto mb-5 h-44 w-44">
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
+              <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" className="stroke-muted" />
+              <circle
+                cx="60"
+                cy="60"
+                r={radius}
+                fill="none"
+                strokeWidth="10"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - (isNaN(percentage) ? 0 : percentage) / 100)}
+                className={`transition-all duration-700 ${isPassing ? "stroke-green-500" : "stroke-destructive"}`}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`text-4xl font-black ${isPassing ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>{percentage}%</span>
+              <span className="text-sm text-muted-foreground">{result.score} of {result.totalQuestions}</span>
             </div>
-            {result.tabSwitchCount > 0 && (
-              <p className="text-xs text-red-500 mt-3 flex items-center justify-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> Tab switches detected: {result.tabSwitchCount}
-              </p>
-            )}
           </div>
 
-          <button onClick={() => navigate("/")} className="w-full py-3 bg-brand text-brand-foreground rounded-xl font-semibold hover:bg-brand/90 transition">Return to Home</button>
+          <h1 className="mb-1 flex items-center justify-center gap-2 text-2xl font-bold text-foreground">
+            {isPassing ? <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" /> : <XCircle className="h-6 w-6 text-destructive" />}
+            Quiz submitted
+          </h1>
+          <p className="mb-6 text-muted-foreground">Great effort, {studentInfo.name}.</p>
+
+          <div className="mb-6 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-muted p-3">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{result.score}</p>
+              <p className="text-xs text-muted-foreground">Correct</p>
+            </div>
+            <div className="rounded-2xl bg-muted p-3">
+              <p className="text-2xl font-bold text-foreground">{result.totalQuestions - result.score}</p>
+              <p className="text-xs text-muted-foreground">Missed</p>
+            </div>
+          </div>
+
+          {result.tabSwitchCount > 0 && (
+            <p className="mb-6 flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <AlertTriangle className="h-3.5 w-3.5" /> Tab switches detected: {result.tabSwitchCount}
+            </p>
+          )}
+
+          <button onClick={() => navigate("/")} className={primaryBtn}>Return to home</button>
         </div>
       </div>
     );
