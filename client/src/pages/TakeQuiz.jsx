@@ -3,12 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, AlertTriangle, Check, ListChecks } from "lucide-react";
 import api from "../utils/api";
 
-/* ---------- Presentational helpers (no logic) ---------- */
-
-const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-const inputCls =
-  "w-full rounded-xl border border-input bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-brand";
+/* ---------- Presentational helpers ---------- */
+const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const inputCls = `w-full rounded-xl border border-input bg-background px-4 py-3 text-foreground placeholder:text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-brand ${focusRing}`;
 const primaryBtn = `w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 const shell = "min-h-screen flex items-center justify-center bg-muted p-4";
 const panel = "w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-xl sm:p-8";
@@ -22,15 +19,7 @@ function Stepper({ current }) {
         const active = i === current;
         return (
           <li key={label} className="flex items-center gap-2" aria-current={active ? "step" : undefined}>
-            <span
-              className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
-                done
-                  ? "bg-brand text-brand-foreground"
-                  : active
-                  ? "bg-brand-soft text-brand ring-2 ring-brand"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
+            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${done ? "bg-brand text-brand-foreground" : active ? "bg-brand-soft text-brand ring-2 ring-brand" : "bg-muted text-muted-foreground"}`}>
               {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
             </span>
             <span className={`${active ? "text-foreground" : "hidden text-muted-foreground sm:inline"}`}>{label}</span>
@@ -52,8 +41,7 @@ function ErrorNote({ children }) {
   );
 }
 
-/* ---------- Component ---------- */
-
+/* ---------- Main Component ---------- */
 export default function TakeQuiz() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -69,12 +57,17 @@ export default function TakeQuiz() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   
-  // ✅ NEW: Anti-cheat & Server Timer State
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [maxTabSwitches, setMaxTabSwitches] = useState(null);
+  const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false); // ✅ Fix 6: Custom modal
+  
   const timerRef = useRef(null);
+  const answersRef = useRef({}); // ✅ Fix 1: Always hold latest answers
 
-  // ✅ NEW: Tab Switch Detection
+  // Keep ref synced with state
+  useEffect(() => { answersRef.current = answers; }, [answers]);
+
+  // ✅ Fix 1 & 6: Tab Switch Detection with Modal
   useEffect(() => {
     if (step !== "quiz") return;
     
@@ -84,8 +77,12 @@ export default function TakeQuiz() {
           const res = await api.post("/quiz/session/update-tab", { code });
           setTabSwitchCount(res.data.tabSwitchCount);
           if (res.data.shouldAutoSubmit) {
-            alert("You have switched tabs too many times. The quiz is being auto-submitted.");
-            handleSubmitQuiz(true);
+            setShowAutoSubmitModal(true);
+            // Give them 2 seconds to read the modal, then auto-submit
+            setTimeout(() => {
+              setShowAutoSubmitModal(false);
+              handleSubmitQuiz(true);
+            }, 2000);
           }
         } catch (err) {
           console.error("Failed to update tab count", err);
@@ -97,15 +94,19 @@ export default function TakeQuiz() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [step, code]);
 
-  // ✅ NEW: Server-Side Timer Logic
+  // ✅ Fix 4: Handle 0 time left properly
   useEffect(() => {
-    if (step !== "quiz" || timeLeft <= 0) return;
+    if (step !== "quiz") return;
+    
+    if (timeLeft <= 0) {
+      handleSubmitQuiz(true);
+      return;
+    }
     
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          handleSubmitQuiz(true);
           return 0;
         }
         return prev - 1;
@@ -121,13 +122,38 @@ export default function TakeQuiz() {
     setError("");
     
     try {
-      // ✅ Start session on server to lock in the start time
-      const res = await api.post("/quiz/session/start", { code });
+      // Just validate the code format and fetch quiz data. 
+      // We do NOT start the timer here anymore.
+      const res = await api.post("/quiz/validate-code", { code });
       const data = res.data.data;
       setQuizData(data);
       setMaxTabSwitches(data.maxTabSwitches);
       
-      // Calculate server-side time left
+      // Show total time on the info screen, but don't start countdown yet
+      const totalSeconds = data.timeType === "perQuestion" 
+        ? data.timeLimit * data.questions.length 
+        : data.timeLimit;
+      const multiplier = data.timeUnit === "minutes" ? 60 : 1;
+      setTimeLeft(totalSeconds * multiplier);
+      
+      setStep("info");
+    } catch (err) {
+      setError(err.response?.data?.message || "Invalid or already used code.");
+    }
+  };
+
+  // ✅ Fix 3: Start the server session ONLY when they click "Start Quiz"
+  const handleStartQuiz = async (e) => {
+    e.preventDefault();
+    if (!studentInfo.name || !studentInfo.surname) return setError("Please enter your name and surname.");
+    setError("");
+    setIsSubmitting(true); // Show loading while starting session
+    
+    try {
+      const res = await api.post("/quiz/session/start", { code });
+      const data = res.data.data;
+      
+      // Now calculate the real countdown based on server start time
       const totalSeconds = data.timeType === "perQuestion" 
         ? data.timeLimit * data.questions.length 
         : data.timeLimit;
@@ -136,17 +162,12 @@ export default function TakeQuiz() {
       const initialTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
       
       setTimeLeft(initialTimeLeft);
-      setStep("info");
+      setStep("quiz");
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid or already used code.");
+      setError(err.response?.data?.message || "Failed to start quiz session.");
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  const handleStartQuiz = (e) => {
-    e.preventDefault();
-    if (!studentInfo.name || !studentInfo.surname) return setError("Please enter your name and surname.");
-    setError("");
-    setStep("quiz");
   };
 
   const handleSelectAnswer = (questionId, option) => {
@@ -158,9 +179,10 @@ export default function TakeQuiz() {
     setIsSubmitting(true);
     clearInterval(timerRef.current);
     
+    // ✅ Fix 1: Use answersRef.current to guarantee we have the latest answers
     const formattedAnswers = quizData.questions.map(q => ({
       questionId: q._id,
-      selectedAnswer: answers[q._id] || null
+      selectedAnswer: answersRef.current[q._id] || null
     }));
 
     try {
@@ -175,7 +197,8 @@ export default function TakeQuiz() {
       setStep("result");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to submit quiz.");
-      if (!isAuto) setIsSubmitting(false);
+      // ✅ Fix 2: Always reset isSubmitting on error so they aren't stuck
+      setIsSubmitting(false); 
     }
   };
 
@@ -185,10 +208,17 @@ export default function TakeQuiz() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Presentation-only derived values
   const totalQuestions = quizData ? quizData.questions.length : 0;
   const answeredCount = quizData ? quizData.questions.filter((q) => answers[q._id]).length : 0;
   const progress = totalQuestions ? (answeredCount / totalQuestions) * 100 : 0;
+  
+  // ✅ Fix 5: Prevent NaN%
+  const percentage = result && result.totalQuestions > 0 
+    ? Math.round((result.score / result.totalQuestions) * 100) 
+    : 0;
+  const isPassing = percentage >= 50;
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
 
   /* ---------- Step 1: Enter code ---------- */
   if (step === "validate") {
@@ -247,7 +277,7 @@ export default function TakeQuiz() {
             <div className="rounded-2xl bg-muted p-3">
               <Clock className="mb-1 h-4 w-4 text-muted-foreground" />
               <p className="font-mono text-lg font-bold text-foreground">{formatTime(timeLeft)}</p>
-              <p className="text-xs text-muted-foreground">Time to finish</p>
+              <p className="text-xs text-muted-foreground">Total Time</p>
             </div>
           </div>
 
@@ -271,8 +301,8 @@ export default function TakeQuiz() {
               <input id="class-name" type="text" value={studentInfo.className} onChange={(e) => setStudentInfo({...studentInfo, className: e.target.value})} className={inputCls} placeholder="e.g., Grade 10A" />
             </div>
             <ErrorNote>{error}</ErrorNote>
-            <button type="submit" className={primaryBtn}>
-              Start quiz <ArrowRight className="h-4 w-4" />
+            <button type="submit" disabled={isSubmitting} className={primaryBtn}>
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start quiz"} <ArrowRight className="h-4 w-4" />
             </button>
           </form>
         </div>
@@ -287,38 +317,35 @@ export default function TakeQuiz() {
 
     return (
       <div className="min-h-screen bg-muted p-4 md:p-8">
+        {/* ✅ Fix 6: Auto-Submit Modal */}
+        {showAutoSubmitModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm bg-card p-6 rounded-2xl border border-border shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200">
+              <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-foreground mb-2">Auto-Submitting Quiz</h3>
+              <p className="text-muted-foreground mb-6">You have switched tabs too many times. Your quiz is being submitted now to preserve your current answers.</p>
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-brand" />
+            </div>
+          </div>
+        )}
+
         <div className="mx-auto max-w-3xl space-y-6">
-          {/* Sticky status bar */}
           <div className="sticky top-4 z-10 rounded-2xl border border-border bg-card p-4 shadow-lg">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-bold text-foreground sm:text-xl">{quizData.title}</h1>
                 <p className="truncate text-sm text-muted-foreground">{studentInfo.name} {studentInfo.surname}</p>
               </div>
-              <div
-                role="timer"
-                className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 font-mono text-base font-bold sm:px-4 sm:text-lg ${
-                  lowTime ? "bg-destructive/10 text-destructive motion-safe:animate-pulse" : "bg-brand-soft text-brand"
-                }`}
-              >
+              <div role="timer" className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 font-mono text-base font-bold sm:px-4 sm:text-lg ${lowTime ? "bg-destructive/10 text-destructive motion-safe:animate-pulse" : "bg-brand-soft text-brand"}`}>
                 <Clock className="h-5 w-5" /> {formatTime(timeLeft)}
               </div>
             </div>
 
             <div className="mt-4 flex items-center gap-3">
-              <div
-                className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={totalQuestions}
-                aria-valuenow={answeredCount}
-                aria-label="Questions answered"
-              >
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={totalQuestions} aria-valuenow={answeredCount}>
                 <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
-              <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                {answeredCount}/{totalQuestions} answered
-              </span>
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">{answeredCount}/{totalQuestions} answered</span>
             </div>
 
             {maxTabSwitches && (
@@ -328,26 +355,17 @@ export default function TakeQuiz() {
             )}
           </div>
 
-          {/* Questions */}
           <div className="space-y-6">
             {quizData.questions.map((q, idx) => {
               const isAnswered = !!answers[q._id];
               return (
                 <section key={q._id} className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby={`q-${q._id}`}>
-                  {q.imageUrl && (
-                    <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" />
-                  )}
+                  {q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" />}
                   <div className="mb-4 flex items-start gap-3">
-                    <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
-                        isAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"
-                      }`}
-                    >
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${isAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"}`}>
                       {idx + 1}
                     </span>
-                    <h3 id={`q-${q._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground">
-                      {q.question}
-                    </h3>
+                    <h3 id={`q-${q._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground">{q.question}</h3>
                   </div>
                   <div className="space-y-3" role="group" aria-labelledby={`q-${q._id}`}>
                     {q.options.map((opt, optIdx) => {
@@ -358,17 +376,9 @@ export default function TakeQuiz() {
                           type="button"
                           aria-pressed={isSelected}
                           onClick={() => handleSelectAnswer(q._id, opt)}
-                          className={`flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${focusRing} ${
-                            isSelected
-                              ? "border-brand bg-brand-soft text-foreground"
-                              : "border-border bg-background text-foreground hover:border-brand/40 hover:bg-muted"
-                          }`}
+                          className={`flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${focusRing} ${isSelected ? "border-brand bg-brand-soft text-foreground" : "border-border bg-background text-foreground hover:border-brand/40 hover:bg-muted"}`}
                         >
-                          <span
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors ${
-                              isSelected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"
-                            }`}
-                          >
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors ${isSelected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>
                             {String.fromCharCode(65 + optIdx)}
                           </span>
                           <span className="min-w-0 flex-1 break-words">{opt}</span>
@@ -382,13 +392,11 @@ export default function TakeQuiz() {
             })}
           </div>
 
-          {/* Submit */}
           <div className="space-y-4 rounded-2xl border border-border bg-card p-5 pb-6 text-center shadow-sm sm:p-6">
             <p className="text-sm text-muted-foreground">
-              {answeredCount === totalQuestions
-                ? "You've answered every question. Ready when you are."
-                : `${totalQuestions - answeredCount} ${totalQuestions - answeredCount === 1 ? "question" : "questions"} still unanswered.`}
+              {answeredCount === totalQuestions ? "You've answered every question. Ready when you are." : `${totalQuestions - answeredCount} ${totalQuestions - answeredCount === 1 ? "question" : "questions"} still unanswered.`}
             </p>
+            {/* ✅ Fix 2: Show errors on the quiz screen */}
             <ErrorNote>{error}</ErrorNote>
             <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting} className={`${primaryBtn} text-lg`}>
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit quiz"}
@@ -401,11 +409,6 @@ export default function TakeQuiz() {
 
   /* ---------- Step 4: Result ---------- */
   if (step === "result") {
-    const percentage = Math.round((result.score / result.totalQuestions) * 100);
-    const isPassing = percentage >= 50;
-    const radius = 52;
-    const circumference = 2 * Math.PI * radius;
-    
     return (
       <div className={shell}>
         <div className={`${panel} text-center`}>
@@ -413,14 +416,9 @@ export default function TakeQuiz() {
             <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
               <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" className="stroke-muted" />
               <circle
-                cx="60"
-                cy="60"
-                r={radius}
-                fill="none"
-                strokeWidth="10"
-                strokeLinecap="round"
+                cx="60" cy="60" r={radius} fill="none" strokeWidth="10" strokeLinecap="round"
                 strokeDasharray={circumference}
-                strokeDashoffset={circumference * (1 - (isNaN(percentage) ? 0 : percentage) / 100)}
+                strokeDashoffset={circumference * (1 - percentage / 100)}
                 className={`transition-all duration-700 ${isPassing ? "stroke-green-500" : "stroke-destructive"}`}
               />
             </svg>
