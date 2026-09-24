@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { 
     Library as LibraryIcon, Search, Grid3x3, List, 
     FileText, Video, Music, Brain, FolderOpen, 
-    Users, Download, X, CheckCircle2, Play, Pause, Mic, Headphones, Trash2 
+    Users, Download, X, CheckCircle2, Play, Pause, Mic, Headphones, Trash2, Lock 
 } from "lucide-react";
 import api from "../../utils/api";
 import AudioPlayer from "../../components/AudioPlayer";
@@ -25,10 +25,8 @@ const Skeleton = ({ className }) => (
   <div className={`animate-pulse bg-muted rounded-md ${className}`} />
 );
 
-// ✅ UPDATED: Added math rendering support
 const MarkdownContent = ({ content }) => {
   let displayContent = content;
-  // Fallback: If it's accidentally stringified JSON, try to make it readable
   try {
     const parsed = JSON.parse(content);
     if (parsed.script) displayContent = parsed.script.map(s => `**${s.speaker}**: ${s.text}`).join('\n\n');
@@ -127,9 +125,8 @@ export default function StudentLibrary() {
         return matchesFilter && matchesSearch;
     });
 
-    // ✅ NEW: Delete functionality with confirmation
     const handleDelete = async (id, e) => {
-        e.stopPropagation(); // Prevent opening the modal
+        e.stopPropagation(); 
         if (window.confirm("Are you sure you want to delete this item? This cannot be undone.")) {
             try {
                 await api.delete(`/ai/library/${id}`);
@@ -232,7 +229,6 @@ export default function StudentLibrary() {
                                             </div>
                                         </div>
                                     </div>
-                                    {/* ✅ NEW: Delete Button */}
                                     <button 
                                         onClick={(e) => handleDelete(item.id, e)} 
                                         className="absolute top-3 right-3 p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 transition-all duration-200"
@@ -250,6 +246,26 @@ export default function StudentLibrary() {
                                 <p className="text-sm text-muted-foreground mt-1 max-w-xs">Try adjusting your search or filters, or generate new notes!</p>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* ✅ NEW: Discover Tab Placeholder */}
+                {activeTab === 'discover' && (
+                    <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in zoom-in-95 duration-300">
+                        <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-6">
+                            <Lock className="w-10 h-10 text-muted-foreground" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-foreground mb-2">Community Library Coming Soon</h3>
+                        <p className="text-muted-foreground max-w-md mb-6">
+                            We are currently building a secure space where you can discover and share study materials with your classmates. 
+                            This feature is temporarily unavailable, but stay tuned!
+                        </p>
+                        <button 
+                            onClick={() => setActiveTab('my-library')}
+                            className="px-6 py-2.5 rounded-lg bg-brand text-brand-foreground font-medium hover:bg-brand/90 transition-all flex items-center gap-2"
+                        >
+                            <FolderOpen className="w-4 h-4" /> Back to My Library
+                        </button>
                     </div>
                 )}
             </div>
@@ -270,7 +286,6 @@ export default function StudentLibrary() {
                         </div>
                         
                         <div className="p-6 overflow-y-auto custom-scrollbar">
-                            {/* VIDEO TYPE */}
                             {selectedItem.type === 'video' && (
                                 <div className="space-y-4">
                                     {(() => {
@@ -312,7 +327,6 @@ export default function StudentLibrary() {
                                 </div>
                             )}
 
-                            {/* PODCAST TYPE */}
                             {selectedItem.type === 'podcast' && (
                                 <div className="space-y-6">
                                     {(() => {
@@ -350,7 +364,6 @@ export default function StudentLibrary() {
                                 </div>
                             )}
 
-                            {/* QUIZ TYPE */}
                             {selectedItem.type === 'quiz' && (
                                 <div className="space-y-4">
                                     {(() => {
@@ -389,7 +402,6 @@ export default function StudentLibrary() {
                                 </div>
                             )}
 
-                            {/* DEFAULT (Summary/Music/Text) */}
                             {!['video', 'podcast', 'quiz'].includes(selectedItem.type) && (
                                 <div className="mt-4 space-y-4">
                                     {selectedItem.type === 'music' && (
