@@ -206,7 +206,6 @@ export default function PodcastGenerator() {
   const [isPaused, setIsPaused] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
-  const [voices, setVoices] = useState([]);
 
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
@@ -216,33 +215,23 @@ export default function PodcastGenerator() {
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [audioProgress, setAudioProgress] = useState(null);
   
-  // ✅ NEW: Studio audio tracking
+  // ✅ FIXED: Declared BEFORE usingStudio to prevent Temporal Dead Zone error
+  const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   const [studioTime, setStudioTime] = useState({ current: 0, duration: 0 });
   const usingStudio = !!studioAudioUrl && !useBrowserTTS;
 
   const [leoVoiceId, setLeoVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
   const [novaVoiceId, setNovaVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
-  const [useBrowserTTS, setUseBrowserTTS] = useState(false);
 
   const speechRunId = useRef(0);
   const currentIndexRef = useRef(0);
   const scriptRef = useRef([]);
   const playbackSpeedRef = useRef(1);
   const studioUrlRef = useRef("");
-  
-  // ✅ NEW: Ref for the HTML5 audio element
   const studioAudioRef = useRef(null);
 
   useEffect(() => { scriptRef.current = script; }, [script]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
-    loadVoices();
-    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -260,7 +249,7 @@ export default function PodcastGenerator() {
     return () => controller.abort();
   }, []);
 
-  // ✅ NEW: Wire up HTML5 audio events to React state
+  // Wire up HTML5 audio events to React state
   useEffect(() => {
     const el = studioAudioRef.current;
     if (!el) return;
@@ -312,13 +301,20 @@ export default function PodcastGenerator() {
     }
   }, [currentLineIndex]);
 
+  // ✅ FIXED: Stop audio and reset time before swapping URL
   const replaceStudioAudio = (url) => {
-    if (studioUrlRef.current) URL.revokeObjectURL(studioUrlRef.current);
+    if (studioAudioRef.current) {
+      studioAudioRef.current.pause();
+      studioAudioRef.current.currentTime = 0;
+    }
+    if (studioUrlRef.current) {
+      URL.revokeObjectURL(studioUrlRef.current);
+    }
     studioUrlRef.current = url || "";
     setStudioAudioUrl(url || "");
+    setStudioTime({ current: 0, duration: 0 });
   };
 
-  // ✅ FIXED: Stop both TTS and HTML5 audio
   const stopAudio = useCallback(() => {
     speechRunId.current += 1;
     window.speechSynthesis?.cancel();
@@ -398,7 +394,6 @@ export default function PodcastGenerator() {
     setTimeout(() => speakLine(runId), 80);
   };
 
-  // ✅ FIXED: Route to HTML5 audio if studio is ready, else fallback to TTS
   const toggleAudio = async () => {
     if (usingStudio) {
       const el = studioAudioRef.current;
@@ -433,7 +428,6 @@ export default function PodcastGenerator() {
     startAudio(0);
   };
 
-  // ✅ FIXED: Change speed for HTML5 audio or TTS depending on active engine
   const changeSpeed = (speed) => {
     setPlaybackSpeed(speed);
     playbackSpeedRef.current = speed;
@@ -480,6 +474,9 @@ export default function PodcastGenerator() {
       setNotice("Browser voice is on. Press play to listen for free, or turn it off to create studio audio.");
       return;
     }
+
+    // ✅ FIXED: Stop any currently playing browser TTS before generating studio audio
+    stopAudio();
 
     setIsAudioLoading(true);
     setError("");
@@ -591,7 +588,6 @@ export default function PodcastGenerator() {
     URL.revokeObjectURL(url);
   };
 
-  // ✅ FIXED: Progress calculation based on active engine
   const formatTime = (sec) => {
     if (!Number.isFinite(sec)) return "0:00";
     const m = Math.floor(sec / 60);
@@ -771,7 +767,6 @@ export default function PodcastGenerator() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-lg font-bold text-foreground">{podcastTitle}</h2>
-                    {/* ✅ NEW: Engine Badge */}
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${usingStudio ? "bg-brand/10 text-brand" : "bg-muted text-muted-foreground"}`}>
                       {usingStudio ? "🎙️ Studio" : "🌐 Browser"}
                     </span>
@@ -856,9 +851,10 @@ export default function PodcastGenerator() {
               )}
               {studioAudioUrl && (
                 <div className="space-y-2 rounded-xl bg-brand-soft p-3">
-                  {/* ✅ FIXED: Attached ref and removed native controls to rely on the main header player */}
+                  {/* ✅ FIXED: Restored controls so the element isn't invisible, allowing users to scrub/seek */}
                   <audio
                     ref={studioAudioRef}
+                    controls
                     preload="metadata"
                     src={studioAudioUrl}
                     className="w-full"
@@ -891,15 +887,18 @@ export default function PodcastGenerator() {
                     >
                       <div className="mb-1 flex items-center justify-between gap-3">
                         <p className="text-xs font-bold opacity-80">{line.speaker}</p>
-                        <button
-                          type="button"
-                          onClick={() => startAudio(index)}
-                          disabled={!hasSpeech}
-                          aria-label={`Play from line ${index + 1}`}
-                          className={`rounded-full p-1 opacity-70 transition hover:opacity-100 disabled:hidden ${focusRing}`}
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                        </button>
+                        {/* ✅ FIXED: Hide per-line play buttons when using Studio audio to prevent overlapping voices */}
+                        {!usingStudio && (
+                          <button
+                            type="button"
+                            onClick={() => startAudio(index)}
+                            disabled={!hasSpeech}
+                            aria-label={`Play from line ${index + 1}`}
+                            className={`rounded-full p-1 opacity-70 transition hover:opacity-100 disabled:hidden ${focusRing}`}
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                       <p>{line.text}</p>
                     </div>
