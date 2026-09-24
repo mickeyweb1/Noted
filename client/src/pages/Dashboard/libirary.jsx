@@ -1,14 +1,19 @@
 import { useState, useEffect } from "react";
 import { 
     Library as LibraryIcon, Search, Grid3x3, List, 
-    FileText, Video, Music, Brain, FolderOpen, MoreHorizontal,
-    Users, Download, X, CheckCircle2, Play, Pause, Mic, Headphones
+    FileText, Video, Music, Brain, FolderOpen, 
+    Users, Download, X, CheckCircle2, Play, Pause, Mic, Headphones, Trash2 
 } from "lucide-react";
 import api from "../../utils/api";
 import AudioPlayer from "../../components/AudioPlayer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useMusic } from "../../context/MusicContext"
+import { useMusic } from "../../context/MusicContext";
+
+// ✅ NEW: Import math rendering plugins for beautiful equations in the library
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 const FREE_BEATS = [
   { id: "beat_1", name: "Upbeat Hip-Hop Loop", url: "https://cdn.pixabay.com/download/audio/2022/11/22/audio_febc508520.mp3" },
@@ -20,11 +25,23 @@ const Skeleton = ({ className }) => (
   <div className={`animate-pulse bg-muted rounded-md ${className}`} />
 );
 
+// ✅ UPDATED: Added math rendering support
 const MarkdownContent = ({ content }) => {
+  let displayContent = content;
+  // Fallback: If it's accidentally stringified JSON, try to make it readable
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed.script) displayContent = parsed.script.map(s => `**${s.speaker}**: ${s.text}`).join('\n\n');
+    else if (parsed.questions) displayContent = parsed.questions.map((q, i) => `**${i+1}. ${q.question}**\nAnswer: ${q.answer || q.correctAnswer}\n${q.explanation ? 'Explanation: ' + q.explanation : ''}`).join('\n\n');
+  } catch (e) {
+    // It's already a normal string, keep it as is
+  }
+
   return (
     <div className="markdown-content prose prose-sm dark:prose-invert max-w-none">
       <ReactMarkdown 
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]} 
+        rehypePlugins={[rehypeKatex]}
         components={{
           h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-foreground mt-6 mb-4" {...props} />,
           h2: ({node, ...props}) => <h2 className="text-xl font-bold text-foreground mt-5 mb-3" {...props} />,
@@ -36,19 +53,18 @@ const MarkdownContent = ({ content }) => {
           code: ({node, inline, ...props}) => inline ? <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props} /> : <code className="block bg-muted p-3 rounded-lg text-sm font-mono overflow-x-auto" {...props} />,
         }}
       >
-        {content}
+        {displayContent}
       </ReactMarkdown>
     </div>
   );
 };
 
-// Fix #14: Safe mapping for Tailwind classes
 const getIconAndColor = (type) => {
     switch (type) {
         case 'summary': return { icon: FileText, colorClass: 'bg-brand/10 text-brand' };
         case 'video': return { icon: Video, colorClass: 'bg-blue-500/10 text-blue-500' };
-        case 'music': return { icon: Music, colorClass: 'bg-flame/10 text-flame' }; // Ensure 'flame' is in your tailwind config, or use 'text-red-500'
-        case 'podcast': return { icon: Mic, colorClass: 'bg-purple-500/10 text-purple-500' };
+        case 'music': return { icon: Music, colorClass: 'bg-purple-500/10 text-purple-500' };
+        case 'podcast': return { icon: Mic, colorClass: 'bg-indigo-500/10 text-indigo-500' };
         case 'quiz': return { icon: Brain, colorClass: 'bg-green-500/10 text-green-500' };
         default: return { icon: FileText, colorClass: 'bg-brand/10 text-brand' };
     }
@@ -80,7 +96,7 @@ export default function StudentLibrary() {
                             generatedText: item.generatedText,
                             mediaUrl: item.mediaUrl,
                             icon,
-                            colorClass // Store the full class string
+                            colorClass
                         };
                     });
                     setMyGenerations(formattedData);
@@ -94,12 +110,7 @@ export default function StudentLibrary() {
         fetchLibrary();
     }, []);
 
-  const { 
-    isPlaying: isBeatPlaying, 
-    currentBeat, 
-    playBeat, 
-    pauseBeat 
-  } = useMusic();
+    const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat } = useMusic();
 
     const filters = [
         { id: 'all', label: 'All', icon: FolderOpen },
@@ -116,14 +127,30 @@ export default function StudentLibrary() {
         return matchesFilter && matchesSearch;
     });
 
+    // ✅ NEW: Delete functionality with confirmation
+    const handleDelete = async (id, e) => {
+        e.stopPropagation(); // Prevent opening the modal
+        if (window.confirm("Are you sure you want to delete this item? This cannot be undone.")) {
+            try {
+                await api.delete(`/ai/library/${id}`);
+                setMyGenerations(prev => prev.filter(item => item.id !== id));
+                if (selectedItem && selectedItem.id === id) {
+                    setSelectedItem(null);
+                }
+            } catch (error) {
+                console.error("Failed to delete item:", error);
+                alert("Failed to delete item. Please try again.");
+            }
+        }
+    };
+
     const handleDownload = () => {
         if (!selectedItem || !selectedItem.generatedText) return;
-        // Basic cleanup for text download
         let cleanText = selectedItem.generatedText;
         try {
             const parsed = JSON.parse(selectedItem.generatedText);
             if (parsed.script) cleanText = parsed.script.map(s => `${s.speaker}: ${s.text}`).join('\n');
-            else if (parsed.questions) cleanText = parsed.questions.map((q, i) => `${i+1}. ${q.question}\nAnswer: ${q.answer}`).join('\n\n');
+            else if (parsed.questions) cleanText = parsed.questions.map((q, i) => `${i+1}. ${q.question}\nAnswer: ${q.answer || q.correctAnswer}`).join('\n\n');
         } catch (e) { /* keep raw text */ }
 
         const content = `TITLE: ${selectedItem.title}\nTYPE: ${selectedItem.categoryLabel}\nDATE: ${selectedItem.date}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${cleanText}`;
@@ -190,18 +217,29 @@ export default function StudentLibrary() {
                             </div>
                         ) : (
                             filteredGenerations.map((item) => (
-                                <div key={item.id} onClick={() => setSelectedItem(item)} className={`group relative p-4 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-brand/30 transition-all duration-300 cursor-pointer ${viewStyle === 'list' ? 'flex items-center gap-4 hover:translate-y-0' : ''}`}>
-                                    {/* Fix #14: Use safe colorClass */}
-                                    <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${item.colorClass} mb-3 group-hover:scale-110 transition-transform duration-300 ${viewStyle === 'list' ? 'mb-0 shrink-0' : ''}`}>
-                                        <item.icon className="w-6 h-6" />
-                                    </div>
-                                    <div className={viewStyle === 'list' ? 'flex-1 min-w-0' : ''}>
-                                        <h3 className="font-semibold text-sm text-foreground truncate group-hover:text-brand transition-colors duration-200">{item.title}</h3>
-                                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                            <span className="font-medium text-foreground/80">{item.categoryLabel}</span><span>•</span><span>{item.date}</span>
+                                <div key={item.id} className={`group relative p-4 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-brand/30 transition-all duration-300 ${viewStyle === 'list' ? 'flex items-center gap-4 hover:translate-y-0' : ''}`}>
+                                    <div 
+                                        onClick={() => setSelectedItem(item)}
+                                        className={`flex-1 flex items-start gap-4 cursor-pointer ${viewStyle === 'list' ? 'w-full' : 'flex-col'}`}
+                                    >
+                                        <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${item.colorClass} group-hover:scale-110 transition-transform duration-300 shrink-0`}>
+                                            <item.icon className="w-6 h-6" />
+                                        </div>
+                                        <div className="flex-1 min-w-0 pt-1">
+                                            <h3 className="font-semibold text-sm text-foreground truncate group-hover:text-brand transition-colors duration-200">{item.title}</h3>
+                                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                                <span className="font-medium text-foreground/80">{item.categoryLabel}</span><span>•</span><span>{item.date}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <button className="absolute top-3 right-3 p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-accent transition-all duration-200"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
+                                    {/* ✅ NEW: Delete Button */}
+                                    <button 
+                                        onClick={(e) => handleDelete(item.id, e)} 
+                                        className="absolute top-3 right-3 p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 transition-all duration-200"
+                                        title="Delete"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             ))
                         )}
@@ -216,7 +254,7 @@ export default function StudentLibrary() {
                 )}
             </div>
 
-            {/* ✅ POLISHED MODAL WITH PROPER TYPE HANDLING */}
+            {/* MODAL */}
             {selectedItem && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedItem(null)}>
                     <div className="bg-background rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col border border-border animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
@@ -238,9 +276,7 @@ export default function StudentLibrary() {
                                     {(() => {
                                         try {
                                             const videoData = JSON.parse(selectedItem.generatedText);
-                                            // Fix #8: Use relative path or env var for production (simplified here to relative)
                                             const streamUrl = selectedItem.mediaUrl ? `/api/ai/video/stream/${selectedItem.mediaUrl.split(/[\\/]/).pop()}` : null;
-                                            
                                             return (
                                                 <div className="space-y-4">
                                                     {streamUrl && (
@@ -276,19 +312,16 @@ export default function StudentLibrary() {
                                 </div>
                             )}
 
-                            {/* PODCAST TYPE (Fix #5) */}
+                            {/* PODCAST TYPE */}
                             {selectedItem.type === 'podcast' && (
                                 <div className="space-y-6">
                                     {(() => {
                                         try {
                                             const podcastData = JSON.parse(selectedItem.generatedText);
-                                            // Extract clean text for AudioPlayer (Fix #6)
                                             const spokenText = podcastData.script.map(s => s.text).join(' ');
-                                            
                                             return (
                                                 <div className="space-y-6">
                                                     <AudioPlayer text={spokenText} title={selectedItem.title} />
-                                                    
                                                     <div className="space-y-3">
                                                         <h3 className="font-bold text-foreground flex items-center gap-2"><Headphones className="w-4 h-4" /> Transcript</h3>
                                                         <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
@@ -300,7 +333,6 @@ export default function StudentLibrary() {
                                                             ))}
                                                         </div>
                                                     </div>
-
                                                     {podcastData.keyTakeaways && podcastData.keyTakeaways.length > 0 && (
                                                         <div className="p-4 rounded-xl bg-brand/5 border border-brand/20">
                                                             <h3 className="font-bold text-brand mb-2">Key Takeaways</h3>
@@ -318,7 +350,7 @@ export default function StudentLibrary() {
                                 </div>
                             )}
 
-                            {/* QUIZ TYPE (Fix #6) */}
+                            {/* QUIZ TYPE */}
                             {selectedItem.type === 'quiz' && (
                                 <div className="space-y-4">
                                     {(() => {
@@ -333,9 +365,9 @@ export default function StudentLibrary() {
                                                                 <p className="font-semibold text-foreground mb-3">{idx + 1}. {q.question}</p>
                                                                 <div className="space-y-2 ml-4">
                                                                     {q.options.map((opt, optIdx) => (
-                                                                        <div key={optIdx} className={`flex items-center gap-2 text-sm ${opt === q.answer ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
+                                                                        <div key={optIdx} className={`flex items-center gap-2 text-sm ${opt === (q.answer || q.correctAnswer) ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
                                                                             <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">{String.fromCharCode(65 + optIdx)}</span>
-                                                                            {opt} {opt === q.answer && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                                                                            {opt} {opt === (q.answer || q.correctAnswer) && <CheckCircle2 className="w-4 h-4 text-green-600" />}
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -357,53 +389,53 @@ export default function StudentLibrary() {
                                 </div>
                             )}
 
-{/* DEFAULT (Summary/Music/Text) */}
-{!['video', 'podcast', 'quiz'].includes(selectedItem.type) && (
-    <div className="mt-4 space-y-4">
-        {selectedItem.type === 'music' && (
-            <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
-                <h3 className="font-bold text-foreground flex items-center gap-2">
-                    <Music className="w-4 h-4 text-purple-500" /> Background Beat
-                </h3>
-                <div className="flex items-center gap-3">
-                    <select 
-                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm"
-                        onChange={(e) => {
-                            const beat = FREE_BEATS.find(b => b.id === e.target.value);
-                            if (beat) {
-                                if (isBeatPlaying) pauseBeat();
-                                playBeat(beat);
-                            }
-                        }}
-                    >
-                        <option value="">Select a beat to play...</option>
-                        {FREE_BEATS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                    <button 
-                        onClick={() => {
-                            if (isBeatPlaying) {
-                                pauseBeat();
-                            } else if (currentBeat) {
-                                playBeat(currentBeat);
-                            }
-                        }}
-                        disabled={!currentBeat}
-                        className={`p-3 rounded-full transition-colors ${isBeatPlaying ? 'bg-purple-500 text-white' : 'bg-muted text-muted-foreground hover:bg-purple-500/10 hover:text-purple-500'} disabled:opacity-50`}
-                    >
-                        {isBeatPlaying ? <Pause className="w-5 h-5" fill="currentColor" /> : <Play className="w-5 h-5" fill="currentColor" />}
-                    </button>
-                </div>
-            </div>
-        )}
-        
-        {selectedItem.type === 'music' && selectedItem.generatedText && (
-            <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} style="rap" />
-        )}
-        <div className="mt-4">
-            <MarkdownContent content={selectedItem.generatedText} />
-        </div>
-    </div>
-)}
+                            {/* DEFAULT (Summary/Music/Text) */}
+                            {!['video', 'podcast', 'quiz'].includes(selectedItem.type) && (
+                                <div className="mt-4 space-y-4">
+                                    {selectedItem.type === 'music' && (
+                                        <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-3">
+                                            <h3 className="font-bold text-foreground flex items-center gap-2">
+                                                <Music className="w-4 h-4 text-purple-500" /> Background Beat
+                                            </h3>
+                                            <div className="flex items-center gap-3">
+                                                <select 
+                                                    className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm"
+                                                    onChange={(e) => {
+                                                        const beat = FREE_BEATS.find(b => b.id === e.target.value);
+                                                        if (beat) {
+                                                            if (isBeatPlaying) pauseBeat();
+                                                            playBeat(beat);
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">Select a beat to play...</option>
+                                                    {FREE_BEATS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                                </select>
+                                                <button 
+                                                    onClick={() => {
+                                                        if (isBeatPlaying) {
+                                                            pauseBeat();
+                                                        } else if (currentBeat) {
+                                                            playBeat(currentBeat);
+                                                        }
+                                                    }}
+                                                    disabled={!currentBeat}
+                                                    className={`p-3 rounded-full transition-colors ${isBeatPlaying ? 'bg-purple-500 text-white' : 'bg-muted text-muted-foreground hover:bg-purple-500/10 hover:text-purple-500'} disabled:opacity-50`}
+                                                >
+                                                    {isBeatPlaying ? <Pause className="w-5 h-5" fill="currentColor" /> : <Play className="w-5 h-5" fill="currentColor" />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {selectedItem.type === 'music' && selectedItem.generatedText && (
+                                        <AudioPlayer text={selectedItem.generatedText} title={selectedItem.title} style="rap" />
+                                    )}
+                                    <div className="mt-4">
+                                        <MarkdownContent content={selectedItem.generatedText} />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="p-4 border-t border-border bg-muted/30 flex items-center justify-between">
