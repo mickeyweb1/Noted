@@ -12,16 +12,27 @@ const FREE_BEATS = [
 
 const VIBES = ["Afrobeat Rap", "Chill Lo-Fi", "Upbeat Pop", "Epic Orchestral"];
 
+// 🔧 NEW: which beat goes with which vibe
+const VIBE_TO_BEAT = {
+  "Afrobeat Rap": "beat_3",
+  "Chill Lo-Fi": "beat_2",
+  "Upbeat Pop": "beat_1",
+  "Epic Orchestral": "beat_1",
+};
+
 export default function MusicGenerator() {
   const [inputMethod, setInputMethod] = useState("type");
   const [notes, setNotes] = useState("");
   const [selectedBeatId, setSelectedBeatId] = useState("beat_1");
   const [selectedVibe, setSelectedVibe] = useState("Afrobeat Rap");
+  const [vibeReason, setVibeReason] = useState(""); // 🔧 NEW
   const [lyrics, setLyrics] = useState("");
   const [audioUrl, setAudioUrl] = useState(null);
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // 🔧 NEW: separate from lyrics loading
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false); // 🔧 NEW: so Play can resume instead of restart
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   
   const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat, resumeBeat, stopBeat, setVolume: setGlobalVolume } = useMusic();
@@ -30,6 +41,12 @@ export default function MusicGenerator() {
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const vocalsRef = useRef(null);
+
+  // 🔧 NEW: refs used for safe cleanup and to ignore stale speech events
+  const speechSessionRef = useRef(0);
+  const startedBeatRef = useRef(false);
+  const stopBeatRef = useRef(stopBeat);
+  stopBeatRef.current = stopBeat;
 
   useEffect(() => {
     const fetchLibrary = async () => {
@@ -54,6 +71,16 @@ export default function MusicGenerator() {
     setGlobalVolume(localVolume);
   }, [localVolume, setGlobalVolume]);
 
+  // 🔧 NEW: stop everything when leaving the page
+  useEffect(() => {
+    return () => {
+      speechSessionRef.current += 1;
+      window.speechSynthesis.cancel();
+      if (vocalsRef.current) vocalsRef.current.pause();
+      if (startedBeatRef.current) stopBeatRef.current();
+    };
+  }, []);
+
   const handleLibrarySelect = (e) => {
     const noteId = e.target.value;
     setSelectedNoteId(noteId);
@@ -64,86 +91,26 @@ export default function MusicGenerator() {
     }
   };
 
+  // 🔧 FIXED: uses the dedicated endpoint. The old version called /ai/generate (summary mode), which
+  // saved a "Music Analysis" item to the library, gave XP, and stripped the "VIBE:" line from the reply.
   const handleAutoSelectVibe = async () => {
     if (!notes.trim()) return alert("Please enter some notes first so the AI can analyze them!");
     
-    setIsGeneratingLyrics(true);
+    setIsAnalyzing(true);
     try {
-      const analysisPrompt = `Analyze these study notes and recommend the BEST music vibe for studying this content.
+      const res = await api.post("/ai/music/analyze-vibe", { text: notes });
+      const { vibe, reason } = res.data.data;
+      if (!VIBES.includes(vibe)) throw new Error("Unexpected response from the server.");
 
-Choose ONE vibe from these options:
-- Afrobeat Rap
-- Chill Lo-Fi
-- Upbeat Pop
-- Epic Orchestral
-
-Notes: ${notes.substring(0, 800)}
-
-Answer in this exact format:
-VIBE: [exact vibe name from the list above]
-WHY: [one short sentence]`;
-
-      const response = await api.post("/ai/generate", {
-        text: analysisPrompt,
-        mode: "summary",
-        title: "Music Analysis",
-        max_tokens: 150
-      });
-
-      // ✅ SAFE EXTRACTION: Handle different backend response structures
-      const generatedText = response.data?.data?.generatedText || response.data?.generatedText;
-      if (!generatedText) {
-        throw new Error("AI returned empty content");
-      }
-
-      console.log("🎵 AI Response:", generatedText);
-      
-      let detectedVibe = "";
-      let reason = "Based on your notes";
-      
-      const vibeMatch = generatedText.match(/^VIBE:\s*(.+)$/im);
-      if (vibeMatch) {
-        const rawVibe = vibeMatch[1].trim();
-        detectedVibe = VIBES.find(v => v.toLowerCase() === rawVibe.toLowerCase()) || "";
-      }
-      
-      const reasonMatch = generatedText.match(/WHY:\s*(.+?)(?:\n|$)/i);
-      if (reasonMatch) reason = reasonMatch[1].trim();
-      
-      if (!detectedVibe) {
-        console.warn("⚠️ No valid vibe detected from AI, using fallback logic");
-        const notesLower = notes.toLowerCase();
-        if (notesLower.includes("history") || notesLower.includes("war") || notesLower.includes("battle") || notesLower.includes("important")) {
-          detectedVibe = "Epic Orchestral";
-          reason = "Historical/important content benefits from dramatic music";
-        } else if (notesLower.includes("science") || notesLower.includes("math") || notesLower.includes("formula") || notesLower.includes("calculate")) {
-          detectedVibe = "Chill Lo-Fi";
-          reason = "Technical content requires focused, calm music";
-        } else if (notesLower.includes("motivational") || notesLower.includes("energy") || notesLower.includes("active")) {
-          detectedVibe = "Afrobeat Rap";
-          reason = "Energetic content matches rhythmic beats";
-        } else {
-          detectedVibe = "Chill Lo-Fi";
-          reason = "General study content works best with calm music";
-        }
-      }
-      
-      if (detectedVibe === "Afrobeat Rap") setSelectedBeatId("beat_3");
-      else if (detectedVibe === "Chill Lo-Fi") setSelectedBeatId("beat_2");
-      else if (detectedVibe === "Upbeat Pop") setSelectedBeatId("beat_1");
-      else setSelectedBeatId("beat_1");
-      
-      setSelectedVibe(detectedVibe);
-      
-      alert(`🎵 AI Analysis Complete!\n\nSelected: ${detectedVibe}\nReason: ${reason}\n\nI've automatically selected the best vibe and beat for you!`);
-      
+      setSelectedVibe(vibe);
+      setSelectedBeatId(VIBE_TO_BEAT[vibe] || "beat_1");
+      setVibeReason(reason || "");
     } catch (error) {
       console.error("Auto-select failed:", error);
-      // ✅ Show the exact error to help us debug
       const errorMsg = error.response?.data?.message || error.message || "Unknown error";
       alert(`AI couldn't analyze the vibe.\n\nError: ${errorMsg}\n\nPlease select manually.`);
     } finally {
-      setIsGeneratingLyrics(false);
+      setIsAnalyzing(false);
     }
   };
 
@@ -184,36 +151,83 @@ WHY: [one short sentence]`;
 
   const pausePlayback = () => {
     if (vocalsRef.current) vocalsRef.current.pause();
-    window.speechSynthesis.pause();
+    if (useBrowserTTS) window.speechSynthesis.pause();
     pauseBeat();
     setIsPlaying(false);
+    setIsPaused(true);
   };
 
   const stopPlayback = () => {
+    speechSessionRef.current += 1; // 🔧 makes any pending speech "end" events harmless
     if (vocalsRef.current) { vocalsRef.current.pause(); vocalsRef.current.currentTime = 0; }
     stopBeat();
+    startedBeatRef.current = false;
     window.speechSynthesis.cancel();
     setIsPlaying(false);
+    setIsPaused(false);
+  };
+
+  // 🔧 NEW: speaks the lyrics line by line. Chrome cuts long utterances after ~15s,
+  // so one short utterance per line is far more reliable than one big one.
+  const speakLyrics = () => {
+    window.speechSynthesis.cancel();
+    speechSessionRef.current += 1;
+    const session = speechSessionRef.current;
+
+    const lines = lyrics
+      .replace(/\[.*?\]/g, "")
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return false;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.lang.includes('en-US') || v.name.includes('Google US English'));
+
+    lines.forEach((line, i) => {
+      const utterance = new SpeechSynthesisUtterance(line);
+      if (preferredVoice) utterance.voice = preferredVoice;
+      utterance.rate = 1.1;
+      utterance.volume = localVolume;
+      if (i === lines.length - 1) {
+        utterance.onend = () => { if (session === speechSessionRef.current) stopPlayback(); };
+      }
+      window.speechSynthesis.speak(utterance);
+    });
+    return true;
   };
 
   const handlePlayFullTrack = async () => {
     if (isPlaying) { pausePlayback(); return; }
 
+    // 🔧 FIXED: resume from where we paused instead of restarting everything
+    if (isPaused) {
+      try {
+        if (useBrowserTTS) window.speechSynthesis.resume();
+        else if (vocalsRef.current) await vocalsRef.current.play();
+        await resumeBeat?.();
+        setIsPlaying(true);
+        setIsPaused(false);
+      } catch (error) {
+        console.error("Resume failed:", error);
+        stopPlayback();
+      }
+      return;
+    }
+
     const beat = FREE_BEATS.find(b => b.id === selectedBeatId);
-    if (beat) await playBeat(beat);
+    if (beat) {
+      // 🔧 FIXED: if the beat fails to load, still play the vocals
+      try {
+        await playBeat(beat);
+        startedBeatRef.current = true;
+      } catch (error) {
+        console.warn("Beat failed to start, playing vocals only:", error);
+      }
+    }
 
     if (useBrowserTTS) {
-      window.speechSynthesis.cancel();
-      const cleanLyrics = lyrics.replace(/\[.*?\]/g, "");
-      const utterance = new SpeechSynthesisUtterance(cleanLyrics);
-      const voices = window.speechSynthesis.getVoices();
-      const preferredVoice = voices.find(v => v.lang.includes('en-US') || v.name.includes('Google US English'));
-      if (preferredVoice) utterance.voice = preferredVoice;
-      utterance.rate = 1.1;
-      utterance.volume = localVolume;
-      utterance.onend = () => stopPlayback();
-      window.speechSynthesis.speak(utterance); 
-      setIsPlaying(true);
+      if (speakLyrics()) setIsPlaying(true);
     } else if (vocalsRef.current) {
       vocalsRef.current.volume = localVolume;
       vocalsRef.current.onended = () => stopPlayback();
@@ -223,6 +237,7 @@ WHY: [one short sentence]`;
       } catch (error) {
         console.error("Vocal playback blocked by browser:", error);
         stopBeat();
+        startedBeatRef.current = false;
         setUseBrowserTTS(true);
         setIsPlaying(false);
       }
@@ -274,28 +289,29 @@ WHY: [one short sentence]`;
             <span className="text-sm font-medium text-foreground">Music Vibe / Genre</span>
             <div className="flex flex-wrap gap-2">
               {VIBES.map((vibe) => (
-                <button key={vibe} type="button" onClick={() => setSelectedVibe(vibe)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${selectedVibe === vibe ? "border-purple-500 bg-purple-500 text-white" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
+                <button key={vibe} type="button" onClick={() => { setSelectedVibe(vibe); setVibeReason(""); }} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${selectedVibe === vibe ? "border-purple-500 bg-purple-500 text-white" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
                   {vibe}
                 </button>
               ))}
             </div>
           </div>
 
-          <button onClick={handleAutoSelectVibe} disabled={isGeneratingLyrics || !notes.trim()} className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-            <Wand2 className="w-5 h-5" /> ✨ AI Auto-Select Best Vibe & Beat
+          <button onClick={handleAutoSelectVibe} disabled={isAnalyzing || isGeneratingLyrics || !notes.trim()} className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
+            {isAnalyzing ? "Analyzing your notes..." : "✨ AI Auto-Select Best Vibe & Beat"}
           </button>
+          {vibeReason && <p className="text-xs text-muted-foreground">🎵 {selectedVibe}: {vibeReason}</p>}
 
-          <button onClick={handleGenerateLyrics} disabled={isGeneratingLyrics || !notes.trim()} className="w-full py-3 rounded-xl bg-brand text-brand-foreground font-bold hover:bg-brand/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+          <button onClick={handleGenerateLyrics} disabled={isGeneratingLyrics || isAnalyzing || !notes.trim()} className="w-full py-3 rounded-xl bg-brand text-brand-foreground font-bold hover:bg-brand/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             {isGeneratingLyrics ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
             {isGeneratingLyrics ? "Writing Lyrics..." : "Generate Lyrics"}
           </button>
         </div>
 
         <div className="space-y-4">
-          <label className="text-sm font-medium text-foreground">Generated Lyrics</label>
-          <div className="w-full h-64 rounded-xl border border-border bg-card p-4 text-sm overflow-y-auto whitespace-pre-wrap font-mono">
-            {lyrics || "Your lyrics will appear here..."}
-          </div>
+          <label htmlFor="lyrics-box" className="text-sm font-medium text-foreground">Generated Lyrics <span className="font-normal text-muted-foreground">(you can edit them)</span></label>
+          {/* 🔧 CHANGED: editable, so you can fix lines before generating vocals */}
+          <textarea id="lyrics-box" value={lyrics} onChange={(e) => setLyrics(e.target.value)} placeholder="Your lyrics will appear here..." className="w-full h-64 rounded-xl border border-border bg-card p-4 text-sm resize-none font-mono focus:outline-none focus:ring-2 focus:ring-brand" />
           <button onClick={handleGenerateVocals} disabled={isGeneratingAudio || !lyrics.trim()} className="w-full py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             {isGeneratingAudio ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mic className="w-5 h-5" />}
             {isGeneratingAudio ? "Recording Vocals..." : "Generate Vocals"}
@@ -308,11 +324,11 @@ WHY: [one short sentence]`;
               </h3>
               
               <div className="flex gap-3">
-                <button onClick={isPlaying ? pausePlayback : handlePlayFullTrack} className="flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-purple-600 text-white hover:bg-purple-700">
-                  {isPlaying ? <><Pause className="w-5 h-5" /> Pause</> : <><Play className="w-5 h-5" /> Play Full Track</>}
+                <button onClick={handlePlayFullTrack} className="flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 bg-purple-600 text-white hover:bg-purple-700">
+                  {isPlaying ? <><Pause className="w-5 h-5" /> Pause</> : isPaused ? <><Play className="w-5 h-5" /> Resume</> : <><Play className="w-5 h-5" /> Play Full Track</>}
                 </button>
-                {isPlaying && (
-                  <button onClick={stopPlayback} className="px-4 py-3 rounded-xl font-bold transition-all bg-red-500 text-white hover:bg-red-600">
+                {(isPlaying || isPaused) && (
+                  <button onClick={stopPlayback} aria-label="Stop" className="px-4 py-3 rounded-xl font-bold transition-all bg-red-500 text-white hover:bg-red-600">
                     <Square className="w-5 h-5" fill="currentColor" />
                   </button>
                 )}
@@ -323,7 +339,7 @@ WHY: [one short sentence]`;
               <div className="space-y-3 pt-3 border-t border-purple-500/20">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-muted-foreground uppercase">Background Beat</p>
-                  <select value={selectedBeatId} onChange={(e) => { setSelectedBeatId(e.target.value); if (isPlaying) stopPlayback(); }} className="text-xs bg-card border border-border rounded px-2 py-1">
+                  <select value={selectedBeatId} onChange={(e) => { setSelectedBeatId(e.target.value); if (isPlaying || isPaused) stopPlayback(); }} className="text-xs bg-card border border-border rounded px-2 py-1">
                     {FREE_BEATS.map(beat => (<option key={beat.id} value={beat.id}>{beat.name}</option>))}
                   </select>
                 </div>
