@@ -1,15 +1,11 @@
 import { useRef, useEffect } from "react";
 import { PanelLeft, Search, Sun, Moon } from "lucide-react";
-// ✅ Import your existing theme hook (adjust the path if your folder structure is different)
 import { useTheme } from "../../hooks/useTheme"; 
 
 export default function StudentTopBar({ onToggleSidebar }) {
     const searchInputRef = useRef(null);
-    
-    // ✅ Use your existing theme hook
     const { theme, toggleTheme } = useTheme();
 
-    // Logic: Listen for Cmd+K or Ctrl+K to focus search
     useEffect(() => {
         const handleKeyDown = (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -23,7 +19,6 @@ export default function StudentTopBar({ onToggleSidebar }) {
 
     return (
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/80 backdrop-blur-md px-4 md:px-6">
-            {/* Mobile Menu Toggle */}
             <button 
                 onClick={onToggleSidebar}
                 className="md:hidden p-2 rounded-md hover:bg-accent text-foreground transition-colors"
@@ -31,7 +26,6 @@ export default function StudentTopBar({ onToggleSidebar }) {
                 <PanelLeft className="w-5 h-5" />
             </button>
 
-            {/* Page Title / Breadcrumb Area */}
             <div className="flex flex-col">
                 <h2 className="text-lg font-display font-semibold text-foreground">Dashboard</h2>
                 <p className="text-xs text-muted-foreground hidden sm:block">Welcome back, let's get some studying done.</p>
@@ -39,7 +33,6 @@ export default function StudentTopBar({ onToggleSidebar }) {
 
             <div className="flex-1" />
 
-            {/* Search Bar */}
             <div className="hidden sm:flex items-center relative max-w-xs w-full">
                 <Search className="absolute left-3 w-4 h-4 text-muted-foreground" />
                 <input
@@ -53,9 +46,7 @@ export default function StudentTopBar({ onToggleSidebar }) {
                 </kbd>
             </div>
 
-            {/* Right Side Actions */}
             <div className="flex items-center gap-2">
-                {/* ✅ REPLACED: Bell icon with Theme Toggle using your hook */}
                 <button 
                     onClick={toggleTheme}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"

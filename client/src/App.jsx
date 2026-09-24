@@ -17,8 +17,7 @@ import SchoolStudentRegisterPage from "./auth/SchoolStudentRegisterPage";
 import SchoolAdminRegisterPage from "./auth/SchoolAdminRegisterPage";
 import PersonalUserRegisterPage from "./auth/PersonalUserRegisterPage";
 
-// Student Dashboard Pages
-import StudentDashboardLayout from "./hooks/isSidebarOpen"; 
+import StudentDashboardLayout from "./components/layouts/StudentDashboardLayout";
 import StudentHome from "./pages/Dashboard/homePage";
 import StudentAiGenerator from "./pages/Dashboard/aiGenerator";
 import AiTeacher from "./pages/Dashboard/AiTeacher";
