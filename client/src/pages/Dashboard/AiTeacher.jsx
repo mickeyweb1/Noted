@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   Send, Volume2, Bot, User, Sparkles, Mic, BookOpen, Square, 
-  Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, Loader2
+  Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, RotateCcw, Loader2
 } from "lucide-react";
 import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
@@ -15,28 +15,39 @@ const ELEVENLABS_VOICES = [
   { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi - Strong & Confident" },
 ];
 
+// TODO (privacy): this key is shared by everyone who uses this browser. On a school computer the
+// next student can see the previous student's chat. Either add the user id to the key
+// (e.g. `noted_ai_tutor_messages_${user._id}`) or remove it in your logout handler.
+const STORAGE_KEY = "noted_ai_tutor_messages";
+
+// 🔧 NEW: ONE place that decides whether an option is the correct answer.
+// It is used both for scoring (handleSelect) and for colouring the options (render).
+const matchesCorrect = (q, opt) => {
+  const o = typeof opt === "string" ? opt.trim().toLowerCase() : "";
+  const optionIndex = q.options.findIndex((x) => typeof x === "string" && x.trim().toLowerCase() === o);
+  const answer = q.correctAnswer;
+
+  if (typeof answer === "number") return optionIndex === answer;          // index (0-3)
+  if (typeof answer !== "string" || !answer.trim()) return true;          // no answer key: can't grade, count it correct
+
+  const correct = answer.trim().toLowerCase();
+  if (o === correct) return true;                                          // exact text (what the backend guarantees)
+  if (/^[a-d]$/.test(correct)) {                                           // letter answer: "b"
+    return optionIndex === correct.charCodeAt(0) - 97 || o.startsWith(correct + ".") || o.startsWith(correct + ")");
+  }
+  // last resort for messy AI output; length guard stops "4" from matching "14"
+  return correct.length > 3 && o.length > 0 && (o.includes(correct) || correct.includes(o));
+};
+
 const ChatQuizCard = ({ msg, onUpdateMessage }) => {
-  const quizState = msg.quizState || { currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0 };
+  const quizState = msg.quizState || {
+    currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0,
+  };
   const q = msg.quizData.questions[quizState.currentQ];
 
   const handleSelect = (opt) => {
     if (quizState.selected) return;
-    const safeOpt = typeof opt === 'string' ? opt.trim() : '';
-    const lowerOpt = safeOpt.toLowerCase();
-    
-    let safeCorrect = '';
-    if (typeof q.correctAnswer === 'number') safeCorrect = String.fromCharCode(97 + q.correctAnswer);
-    else if (typeof q.correctAnswer === 'string') safeCorrect = q.correctAnswer.trim().toLowerCase();
-
-    let isCorrect = false;
-    if (safeCorrect !== '') {
-      if (lowerOpt === safeCorrect) isCorrect = true;
-      if (!isCorrect && safeCorrect.length > 1) isCorrect = lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt);
-      if (!isCorrect && safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect)) {
-        isCorrect = lowerOpt.startsWith(safeCorrect + ".") || lowerOpt.startsWith(safeCorrect + ")") || String.fromCharCode(97 + q.options.indexOf(opt)).toLowerCase() === safeCorrect;
-      }
-    } else { isCorrect = true; }
-
+    const isCorrect = matchesCorrect(q, opt);
     onUpdateMessage(msg.id, { ...msg, quizState: { ...quizState, selected: opt, showExplanation: true, score: isCorrect ? quizState.score + 1 : quizState.score } });
   };
 
@@ -66,45 +77,67 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
       <div className="space-y-2">
         {q.options.map((opt, index) => {
           const safeOpt = typeof opt === 'string' ? opt.trim() : `Option ${index + 1}`;
-          let isCorrect = false;
-          if (quizState.selected === safeOpt) isCorrect = true; 
-          
+          const answered = !!quizState.selected;
+          const isPicked = quizState.selected === safeOpt;
+          const isRight = matchesCorrect(q, safeOpt);
+
+          // 🔧 FIXED: the real correct option turns green; a wrong pick turns red; the rest fade.
+          // (Before, the option you picked was ALWAYS green and everything else red.)
           let style = "border-border bg-background hover:bg-accent/50";
-          if (quizState.selected) style = isCorrect ? "border-green-500 bg-green-500/10" : "border-red-500 bg-red-500/10";
+          if (answered) {
+            if (isRight) style = "border-green-500 bg-green-500/10";
+            else if (isPicked) style = "border-red-500 bg-red-500/10";
+            else style = "border-border bg-background opacity-60";
+          }
           
           return (
-            <button key={index} onClick={() => handleSelect(safeOpt)} disabled={!!quizState.selected} className={`w-full flex items-center justify-between p-3 rounded-xl border-2 text-left text-sm font-medium transition-all ${style}`}>
+            <button key={index} onClick={() => handleSelect(safeOpt)} disabled={answered} className={`w-full flex items-center justify-between p-3 rounded-xl border-2 text-left text-sm font-medium transition-all ${style}`}>
               <span>{safeOpt}</span>
-              {quizState.selected && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-600" />}
+              {answered && isRight && <CheckCircle2 className="w-5 h-5 text-green-600" />}
+              {answered && isPicked && !isRight && <XCircle className="w-5 h-5 text-red-600" />}
             </button>
           );
         })}
       </div>
+      {/* 🔧 NEW: the explanation was stored but never shown */}
+      {quizState.showExplanation && q.explanation && (
+        <p className="rounded-xl border border-brand/20 bg-brand/5 p-3 text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">Why: </span>{q.explanation}
+        </p>
+      )}
       {quizState.selected && <button onClick={handleNext} className="w-full py-2.5 rounded-xl bg-brand text-brand-foreground text-sm font-semibold">Next Question</button>}
     </div>
   );
 };
 
 const INITIAL_MESSAGES = [{ id: 1, role: "ai", text: "Hello! I'm your **Noted AI Tutor**. What subject or topic would you like to explore today?" }];
+const SUGGESTED_QUESTIONS = ["Explain Newton's Third Law", "What caused World War I?", "Help me understand photosynthesis"];
 const LOADING_MESSAGES = ["Thinking...", "Consulting archives...", "Drafting response..."];
 
 export default function AiTeacher() {
   const [messages, setMessages] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('noted_ai_tutor_messages')) || INITIAL_MESSAGES; } catch { return INITIAL_MESSAGES; }
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || INITIAL_MESSAGES; } catch { return INITIAL_MESSAGES; }
   });
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeAudioId, setActiveAudioId] = useState(null);
+  const [loadingAudioId, setLoadingAudioId] = useState(null); // 🔧 NEW: "Loading..." is only for the network wait
   const [activeAudio, setActiveAudio] = useState(null);
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   
+  // ✅ Voice Settings
   const [selectedVoice, setSelectedVoice] = useState("pNInz6obpgDQGcFmaJgB"); 
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
-  useEffect(() => { localStorage.setItem('noted_ai_tutor_messages', JSON.stringify(messages)); }, [messages]);
+  // 🔧 NEW: refs so cleanup and cancellation always see the CURRENT audio / request
+  const activeAudioRef = useRef(null);
+  const ttsRequestRef = useRef(0);
+  const updateActiveAudio = (audio) => { activeAudioRef.current = audio; setActiveAudio(audio); };
+
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); }, [messages]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
   useEffect(() => {
     if (isLoading) {
@@ -113,26 +146,29 @@ export default function AiTeacher() {
     }
   }, [isLoading]);
 
-  // ✅ FIXED: Use setActiveAudio(null) instead of activeAudio = null
+  // 🔧 FIXED: the old cleanup captured activeAudio from the first render (always null), so audio kept
+  // playing after leaving the page. (It also tried to assign to a const.) Now it reads the ref.
   useEffect(() => {
     return () => {
-      if (activeAudio) { 
-        activeAudio.pause(); 
-        setActiveAudio(null); 
-      }
+      ttsRequestRef.current += 1;
+      if (activeAudioRef.current) activeAudioRef.current.pause();
       window.speechSynthesis.cancel();
     };
-  }, [activeAudio]);
+  }, []);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || isLoading) return; // 🔧 FIXED: Enter could send while a reply was loading
     const userMessage = { id: Date.now(), role: "user", text: inputValue };
     setMessages(prev => [...prev, userMessage]);
     setInputValue("");
     setIsLoading(true);
 
     try {
-      const history = messages.filter(m => m.id !== 1).map(m => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text }));
+      // 🔧 IMPROVED: only real chat turns, no quiz cards or error bubbles, and only the last 20
+      const history = messages
+        .filter(m => m.id !== 1 && (m.role === "user" || m.role === "ai") && typeof m.text === "string" && !m.text.startsWith("⚠️ Error"))
+        .slice(-20)
+        .map(m => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text }));
       const response = await api.post('/ai/generate', { messages: [...history, { role: "user", content: inputValue }], mode: 'tutor' });
       setMessages(prev => [...prev, { id: Date.now() + 1, role: "ai", text: response.data.data.generatedText }]);
     } catch (error) {
@@ -142,42 +178,94 @@ export default function AiTeacher() {
     }
   };
 
-  const toggleAudioPlayback = async (messageId, text) => {
-    const cleanText = text.replace(/\*\*/g, '').replace(/#/g, '');
+  // 🔧 NEW: browser voice, one short utterance per sentence (Chrome cuts long utterances after ~15s)
+  const speakWithBrowser = (messageId, cleanText, requestId) => {
+    const chunks = (cleanText.match(/[^.!?\n]+[.!?]*/g) || [cleanText]).map((s) => s.trim()).filter(Boolean);
+    if (chunks.length === 0) { setActiveAudioId(null); return; }
+    setActiveAudioId(messageId);
+    chunks.forEach((chunk, i) => {
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      if (i === chunks.length - 1) {
+        utterance.onend = () => { if (requestId === ttsRequestRef.current) setActiveAudioId(null); };
+      }
+      window.speechSynthesis.speak(utterance);
+    });
+  };
 
-    if (activeAudioId === messageId) {
-      if (activeAudio) { activeAudio.pause(); setActiveAudio(null); }
-      else { window.speechSynthesis.cancel(); }
+  // ✅ UPDATED: race-safe audio playback
+  const toggleAudioPlayback = async (messageId, text) => {
+    // 🔧 IMPROVED: strip more markdown so the voice doesn't read symbols aloud
+    const cleanText = text
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`([^`]*)`/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/^\s*>\s?/gm, "")
+      .replace(/[*#]/g, "")
+      .trim();
+
+    // Every click gets a new id, so an older in-flight request knows it was cancelled.
+    const requestId = ++ttsRequestRef.current;
+
+    // Clicking the same message again = stop (this also cancels a request that is still loading)
+    if (activeAudioId === messageId || loadingAudioId === messageId) {
+      if (activeAudioRef.current) { activeAudioRef.current.pause(); updateActiveAudio(null); }
+      window.speechSynthesis.cancel();
       setActiveAudioId(null);
+      setLoadingAudioId(null);
       return;
     }
 
-    if (activeAudio) { activeAudio.pause(); setActiveAudio(null); }
+    if (activeAudioRef.current) { activeAudioRef.current.pause(); updateActiveAudio(null); }
     window.speechSynthesis.cancel();
+    setLoadingAudioId(null);
+    if (!cleanText) return;
 
     if (useBrowserTTS) {
-      const utterance = new SpeechSynthesisUtterance(cleanText); 
-      utterance.onend = () => setActiveAudioId(null);
-      setActiveAudioId(messageId);
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setActiveAudioId(messageId);
-      try {
-        const response = await api.post('/ai/text-to-speech', { text: cleanText, style: 'tutor', voiceId: selectedVoice }, { responseType: 'blob' });
-        const audioUrl = URL.createObjectURL(response.data);
-        const audio = new Audio(audioUrl);
-        setActiveAudio(audio);
-        
-        audio.onended = () => { setActiveAudioId(null); setActiveAudio(null); URL.revokeObjectURL(audioUrl); };
-        audio.onerror = () => { setActiveAudioId(null); setActiveAudio(null); setUseBrowserTTS(true); };
-        
-        await audio.play();
-      } catch (error) {
-        console.error("TTS Error:", error);
-        setActiveAudioId(null);
-        setUseBrowserTTS(true);
-      }
+      speakWithBrowser(messageId, cleanText, requestId);
+      return;
     }
+
+    setActiveAudioId(messageId);
+    setLoadingAudioId(messageId);
+    try {
+      const response = await api.post('/ai/text-to-speech', { text: cleanText, style: 'tutor', voiceId: selectedVoice }, { responseType: 'blob' });
+      if (requestId !== ttsRequestRef.current) return; // stopped while loading, don't play
+
+      setLoadingAudioId(null);
+      const audioUrl = URL.createObjectURL(response.data);
+      const audio = new Audio(audioUrl);
+      updateActiveAudio(audio);
+      
+      audio.onended = () => { setActiveAudioId(null); updateActiveAudio(null); URL.revokeObjectURL(audioUrl); };
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        updateActiveAudio(null);
+        setUseBrowserTTS(true);
+        // 🔧 FIXED: actually fall back right away instead of leaving the user with silence
+        if (requestId === ttsRequestRef.current) speakWithBrowser(messageId, cleanText, requestId);
+      };
+      
+      await audio.play();
+    } catch (error) {
+      console.error("TTS Error:", error);
+      if (requestId !== ttsRequestRef.current) return;
+      setLoadingAudioId(null);
+      updateActiveAudio(null);
+      setUseBrowserTTS(true);
+      speakWithBrowser(messageId, cleanText, requestId); // 🔧 FIXED: fall back right away
+    }
+  };
+
+  // 🔧 IMPROVED: also stops any audio that is playing
+  const handleClearChat = () => {
+    ttsRequestRef.current += 1;
+    if (activeAudioRef.current) activeAudioRef.current.pause();
+    updateActiveAudio(null);
+    window.speechSynthesis.cancel();
+    setActiveAudioId(null);
+    setLoadingAudioId(null);
+    setMessages(INITIAL_MESSAGES);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   return (
@@ -190,9 +278,10 @@ export default function AiTeacher() {
             <p className="text-xs text-muted-foreground">Online and ready</p>
           </div>
         </div>
-        <button onClick={() => { setMessages(INITIAL_MESSAGES); localStorage.removeItem('noted_ai_tutor_messages'); }} className="p-2 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+        <button onClick={handleClearChat} aria-label="Clear chat" className="p-2 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
       </div>
 
+      {/* ✅ Voice Settings Bar */}
       <div className="mb-4 p-3 rounded-xl border border-border bg-card/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1">
           <Volume2 className="w-4 h-4 text-brand" />
@@ -225,8 +314,8 @@ export default function AiTeacher() {
               
               {msg.role === "ai" && (
                 <button onClick={() => toggleAudioPlayback(msg.id, msg.text)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${activeAudioId === msg.id ? "bg-brand/10 text-brand border-brand/20" : "bg-card text-muted-foreground border-border"}`}>
-                  {activeAudioId === msg.id && !activeAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : activeAudioId === msg.id ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                  {activeAudioId === msg.id && !activeAudio ? "Loading..." : activeAudioId === msg.id ? "Stop" : "Listen"}
+                  {loadingAudioId === msg.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : activeAudioId === msg.id ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                  {loadingAudioId === msg.id ? "Loading..." : activeAudioId === msg.id ? "Stop" : "Listen"}
                 </button>
               )}
             </div>
@@ -242,9 +331,22 @@ export default function AiTeacher() {
       </div>
 
       <div className="relative bg-card border border-border rounded-2xl shadow-lg p-2">
-        <textarea ref={textareaRef} value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())} placeholder="Ask a question..." rows={1} className="w-full bg-transparent border-0 resize-none px-4 py-3 text-sm focus:outline-none max-h-32" />
+        <textarea
+          ref={textareaRef}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              handleSendMessage();
+            }
+          }}
+          placeholder="Ask a question..."
+          rows={1}
+          className="w-full bg-transparent border-0 resize-none px-4 py-3 text-sm focus:outline-none max-h-32"
+        />
         <div className="flex justify-end px-2 pb-1">
-          <button onClick={handleSendMessage} disabled={!inputValue.trim() || isLoading} className={`p-2.5 rounded-xl ${inputValue.trim() && !isLoading ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}><Send className="w-4 h-4" /></button>
+          <button onClick={handleSendMessage} disabled={!inputValue.trim() || isLoading} aria-label="Send message" className={`p-2.5 rounded-xl ${inputValue.trim() && !isLoading ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}><Send className="w-4 h-4" /></button>
         </div>
       </div>
     </div>
