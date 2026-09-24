@@ -1,4 +1,4 @@
-himport { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { 
   Send, Volume2, Bot, User, Sparkles, Mic, BookOpen, Square, 
   Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, RotateCcw, Loader2
