@@ -207,4 +207,49 @@ router.get('/admin/quizzes', protect, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// 🎯 Validate access code and get quiz info (NO AUTH REQUIRED for students)
+router.post('/validate-code', async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
+    
+    if (!quiz) {
+      return res.status(404).json({ success: false, message: 'Invalid access code' });
+    }
+
+    const existingSubmission = await QuizSubmission.findOne({ 
+      quiz: quiz._id, 
+      accessCode: code.toUpperCase() 
+    });
+
+    if (existingSubmission) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'This access code has already been used' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      data: {
+        title: quiz.title,
+        difficulty: quiz.difficulty,
+        timeLimit: quiz.timeLimit,
+        timeUnit: quiz.timeUnit,
+        timeType: quiz.timeType,
+        maxTabSwitches: quiz.maxTabSwitches,
+        questions: quiz.questions.map(q => ({
+          _id: q._id,
+          question: q.question,
+          options: q.options,
+          imageUrl: q.imageUrl
+        }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
 export default router;
