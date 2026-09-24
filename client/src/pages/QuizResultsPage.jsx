@@ -13,7 +13,8 @@ const td = "px-4 py-4 sm:px-6";
 
 function PageSpinner() {
   return (
-    <div role="status" aria-label="Loading" className="flex min-h-screen items-center justify-center bg-muted">
+    // ✅ FIXED: Changed bg-muted to bg-background for consistency
+    <div role="status" aria-label="Loading" className="flex min-h-screen items-center justify-center bg-background">
       <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-brand"></div>
     </div>
   );
@@ -33,7 +34,6 @@ function StatCard({ icon: Icon, label, children }) {
   );
 }
 
-// ✅ Fix 1: Properly escape CSV values to handle commas and quotes
 const escapeCsvValue = (val) => {
   const str = String(val ?? "");
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -42,7 +42,6 @@ const escapeCsvValue = (val) => {
   return str;
 };
 
-// ✅ Fix 6: Format average time to show minutes AND seconds
 const formatAvgTime = (seconds) => {
   if (!seconds || seconds <= 0) return "0s";
   const m = Math.floor(seconds / 60);
@@ -70,7 +69,8 @@ export function QuizResultsDashboard() {
   if (loading) return <PageSpinner />;
 
   return (
-    <div className="min-h-screen bg-muted p-4 md:p-8">
+    // ✅ FIXED: Changed bg-muted to bg-background
+    <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -126,17 +126,15 @@ export default function QuizResultsPage() {
   const [quizData, setQuizData] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(""); // ✅ Fix 2: Error state
+  const [error, setError] = useState(""); 
   const [expandedSubmission, setExpandedSubmission] = useState(null);
-  
-  // ✅ Fix 3: Modal state for regenerating code
   const [regenModal, setRegenModal] = useState({ open: false, step: 'confirm', code: '', loading: false });
 
   useEffect(() => { fetchResults(); }, [quizId]);
 
   const fetchResults = async () => {
     setLoading(true);
-    setError(""); // ✅ Fix 2: Clear previous errors
+    setError(""); 
     try {
       const res = await api.get(`/quiz/${quizId}/results`);
       setQuizData(res.data.data.quiz);
@@ -148,7 +146,6 @@ export default function QuizResultsPage() {
     }
   };
 
-  // ✅ Fix 3: Handle regenerate code with modal
   const handleRegenerateCode = () => {
     setRegenModal({ open: true, step: 'confirm', code: '', loading: false });
   };
@@ -164,11 +161,9 @@ export default function QuizResultsPage() {
     }
   };
 
-  // ✅ Fix 1: Robust CSV export
   const exportToCSV = () => {
     const headers = ["Student Name", "Class", "Score", "Percentage", "Time Taken", "Tab Switches", "Date Submitted"];
     const rows = submissions.map(sub => {
-      // ✅ Fix 4: Guard against NaN in CSV
       const percentage = sub.totalQuestions > 0 ? Math.round((sub.score / sub.totalQuestions) * 100) : 0;
       const timeStr = `${Math.floor((sub.timeTaken || 0) / 60)}m ${(sub.timeTaken || 0) % 60}s`;
       
@@ -188,21 +183,20 @@ export default function QuizResultsPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    // Clean filename
     const safeTitle = (quizData?.title || "Quiz").replace(/[^a-z0-9]/gi, '_').substring(0, 50);
     a.download = `${safeTitle}-Results.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    window.URL.revokeObjectURL(url); // ✅ Fix 1: Prevent memory leak
+    window.URL.revokeObjectURL(url); 
   };
 
   if (loading) return <PageSpinner />;
 
-  // ✅ Fix 2: Render proper error UI instead of blank screen
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted p-4">
+      // ✅ FIXED: Changed bg-muted to bg-background
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
             <AlertTriangle className="h-7 w-7" />
@@ -215,7 +209,6 @@ export default function QuizResultsPage() {
     );
   }
 
-  // ✅ Fix 4 & 6: Safe calculations
   const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => {
     const p = sub.totalQuestions > 0 ? (sub.score / sub.totalQuestions) * 100 : 0;
     return acc + p;
@@ -224,9 +217,9 @@ export default function QuizResultsPage() {
   const avgTimeSeconds = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => acc + (sub.timeTaken || 0), 0) / submissions.length) : 0;
 
   return (
-    <div className="min-h-screen bg-muted p-4 md:p-8">
+    // ✅ FIXED: Changed bg-muted to bg-background
+    <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-center gap-3">
             <button onClick={() => navigate("/admin/quiz-results")} aria-label="Back to all quizzes" className={`shrink-0 rounded-xl border border-border bg-card p-2.5 text-foreground transition hover:bg-accent ${focusRing}`}>
@@ -249,19 +242,17 @@ export default function QuizResultsPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <StatCard icon={User} label="Total students">{submissions.length}</StatCard>
           <StatCard icon={Trophy} label="Average score">{avgScore}%</StatCard>
           <StatCard icon={Clock} label="Average time">{formatAvgTime(avgTimeSeconds)}</StatCard>
         </div>
 
-        {/* Results Table */}
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           {submissions.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px]">
-                <thead className="border-b border-border bg-muted">
+                <thead className="border-b border-border bg-muted/50">
                   <tr>
                     <th scope="col" className={th}>Student</th>
                     <th scope="col" className={th}>Score</th>
@@ -273,7 +264,6 @@ export default function QuizResultsPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {submissions.map((sub, idx) => {
-                    // ✅ Fix 4: Guard against NaN percentage
                     const percentage = sub.totalQuestions > 0 ? Math.round((sub.score / sub.totalQuestions) * 100) : 0;
                     const isExpanded = expandedSubmission === sub._id;
                     const tone =
@@ -284,7 +274,7 @@ export default function QuizResultsPage() {
                         : { badge: "bg-destructive/10 text-destructive", bar: "bg-destructive" };
                     return (
                       <React.Fragment key={idx}>
-                        <tr className={`transition-colors hover:bg-muted ${isExpanded ? "bg-muted" : ""}`}>
+                        <tr className={`transition-colors hover:bg-muted/50 ${isExpanded ? "bg-muted/50" : ""}`}>
                           <td className={td}>
                             <div className="font-medium text-foreground">{sub.studentName} {sub.studentSurname}</div>
                             <div className="text-xs text-muted-foreground">{sub.studentClass || "No class"}</div>
@@ -316,16 +306,13 @@ export default function QuizResultsPage() {
                             </button>
                           </td>
                         </tr>
-                        {/* ✅ EXPANDABLE ROW */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan="6" className="bg-muted p-4 sm:p-6">
+                            <td colSpan="6" className="bg-muted/30 p-4 sm:p-6">
                               <div className="space-y-4">
                                 <h4 className="font-semibold text-foreground">Question breakdown</h4>
                                 {sub.answers.map((ans, aIdx) => {
                                   const question = quizData?.questions.find(q => q._id === ans.questionId);
-                                  
-                                  // ✅ Fix 5: Handle missing question data gracefully
                                   if (!question) {
                                     return (
                                       <div key={aIdx} className="rounded-xl border border-dashed border-border bg-muted/50 p-4 text-center text-sm text-muted-foreground">
@@ -333,7 +320,6 @@ export default function QuizResultsPage() {
                                       </div>
                                     );
                                   }
-                                  
                                   return (
                                     <div key={aIdx} className="rounded-xl border border-border bg-card p-4">
                                       <div className="mb-3 flex items-start gap-3">
@@ -390,7 +376,6 @@ export default function QuizResultsPage() {
         </div>
       </div>
 
-      {/* ✅ Fix 3: Regenerate Code Modal */}
       {regenModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
