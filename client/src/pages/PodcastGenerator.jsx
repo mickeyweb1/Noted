@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Camera, Check, Clipboard, Download, FileText, GraduationCap,
-  Headphones, Loader2, MessageCircle, Mic, Pause, Play, Sparkles,
-  Square, User, Brain
+  AlertTriangle, Brain, Camera, Check, CheckCircle2, ChevronDown, Clipboard, Download,
+  FileText, GraduationCap, Headphones, Loader2, MessageCircle, Mic, Pause, Play,
+  Sparkles, Square, User, XCircle
 } from "lucide-react";
 import api from "../utils/api";
 import NoteScanner from "../components/NoteScanner";
@@ -10,6 +10,11 @@ import NoteScanner from "../components/NoteScanner";
 const SPEEDS = [0.75, 1, 1.25, 1.5];
 const TONES = ["Funny", "Calm", "Energetic", "Serious"];
 const LEVELS = ["Beginner", "Intermediate", "Advanced"];
+const LENGTHS = [
+  { id: "short", label: "Short", hint: "~3-5 min" },
+  { id: "medium", label: "Medium", hint: "~5-8 min" },
+  { id: "long", label: "Long", hint: "~10-12 min" },
+];
 
 const ELEVENLABS_VOICES = [
   { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel - Warm & Natural" },
@@ -19,47 +24,70 @@ const ELEVENLABS_VOICES = [
   { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi - Strong & Confident" },
 ];
 
+/* ---------- Style helpers ---------- */
+
+const focusRing =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const card = "rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6";
+const inputCls =
+  "w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-brand";
+const primaryBtn = `inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+const ghostBtn = `inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-60 ${focusRing}`;
+
+/* ---------- Pure helpers ---------- */
+
 const removeCodeFence = (value) => value.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+const normalizeQuiz = (quiz) =>
+  Array.isArray(quiz)
+    ? quiz
+        .filter((q) => q && typeof q.question === "string" && Array.isArray(q.options) && q.options.length >= 2)
+        .map((q) => ({
+          question: q.question.trim(),
+          options: q.options.map((o) => String(o).trim()),
+          answer: String(q.answer ?? q.correctAnswer ?? "").trim(),
+          explanation: typeof q.explanation === "string" ? q.explanation.trim() : "",
+        }))
+    : [];
 
 const parsePodcastResponse = (generatedText) => {
   try {
-    if (generatedText && typeof generatedText === "object") return generatedText;
-    if (typeof generatedText !== "string") throw new Error("The podcast response was empty.");
-    
-    const cleanText = removeCodeFence(generatedText);
-    const firstBrace = cleanText.indexOf("{");
-    const lastBrace = cleanText.lastIndexOf("}");
-    const jsonText = firstBrace >= 0 && lastBrace > firstBrace ? cleanText.slice(firstBrace, lastBrace + 1) : cleanText;
-    
-    const parsed = JSON.parse(jsonText);
-    if (!parsed) throw new Error("Empty response");
-    
-    const title = parsed.title?.trim() || "Study Podcast";
-    
+    let parsed = generatedText;
+    if (typeof generatedText === "string") {
+      const cleanText = removeCodeFence(generatedText);
+      const firstBrace = cleanText.indexOf("{");
+      const lastBrace = cleanText.lastIndexOf("}");
+      const jsonText = firstBrace >= 0 && lastBrace > firstBrace ? cleanText.slice(firstBrace, lastBrace + 1) : cleanText;
+      parsed = JSON.parse(jsonText);
+    }
+    if (!parsed || typeof parsed !== "object") throw new Error("The podcast response was empty.");
+
+    const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : "Study Podcast";
+
     let script = [];
     if (Array.isArray(parsed.script)) {
       script = parsed.script
         .filter((line) => line && (typeof line.text === "string" || typeof line === "string"))
         .map((line) => {
           const text = typeof line === "string" ? line : line.text;
-          const speaker = line.speaker?.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
+          const speaker = typeof line.speaker === "string" && line.speaker.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
           return { speaker, text: text.trim() };
         })
-        .filter(line => line.text.length > 0);
+        .filter((line) => line.text.length > 0);
     }
-    
+
     if (script.length === 0) {
       script = [
         { speaker: "Leo", text: `Welcome to this study session about ${title}!` },
-        { speaker: "Dr. Nova", text: `Let's explore this topic together.` }
+        { speaker: "Dr. Nova", text: `Let's explore this topic together.` },
       ];
     }
-    
+
     return {
       title,
       script,
-      keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [],
-      quiz: Array.isArray(parsed.quiz) ? parsed.quiz : [],
+      keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways.filter((t) => typeof t === "string" && t.trim()) : [],
+      quiz: normalizeQuiz(parsed.quiz),
     };
   } catch (error) {
     console.error("Podcast parsing error:", error);
@@ -67,42 +95,147 @@ const parsePodcastResponse = (generatedText) => {
   }
 };
 
+// 🔧 NEW: Chrome cuts long utterances after ~15s (and then never fires "end"), so we speak short chunks.
+const toChunks = (text, max = 200) => {
+  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [text];
+  const out = [];
+  sentences.forEach((sentence) => {
+    let rest = sentence.trim();
+    while (rest.length > max) {
+      let cut = rest.lastIndexOf(",", max);
+      if (cut < 60) cut = rest.lastIndexOf(" ", max);
+      if (cut < 1) cut = max;
+      out.push(rest.slice(0, cut + 1).trim());
+      rest = rest.slice(cut + 1).trim();
+    }
+    if (rest) out.push(rest);
+  });
+  return out;
+};
+
+// 🔧 FIXED: only English voices, and always two different ones when possible
+// (before, the second host could get a voice in a random language).
+const pickBrowserVoices = () => {
+  const all = window.speechSynthesis.getVoices();
+  const english = all.filter((v) => /^en/i.test(v.lang));
+  const pool = english.length ? english : all;
+  const leoVoice = pool.find((v) => /Daniel|Alex|David|Mark|Guy|Ryan|Google US English/i.test(v.name)) || pool[0];
+  const novaVoice =
+    pool.find((v) => v !== leoVoice && /Samantha|Karen|Zira|Aria|Jenny|Google UK English Female|Female/i.test(v.name)) ||
+    pool.find((v) => v !== leoVoice) ||
+    leoVoice;
+  return { leoVoice, novaVoice };
+};
+
+// 🔧 NEW: with responseType "blob", axios errors carry a Blob, so the server's message was invisible.
+const getErrorInfo = async (err) => {
+  const status = err?.response?.status;
+  let message = err?.message || "Something went wrong.";
+  const data = err?.response?.data;
+  try {
+    if (typeof Blob !== "undefined" && data instanceof Blob) {
+      const parsed = JSON.parse(await data.text());
+      if (parsed?.message) message = parsed.message;
+    } else if (data?.message) {
+      message = data.message;
+    }
+  } catch { /* keep the default message */ }
+  return { status, message };
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const norm = (value) => String(value ?? "").trim().toLowerCase();
+const isCorrectOption = (q, opt, index) => {
+  const answer = norm(q.answer);
+  if (!answer) return false;
+  if (/^[a-d]$/.test(answer)) return index === answer.charCodeAt(0) - 97;
+  const stripLabel = (s) => s.replace(/^[a-d][.)]\s*/, "");
+  return norm(opt) === answer || stripLabel(norm(opt)) === stripLabel(answer);
+};
+
+/* ---------- Small UI pieces ---------- */
+
+function ChipGroup({ label, options, value, onChange }) {
+  return (
+    <div className="space-y-2">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={value === option}
+            onClick={() => onChange(option)}
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${focusRing} ${
+              value === option ? "border-brand bg-brand text-brand-foreground shadow-sm" : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+            }`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VoiceSelect({ id, label, value, onChange }) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="text-xs font-medium text-muted-foreground">{label}</label>
+      <div className="relative">
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} appearance-none pr-9`}>
+          {ELEVENLABS_VOICES.map((voice) => (<option key={voice.id} value={voice.id}>{voice.name}</option>))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Component ---------- */
+
 export default function PodcastGenerator() {
   const [inputMethod, setInputMethod] = useState("type");
   const [topic, setTopic] = useState("");
   const [length, setLength] = useState("short");
   const [tone, setTone] = useState("Funny");
   const [level, setLevel] = useState("Beginner");
-  
+
   const [script, setScript] = useState([]);
   const [keyTakeaways, setKeyTakeaways] = useState([]);
   const [quiz, setQuiz] = useState([]);
+  const [quizPicks, setQuizPicks] = useState({});
   const [podcastTitle, setPodcastTitle] = useState("");
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
   const [voices, setVoices] = useState([]);
-  
+
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const [copied, setCopied] = useState(false);
+
   const [studioAudioUrl, setStudioAudioUrl] = useState("");
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-  
-  // ✅ NEW: Voice selection and fallback states
-  const [selectedVoice, setSelectedVoice] = useState("21m00Tcm4TlvDq8ikWAM");
+  const [audioProgress, setAudioProgress] = useState(null);
+
+  // 🔧 CHANGED: one voice per host for studio audio (before: a single voice read both hosts)
+  const [leoVoiceId, setLeoVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
+  const [novaVoiceId, setNovaVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
 
   const speechRunId = useRef(0);
   const currentIndexRef = useRef(0);
   const scriptRef = useRef([]);
   const playbackSpeedRef = useRef(1);
+  const studioUrlRef = useRef("");
 
   useEffect(() => { scriptRef.current = script; }, [script]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
@@ -112,10 +245,7 @@ export default function PodcastGenerator() {
     const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
     loadVoices();
     window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
-    return () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-      window.speechSynthesis.cancel();
-    };
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
   }, []);
 
   useEffect(() => {
@@ -124,8 +254,7 @@ export default function PodcastGenerator() {
       try {
         const response = await api.get("/ai/library", { signal: controller.signal });
         if (response.data?.success) {
-          const notes = response.data.data.filter((item) => item.type === "summary" || item.type === "tutor");
-          setLibraryNotes(notes);
+          setLibraryNotes(response.data.data.filter((item) => item.type === "summary" || item.type === "tutor"));
         }
       } catch (requestError) {
         if (requestError.name !== "CanceledError") console.error("Failed to fetch library:", requestError);
@@ -135,6 +264,29 @@ export default function PodcastGenerator() {
     return () => controller.abort();
   }, []);
 
+  // 🔧 FIXED: cleanup used to depend on [studioAudioUrl], so creating studio audio also
+  // cancelled the browser playback. Now it only runs on unmount.
+  useEffect(() => {
+    return () => {
+      speechRunId.current += 1;
+      window.speechSynthesis?.cancel();
+      if (studioUrlRef.current) URL.revokeObjectURL(studioUrlRef.current);
+    };
+  }, []);
+
+  // Keep the line being spoken in view
+  useEffect(() => {
+    if (currentLineIndex >= 0) {
+      document.getElementById(`line-${currentLineIndex}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [currentLineIndex]);
+
+  const replaceStudioAudio = (url) => {
+    if (studioUrlRef.current) URL.revokeObjectURL(studioUrlRef.current);
+    studioUrlRef.current = url || "";
+    setStudioAudioUrl(url || "");
+  };
+
   const stopAudio = useCallback(() => {
     speechRunId.current += 1;
     window.speechSynthesis?.cancel();
@@ -143,66 +295,70 @@ export default function PodcastGenerator() {
     setCurrentLineIndex(-1);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      speechRunId.current += 1;
-      window.speechSynthesis?.cancel();
-      if (studioAudioUrl) URL.revokeObjectURL(studioAudioUrl);
-    };
-  }, [studioAudioUrl]);
-
-  const chooseVoices = () => {
-    const allVoices = window.speechSynthesis.getVoices();
-    const leoVoice = allVoices.find(v => /Daniel|Alex/i.test(v.name)) || allVoices.find(v => /Google US English/i.test(v.name)) || allVoices[0];
-    const novaVoice = allVoices.find(v => /Samantha|Karen/i.test(v.name)) || allVoices.find(v => /Google UK English Female/i.test(v.name) && v !== leoVoice) || allVoices.find(v => v !== leoVoice) || allVoices[0];
-    return { leoVoice, novaVoice };
-  };
-
-  const speakCurrentLine = useCallback((runId) => {
+  const speakLine = useCallback(function speak(runId) {
+    if (runId !== speechRunId.current) return;
     const activeScript = scriptRef.current;
-    const currentIndex = currentIndexRef.current;
-    if (runId !== speechRunId.current || currentIndex >= activeScript.length) {
+    const index = currentIndexRef.current;
+    if (index >= activeScript.length) {
       setIsPlaying(false);
       setIsPaused(false);
       setCurrentLineIndex(-1);
       return;
     }
-    const line = activeScript[currentIndex];
-    const { leoVoice, novaVoice } = chooseVoices();
-    const utterance = new SpeechSynthesisUtterance(line.text);
-    utterance.voice = line.speaker.toLowerCase() === "leo" ? leoVoice : novaVoice;
-    utterance.rate = playbackSpeedRef.current;
-    utterance.pitch = line.speaker.toLowerCase() === "leo" ? 1.08 : 0.92;
-    setCurrentLineIndex(currentIndex);
-    
-    utterance.onend = () => {
-      if (runId !== speechRunId.current) return;
-      currentIndexRef.current += 1;
-      setTimeout(() => speakCurrentLine(runId), 100);
-    };
-    utterance.onerror = () => {
-      if (runId !== speechRunId.current) return;
-      setIsPlaying(false);
-      setIsPaused(false);
-      setCurrentLineIndex(-1);
-      setError("Audio playback failed. Please try again.");
-    };
-    window.speechSynthesis.speak(utterance);
-  }, [voices]);
 
-  const startAudio = () => {
+    const line = activeScript[index];
+    const isLeo = line.speaker.toLowerCase() === "leo";
+    const { leoVoice, novaVoice } = pickBrowserVoices();
+    const chunks = toChunks(line.text);
+    setCurrentLineIndex(index);
+
+    if (chunks.length === 0) {
+      currentIndexRef.current += 1;
+      speak(runId);
+      return;
+    }
+
+    chunks.forEach((chunk, i) => {
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      const voice = isLeo ? leoVoice : novaVoice;
+      if (voice) utterance.voice = voice;
+      utterance.rate = playbackSpeedRef.current;
+      utterance.pitch = isLeo ? 1.08 : 0.92;
+      utterance.onerror = (event) => {
+        if (runId !== speechRunId.current) return;
+        if (event.error === "interrupted" || event.error === "canceled") return;
+        speechRunId.current += 1;
+        setIsPlaying(false);
+        setIsPaused(false);
+        setCurrentLineIndex(-1);
+        setError("Audio playback failed. Check your volume, or try another browser.");
+      };
+      if (i === chunks.length - 1) {
+        utterance.onend = () => {
+          if (runId !== speechRunId.current) return;
+          currentIndexRef.current += 1;
+          setTimeout(() => speak(runId), 150);
+        };
+      }
+      window.speechSynthesis.speak(utterance);
+    });
+  }, []);
+
+  const startAudio = (fromIndex = 0) => {
     if (!window.speechSynthesis || scriptRef.current.length === 0) {
       setError("Audio playback is not supported in this browser.");
       return;
     }
     speechRunId.current += 1;
     const runId = speechRunId.current;
-    currentIndexRef.current = 0;
+    currentIndexRef.current = fromIndex;
+    window.speechSynthesis.resume(); // a cancel() while paused can leave Chrome stuck paused
     window.speechSynthesis.cancel();
     setError("");
     setIsPlaying(true);
     setIsPaused(false);
-    speakCurrentLine(runId);
+    // Chrome can swallow speak() if it comes right after cancel(), so wait a moment
+    setTimeout(() => speakLine(runId), 80);
   };
 
   const toggleAudio = () => {
@@ -218,16 +374,16 @@ export default function PodcastGenerator() {
       setIsPaused(true);
       return;
     }
-    startAudio();
+    startAudio(0);
   };
 
   const changeSpeed = (speed) => {
     setPlaybackSpeed(speed);
+    playbackSpeedRef.current = speed; // 🔧 FIXED: update the ref NOW, or the restart used the old speed
     if (isPlaying && !isPaused) {
       const runId = ++speechRunId.current;
       window.speechSynthesis.cancel();
-      setIsPlaying(true);
-      speakCurrentLine(runId);
+      setTimeout(() => speakLine(runId), 80);
     }
   };
 
@@ -238,35 +394,74 @@ export default function PodcastGenerator() {
     if (note) setTopic((note.generatedText || note.title).slice(0, 50000));
   };
 
-  // ✅ UPDATED: Single, clean generateStudioAudio function with fallback logic
+  const transcriptText = script.map((line) => `${line.speaker}: ${line.text}`).join("\n\n");
+
+  // One request per line so each host gets their own voice, then the clips are joined into one MP3.
+  const fetchLineAudio = async (line) => {
+    const voiceId = line.speaker.toLowerCase() === "leo" ? leoVoiceId : novaVoiceId;
+    const request = () =>
+      api.post("/ai/text-to-speech", { text: line.text, style: "podcast", useCase: "podcast", voiceId }, { responseType: "blob" });
+    try {
+      return (await request()).data;
+    } catch (requestError) {
+      if (requestError.response?.status === 429) { // "busy": wait a moment and retry once
+        await sleep(1500);
+        return (await request()).data;
+      }
+      throw requestError;
+    }
+  };
+
   const generateStudioAudio = async () => {
-    if (!transcriptText || isAudioLoading) return;
+    if (script.length === 0 || isAudioLoading) return;
+    // 🔧 FIXED: with browser voice on, this used to still call ElevenLabs and burn credits
+    if (useBrowserTTS) {
+      setNotice("Browser voice is on. Press play to listen for free, or turn it off to create studio audio.");
+      return;
+    }
+
     setIsAudioLoading(true);
     setError("");
+    setNotice("");
+    const total = script.length;
+    setAudioProgress({ done: 0, total });
+
     try {
-      const response = await api.post("/ai/text-to-speech", { 
-        text: transcriptText, 
-        style: "podcast",
-        voiceId: useBrowserTTS ? null : selectedVoice,
-        useBrowserTTS: useBrowserTTS
-      }, { responseType: "blob" });
-      
-      const nextAudioUrl = URL.createObjectURL(response.data);
-      setStudioAudioUrl((previousUrl) => {
-        if (previousUrl) URL.revokeObjectURL(previousUrl);
-        return nextAudioUrl;
-      });
+      const clips = new Array(total);
+      let next = 0;
+      let done = 0;
+      let failed = false;
+
+      const worker = async () => {
+        while (!failed) {
+          const i = next++;
+          if (i >= total) return;
+          try {
+            clips[i] = await fetchLineAudio(script[i]);
+          } catch (lineError) {
+            failed = true;
+            throw lineError;
+          }
+          done += 1;
+          setAudioProgress({ done, total });
+        }
+      };
+      await Promise.all([worker(), worker()]); // 2 at a time keeps us inside ElevenLabs' free-tier limit
+
+      replaceStudioAudio(URL.createObjectURL(new Blob(clips, { type: "audio/mpeg" })));
       setNotice("Studio audio is ready.");
     } catch (requestError) {
       console.error("Studio audio failed:", requestError);
-      if (requestError.response?.status === 402 || requestError.response?.status === 429) {
-        setUseBrowserTTS(true); // Auto-enable the toggle for them
-        setError("ElevenLabs credits may be exhausted. Switched to free browser TTS automatically.");
+      const { status, message } = await getErrorInfo(requestError);
+      if (status === 402) {
+        setUseBrowserTTS(true); // ElevenLabs can't be used right now, fall back to the free voice
+        setError(`${message} Switched to the free browser voice.`);
       } else {
-        setError(requestError.response?.data?.message || "Studio audio could not be created. Browser playback is still available.");
+        setError(message || "Studio audio could not be created. Browser playback is still available.");
       }
     } finally {
       setIsAudioLoading(false);
+      setAudioProgress(null);
     }
   };
 
@@ -287,9 +482,10 @@ export default function PodcastGenerator() {
     setScript([]);
     setKeyTakeaways([]);
     setQuiz([]);
+    setQuizPicks({});
     setPodcastTitle("");
-    setStudioAudioUrl("");
-    
+    replaceStudioAudio("");
+
     try {
       const response = await api.post("/ai/generate", {
         text: cleanTopic,
@@ -299,9 +495,8 @@ export default function PodcastGenerator() {
         level,
         subject: "General",
       });
-      const generatedText = response.data?.data?.generatedText;
-      const podcast = parsePodcastResponse(generatedText);
-      
+      const podcast = parsePodcastResponse(response.data?.data?.generatedText);
+
       setPodcastTitle(podcast.title);
       setScript(podcast.script);
       setKeyTakeaways(podcast.keyTakeaways);
@@ -314,8 +509,6 @@ export default function PodcastGenerator() {
       setIsLoading(false);
     }
   };
-
-  const transcriptText = script.map((line) => `${line.speaker}: ${line.text}`).join("\n\n");
 
   const copyTranscript = async () => {
     try {
@@ -337,204 +530,314 @@ export default function PodcastGenerator() {
     URL.revokeObjectURL(url);
   };
 
+  const progress = currentLineIndex >= 0 && script.length ? ((currentLineIndex + 1) / script.length) * 100 : 0;
+  const hasSpeech = typeof window !== "undefined" && !!window.speechSynthesis;
+
   return (
-    <div className="min-h-screen w-full bg-muted transition-colors duration-300 dark:bg-background">
+    <div className="min-h-screen w-full bg-muted">
       <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
-        <header className="space-y-2 text-center">
-          <h1 className="flex items-center justify-center gap-3 text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            <Mic className="h-8 w-8 text-brand" /> AI Study Podcast
-          </h1>
-          <p className="text-base text-muted-foreground md:text-lg">
-            Turn your notes into a natural conversation you can listen to, pause, replay, and study from.
+        {/* Header */}
+        <header className="space-y-3 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+            <Mic className="h-7 w-7" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">AI study podcast</h1>
+          <p className="mx-auto max-w-xl text-muted-foreground">
+            Turn your notes into a conversation you can listen to, pause and study from.
           </p>
-          <p className="text-xs text-muted-foreground italic bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 py-1 px-3 rounded-full inline-block">
-            ⚠️ AI-generated content — review important facts before using for exams.
+          <p className="mx-auto inline-flex items-center gap-2 rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-700 dark:text-yellow-400">
+            <AlertTriangle className="h-3.5 w-3.5" /> AI-generated. Double-check important facts before an exam.
           </p>
         </header>
 
-        <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <div className="mx-auto flex w-fit max-w-full overflow-x-auto rounded-lg bg-muted p-1 md:mx-0" role="tablist">
-            <button type="button" onClick={() => { setInputMethod("type"); setSelectedNoteId(""); }} className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all ${inputMethod === "type" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
-              <FileText className="mr-2 inline h-4 w-4" /> Type Topic
-            </button>
-            <button type="button" onClick={() => setInputMethod("scan")} className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all ${inputMethod === "scan" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
-              <Camera className="mr-2 inline h-4 w-4" /> Scan Notes
-            </button>
-            <button type="button" onClick={() => setInputMethod("library")} className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-all ${inputMethod === "library" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
-              <MessageCircle className="mr-2 inline h-4 w-4" /> From Library
-            </button>
+        {/* Setup */}
+        <section className={`${card} space-y-6`}>
+          <div className="space-y-4">
+            <div className="flex w-full gap-1 overflow-x-auto rounded-xl bg-muted p-1 sm:w-fit" role="tablist">
+              {[
+                { id: "type", label: "Type topic", icon: FileText },
+                { id: "scan", label: "Scan notes", icon: Camera },
+                { id: "library", label: "From library", icon: MessageCircle },
+              ].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={inputMethod === id}
+                  onClick={() => { setInputMethod(id); if (id === "type") setSelectedNoteId(""); }}
+                  className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition sm:flex-none ${focusRing} ${
+                    inputMethod === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </div>
+
+            {inputMethod === "scan" && (
+              <NoteScanner
+                onScanComplete={(text) => {
+                  setTopic((prev) => (prev ? `${prev}\n\n--- 📄 New Page ---\n\n${text}` : text));
+                  setInputMethod("type");
+                }}
+              />
+            )}
+
+            {inputMethod === "library" && (
+              <div className="space-y-1.5">
+                <label htmlFor="saved-note" className="text-sm font-medium text-foreground">Select a saved note</label>
+                <div className="relative">
+                  <select id="saved-note" value={selectedNoteId} onChange={handleLibrarySelect} className={`${inputCls} appearance-none pr-9`}>
+                    <option value="">Choose a note</option>
+                    {libraryNotes.map((note) => (<option key={note._id} value={note._id}>{note.title} ({new Date(note.createdAt).toLocaleDateString()})</option>))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label htmlFor="podcast-topic" className="text-sm font-medium text-foreground">
+                {inputMethod === "type" ? "What should they discuss?" : "Review or edit your notes"}
+              </label>
+              <textarea
+                id="podcast-topic"
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                rows={inputMethod === "scan" ? 7 : 5}
+                maxLength={50000}
+                placeholder="Example: The water cycle, black holes, or photosynthesis..."
+                className={`${inputCls} resize-none p-4`}
+              />
+              <div className="flex justify-end text-xs text-muted-foreground">{topic.length.toLocaleString()} / 50,000</div>
+            </div>
           </div>
 
-          {inputMethod === "scan" && (
-            <NoteScanner 
-              onScanComplete={(text) => { 
-                setTopic(prev => prev ? `${prev}\n\n--- 📄 New Page ---\n\n${text}` : text); 
-                setInputMethod("type"); 
-              }} 
-            />
-          )}
-          
-          {inputMethod === "library" && (
-            <div className="space-y-2">
-              <label htmlFor="saved-note" className="text-sm font-medium text-foreground">Select a saved note</label>
-              <select id="saved-note" value={selectedNoteId} onChange={handleLibrarySelect} className="flex w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                <option value="">Choose a note</option>
-                {libraryNotes.map((note) => (<option key={note._id} value={note._id}>{note.title} ({new Date(note.createdAt).toLocaleDateString()})</option>))}
-              </select>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label htmlFor="podcast-topic" className="text-sm font-medium text-foreground">{inputMethod === "type" ? "What should they discuss?" : "Review or edit your notes"}</label>
-            <textarea id="podcast-topic" value={topic} onChange={(event) => setTopic(event.target.value)} rows={inputMethod === "scan" ? 7 : 5} maxLength={50000} placeholder="Example: The water cycle, black holes, or photosynthesis..." className="flex w-full resize-none rounded-lg border border-input bg-background p-4 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand" />
-            <div className="flex justify-end text-xs text-muted-foreground">{topic.length.toLocaleString()} / 50,000</div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-foreground">Tone</span>
-              <div className="flex flex-wrap gap-2">
-                {TONES.map((t) => (
-                  <button key={t} type="button" onClick={() => setTone(t)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${tone === t ? "border-brand bg-brand text-brand-foreground" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-foreground">Study Level</span>
-              <div className="flex flex-wrap gap-2">
-                {LEVELS.map((l) => (
-                  <button key={l} type="button" onClick={() => setLevel(l)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${level === l ? "border-brand bg-brand text-brand-foreground" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <ChipGroup label="Tone" options={TONES} value={tone} onChange={setTone} />
+            <ChipGroup label="Study level" options={LEVELS} value={level} onChange={setLevel} />
           </div>
 
           <div className="space-y-2">
             <span className="text-sm font-medium text-foreground">Podcast length</span>
-            <div className="grid grid-cols-3 gap-2">
-              {["short", "medium", "long"].map((option) => (
-                <button type="button" key={option} onClick={() => setLength(option)} className={`rounded-lg border py-2 text-sm font-medium transition-all ${length === option ? "border-brand bg-brand text-brand-foreground" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}>
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                  <span className="block text-[10px] opacity-80">{option === "short" ? "~3-5 mins" : option === "medium" ? "~5-8 mins" : "~10-12 mins"}</span>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Podcast length">
+              {LENGTHS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={length === option.id}
+                  onClick={() => setLength(option.id)}
+                  className={`rounded-xl border p-3 text-center transition ${focusRing} ${
+                    length === option.id ? "border-brand bg-brand-soft text-foreground" : "border-border bg-background text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{option.label}</span>
+                  <span className="block text-[11px] opacity-80">{option.hint}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* ✅ NEW: Voice Selection & Fallback UI */}
-          <div className="space-y-3 rounded-xl border border-border bg-muted/50 p-4">
-            <div className="flex items-center justify-between">
-              <label htmlFor="voice-select" className="text-sm font-medium text-foreground">AI Voice</label>
-              <span className="text-xs text-muted-foreground">{useBrowserTTS ? "Browser (Free)" : "ElevenLabs (Premium)"}</span>
-            </div>
-            
-            {!useBrowserTTS ? (
-              <select 
-                id="voice-select" 
-                value={selectedVoice} 
-                onChange={(e) => setSelectedVoice(e.target.value)}
-                className="flex w-full rounded-lg border border-input bg-background p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+          {/* Voices */}
+          <div className="space-y-4 rounded-xl border border-border bg-muted p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Voices</p>
+                <p className="text-xs text-muted-foreground">
+                  {useBrowserTTS ? "Free browser voice. Unlimited, quality varies." : "ElevenLabs studio voices, one for each host."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={useBrowserTTS}
+                aria-label="Use free browser voice only"
+                onClick={() => setUseBrowserTTS((v) => !v)}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition ${focusRing} ${useBrowserTTS ? "bg-brand" : "bg-border"}`}
               >
-                {ELEVENLABS_VOICES.map((voice) => (
-                  <option key={voice.id} value={voice.id}>{voice.name}</option>
-                ))}
-              </select>
-            ) : (
-              <div className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
-                Using browser's built-in voices (unlimited, free). Quality may vary.
+                <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform ${useBrowserTTS ? "translate-x-5" : ""}`} />
+              </button>
+            </div>
+            {!useBrowserTTS && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <VoiceSelect id="leo-voice" label="Leo (curious student)" value={leoVoiceId} onChange={setLeoVoiceId} />
+                <VoiceSelect id="nova-voice" label="Dr. Nova (expert teacher)" value={novaVoiceId} onChange={setNovaVoiceId} />
               </div>
             )}
-            
-            <div className="flex items-center gap-2 pt-2">
-              <input 
-                type="checkbox" 
-                id="use-browser-tts" 
-                checked={useBrowserTTS} 
-                onChange={(e) => setUseBrowserTTS(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
-              />
-              <label htmlFor="use-browser-tts" className="text-sm text-muted-foreground cursor-pointer">
-                Use browser TTS (free, unlimited) instead of ElevenLabs
-              </label>
-            </div>
           </div>
 
-          <button type="button" onClick={handleGenerate} disabled={topic.trim().length < 5 || isLoading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-base font-semibold text-brand-foreground shadow-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">
-            {isLoading ? (<><Loader2 className="h-5 w-5 animate-spin" /> Writing your podcast...</>) : (<><Sparkles className="h-5 w-5" /> Generate Podcast</>)}
+          <button type="button" onClick={handleGenerate} disabled={topic.trim().length < 5 || isLoading} className={`${primaryBtn} h-12 w-full text-base`}>
+            {isLoading ? (<><Loader2 className="h-5 w-5 animate-spin" /> Writing your podcast...</>) : (<><Sparkles className="h-5 w-5" /> Generate podcast</>)}
           </button>
-          
-          {error && (<div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-center text-sm text-red-500">{error}</div>)}
+
+          {error && script.length === 0 && (
+            <div role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 p-4 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{error}</span>
+            </div>
+          )}
         </section>
 
         {isLoading && (
-          <div className="flex flex-col items-center justify-center space-y-4 py-12 text-muted-foreground">
+          <div role="status" className="flex flex-col items-center justify-center space-y-3 py-12 text-muted-foreground">
             <Loader2 className="h-10 w-10 animate-spin text-brand" />
             <p className="text-sm font-medium">Planning the conversation and writing the script...</p>
           </div>
         )}
 
         {!isLoading && script.length > 0 && (
-          <section className="animate-in space-y-6 fade-in slide-in-from-bottom-4 duration-500">
-            {notice && (<div className="rounded-xl border border-brand/20 bg-brand/10 p-3 text-center text-sm text-brand">{notice}</div>)}
-            
-            <div className="sticky top-4 z-10 flex flex-col gap-4 rounded-2xl border border-brand/20 bg-gradient-to-r from-brand/10 to-brand/5 p-4 shadow-sm backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <h2 className="truncate text-xl font-bold text-foreground">{podcastTitle}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">Featuring Leo and Dr. Nova {currentLineIndex >= 0 ? ` · Line ${currentLineIndex + 1} of ${script.length}` : ""}</p>
+          <section className="space-y-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4">
+            {notice && (
+              <div role="status" className="flex items-center justify-center gap-2 rounded-xl bg-brand-soft p-3 text-center text-sm text-brand">
+                <CheckCircle2 className="h-4 w-4 shrink-0" /> {notice}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center rounded-lg border border-border bg-background p-1">
-                  {SPEEDS.map((speed) => (
-                    <button type="button" key={speed} onClick={() => changeSpeed(speed)} className={`rounded px-2 py-1 text-xs font-bold transition-all ${playbackSpeed === speed ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`} aria-label={`Set playback speed to ${speed} times`}>
-                      {speed}x
-                    </button>
-                  ))}
+            )}
+            {error && (
+              <div role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 p-4 text-sm text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{error}</span>
+              </div>
+            )}
+
+            {/* Player */}
+            <div className="sticky top-4 z-10 space-y-3 rounded-2xl border border-border bg-card p-4 shadow-lg">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-bold text-foreground">{podcastTitle}</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Leo and Dr. Nova {currentLineIndex >= 0 ? `- line ${currentLineIndex + 1} of ${script.length}` : `- ${script.length} lines`}
+                  </p>
                 </div>
-                <button type="button" onClick={toggleAudio} className="rounded-full bg-brand p-3 text-brand-foreground shadow-lg transition-all hover:bg-brand/90" aria-label={isPaused ? "Resume podcast" : isPlaying ? "Pause podcast" : "Play podcast"}>
-                  {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                </button>
-                {(isPlaying || isPaused) && (
-                  <button type="button" onClick={stopAudio} className="rounded-full border border-border bg-background p-3 text-muted-foreground transition hover:text-foreground" aria-label="Stop podcast">
-                    <Square className="h-4 w-4 fill-current" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center rounded-lg border border-border bg-background p-1" role="group" aria-label="Playback speed">
+                    {SPEEDS.map((speed) => (
+                      <button
+                        type="button"
+                        key={speed}
+                        onClick={() => changeSpeed(speed)}
+                        aria-pressed={playbackSpeed === speed}
+                        aria-label={`Set playback speed to ${speed} times`}
+                        className={`rounded px-2 py-1 text-xs font-bold transition ${focusRing} ${playbackSpeed === speed ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        {speed}x
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleAudio}
+                    disabled={!hasSpeech}
+                    className={`rounded-full bg-brand p-3 text-brand-foreground shadow transition hover:bg-brand/90 disabled:opacity-50 ${focusRing}`}
+                    aria-label={isPaused ? "Resume podcast" : isPlaying ? "Pause podcast" : "Play podcast"}
+                  >
+                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                   </button>
-                )}
+                  {(isPlaying || isPaused) && (
+                    <button type="button" onClick={stopAudio} className={`rounded-full border border-border bg-background p-3 text-muted-foreground transition hover:text-foreground ${focusRing}`} aria-label="Stop podcast">
+                      <Square className="h-4 w-4 fill-current" />
+                    </button>
+                  )}
+                </div>
               </div>
+              <div
+                className="h-1.5 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="Podcast progress"
+                aria-valuemin={0}
+                aria-valuemax={script.length}
+                aria-valuenow={currentLineIndex >= 0 ? currentLineIndex + 1 : 0}
+              >
+                <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
+              {!hasSpeech && <p className="text-xs text-destructive">This browser can't play speech. Try Chrome, Edge or Safari.</p>}
+              {hasSpeech && voices.length === 0 && <p className="text-xs text-muted-foreground">No browser voices found yet. If it stays silent, check your device's speech settings.</p>}
             </div>
 
+            {/* Actions */}
             <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={generateStudioAudio} disabled={isAudioLoading} className="inline-flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs font-medium text-brand transition hover:bg-brand/20 disabled:opacity-60">
-                {isAudioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Headphones className="h-4 w-4" />}
-                {isAudioLoading ? "Creating audio..." : "Create studio audio"}
-              </button>
-              <button type="button" onClick={copyTranscript} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Clipboard className="h-4 w-4" />}
+              <button type="button" onClick={copyTranscript} className={ghostBtn}>
+                {copied ? <Check className="h-4 w-4 text-green-600 dark:text-green-400" /> : <Clipboard className="h-4 w-4" />}
                 {copied ? "Copied" : "Copy transcript"}
               </button>
-              <button type="button" onClick={downloadTranscript} className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+              <button type="button" onClick={downloadTranscript} className={ghostBtn}>
                 <Download className="h-4 w-4" /> Download
               </button>
             </div>
 
-            {studioAudioUrl && (
-              <div className="rounded-xl border border-brand/20 bg-brand/5 p-4">
-                <p className="mb-2 text-sm font-semibold text-foreground">Studio narration</p>
-                <audio controls preload="metadata" src={studioAudioUrl} className="w-full">Your browser does not support audio playback.</audio>
+            {/* Studio audio */}
+            <div className={`${card} space-y-3`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 font-semibold text-foreground"><Headphones className="h-5 w-5 text-brand" /> Studio audio</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {useBrowserTTS ? "Turn off the browser voice above to create studio audio." : "A downloadable MP3 with a different voice for each host."}
+                  </p>
+                </div>
+                <button type="button" onClick={generateStudioAudio} disabled={isAudioLoading || useBrowserTTS} className={`${primaryBtn} py-2.5 text-sm`}>
+                  {isAudioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Headphones className="h-4 w-4" />}
+                  {isAudioLoading ? (audioProgress ? `Recording ${audioProgress.done}/${audioProgress.total}...` : "Creating audio...") : studioAudioUrl ? "Recreate audio" : "Create studio audio"}
+                </button>
               </div>
-            )}
+              {isAudioLoading && audioProgress && (
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${(audioProgress.done / audioProgress.total) * 100}%` }} />
+                </div>
+              )}
+              {studioAudioUrl && (
+                <div className="space-y-2 rounded-xl bg-brand-soft p-3">
+                  <audio controls preload="metadata" src={studioAudioUrl} className="w-full">Your browser does not support audio playback.</audio>
+                  <a href={studioAudioUrl} download={`${podcastTitle || "study-podcast"}.mp3`} className={`inline-flex items-center gap-1.5 rounded-lg text-xs font-medium text-brand hover:underline ${focusRing}`}>
+                    <Download className="h-3.5 w-3.5" /> Download MP3
+                  </a>
+                </div>
+              )}
+            </div>
 
+            {/* Transcript */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-foreground">Transcript</h3>
+              {script.map((line, index) => {
+                const isLeo = line.speaker.toLowerCase() === "leo";
+                const isActive = currentLineIndex === index;
+                return (
+                  <div key={`${index}-${line.text.slice(0, 20)}`} id={`line-${index}`} className={`flex gap-3 ${isLeo ? "flex-row" : "flex-row-reverse"}`}>
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isLeo ? "bg-card text-muted-foreground ring-1 ring-border" : "bg-brand-soft text-brand"}`}>
+                      {isLeo ? <User className="h-4 w-4" /> : <GraduationCap className="h-4 w-4" />}
+                    </div>
+                    <div
+                      className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed shadow-sm transition-all duration-300 ${
+                        isLeo
+                          ? `rounded-tl-sm border bg-card text-foreground ${isActive ? "border-brand ring-2 ring-brand/30" : "border-border"}`
+                          : `rounded-tr-sm bg-brand text-brand-foreground ${isActive ? "ring-4 ring-brand/30" : ""}`
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <p className="text-xs font-bold opacity-80">{line.speaker}</p>
+                        <button
+                          type="button"
+                          onClick={() => startAudio(index)}
+                          disabled={!hasSpeech}
+                          aria-label={`Play from line ${index + 1}`}
+                          className={`rounded-full p-1 opacity-70 transition hover:opacity-100 disabled:hidden ${focusRing}`}
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <p>{line.text}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Key takeaways */}
             {keyTakeaways.length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-5">
-                <h3 className="flex items-center gap-2 text-lg font-bold text-foreground mb-3">
-                  <Sparkles className="h-5 w-5 text-brand" /> Key Takeaways
+              <div className={card}>
+                <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-foreground">
+                  <Sparkles className="h-5 w-5 text-brand" /> Key takeaways
                 </h3>
-                <ul className="space-y-2">
+                <ul className="space-y-2.5">
                   {keyTakeaways.map((takeaway, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand" />
+                    <li key={idx} className="flex items-start gap-2.5 text-sm text-foreground">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand"><Check className="h-3 w-3" /></span>
                       {takeaway}
                     </li>
                   ))}
@@ -542,49 +845,52 @@ export default function PodcastGenerator() {
               </div>
             )}
 
+            {/* Quiz */}
             {quiz.length > 0 && (
-              <div className="rounded-xl border border-brand/20 bg-brand/5 p-5">
-                <h3 className="flex items-center gap-2 text-lg font-bold text-foreground mb-4">
-                  <Brain className="h-5 w-5 text-brand" /> Test Yourself
+              <div className={`${card} space-y-4 pb-6`}>
+                <h3 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                  <Brain className="h-5 w-5 text-brand" /> Test yourself
                 </h3>
-                <div className="space-y-6">
-                  {quiz.map((q, qIdx) => (
-                    <div key={qIdx} className="space-y-3 rounded-lg bg-background p-4 border border-border">
+                {quiz.map((q, qIdx) => {
+                  const picked = quizPicks[qIdx];
+                  const answered = picked !== undefined;
+                  return (
+                    <div key={qIdx} className="space-y-3 rounded-xl border border-border bg-background p-4">
                       <p className="font-semibold text-foreground">{qIdx + 1}. {q.question}</p>
                       <div className="space-y-2">
-                        {q.options.map((opt, optIdx) => (
-                          <div key={optIdx} className="text-sm text-muted-foreground flex items-center gap-2">
-                            <span className="font-bold text-foreground">{String.fromCharCode(65 + optIdx)}.</span> {opt}
-                          </div>
-                        ))}
+                        {q.options.map((opt, optIdx) => {
+                          const right = isCorrectOption(q, opt, optIdx);
+                          const isPicked = picked === optIdx;
+                          let style = "border-border bg-card hover:bg-accent";
+                          if (answered) {
+                            if (right) style = "border-green-500 bg-green-500/10";
+                            else if (isPicked) style = "border-destructive bg-destructive/10";
+                            else style = "border-border bg-card opacity-60";
+                          }
+                          return (
+                            <button
+                              key={optIdx}
+                              type="button"
+                              disabled={answered}
+                              onClick={() => setQuizPicks((prev) => ({ ...prev, [qIdx]: optIdx }))}
+                              className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left text-sm transition ${focusRing} ${style}`}
+                            >
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">{String.fromCharCode(65 + optIdx)}</span>
+                              <span className="min-w-0 flex-1 break-words text-foreground">{opt}</span>
+                              {answered && right && <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />}
+                              {answered && isPicked && !right && <XCircle className="h-5 w-5 shrink-0 text-destructive" />}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <div className="pt-3 border-t border-border">
-                        <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Answer:</span> {q.answer}</p>
-                        <p className="text-xs text-muted-foreground mt-1"><span className="font-semibold text-foreground">Why:</span> {q.explanation}</p>
-                      </div>
+                      {answered && q.explanation && (
+                        <p className="rounded-lg bg-brand-soft p-3 text-xs text-foreground"><span className="font-semibold">Why:</span> {q.explanation}</p>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             )}
-
-            <div className="space-y-4 pb-10">
-              {script.map((line, index) => {
-                const isLeo = line.speaker.toLowerCase() === "leo";
-                const isActive = currentLineIndex === index;
-                return (
-                  <div key={`${index}-${line.text.slice(0, 20)}`} className={`flex gap-3 transition-all duration-300 ${isLeo ? "flex-row" : "flex-row-reverse"} ${isActive ? "scale-[1.02]" : "opacity-90"}`}>
-                    <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full shadow-sm ${isLeo ? "bg-muted text-muted-foreground" : "bg-brand/10 text-brand"}`}>
-                      {isLeo ? <User className="h-4 w-4" /> : <GraduationCap className="h-4 w-4" />}
-                    </div>
-                    <div className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed shadow-sm transition-all duration-300 ${isLeo ? `rounded-tl-sm border bg-card text-foreground ${isActive ? "border-brand ring-2 ring-brand/20" : "border-border"}` : `rounded-tr-sm bg-brand text-brand-foreground ${isActive ? "shadow-xl ring-4 ring-brand/40" : ""}`}`}>
-                      <p className="mb-1 text-xs font-bold opacity-80">{line.speaker}</p>
-                      <p>{line.text}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </section>
         )}
       </div>
