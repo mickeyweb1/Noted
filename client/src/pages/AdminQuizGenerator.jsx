@@ -6,7 +6,8 @@ import api from "../utils/api";
 /* ---------- Presentational helpers ---------- */
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const inputCls = `w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-foreground placeholder:text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-brand ${focusRing}`;
-const card = "rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6";
+// ✅ UPDATED: Removed bg-card so it blends with the main background
+const card = "rounded-2xl border border-border p-5 shadow-sm sm:p-6"; 
 const primaryBtn = `inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 const secondaryBtn = `inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-5 py-3 font-semibold text-foreground transition hover:bg-accent disabled:opacity-50 ${focusRing}`;
 const iconBtnDanger = `rounded-lg p-2 text-destructive transition hover:bg-destructive/10 ${focusRing}`;
@@ -45,7 +46,7 @@ function ErrorNote({ children }) {
 export default function AdminQuizGenerator() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("ai"); 
-  const [errorMessage, setErrorMessage] = useState(""); // ✅ Fix 5: Replaces alert()
+  const [errorMessage, setErrorMessage] = useState(""); 
   
   const [metadata, setMetadata] = useState({
     title: "", difficulty: "Intermediate", numQuestions: 5, numStudents: 30,
@@ -60,14 +61,12 @@ export default function AdminQuizGenerator() {
   const [previewQuestions, setPreviewQuestions] = useState([]);
   const [isReviewing, setIsReviewing] = useState(false);
 
-  // ✅ Fix 1 & 5: Use correctOptionIndex instead of string to prevent edit/duplicate bugs
   const [manualQuestions, setManualQuestions] = useState([{
     question: "", options: ["", "", "", ""], correctOptionIndex: null, explanation: "", imageUrl: ""
   }]);
   const [uploadingQuestionImage, setUploadingQuestionImage] = useState(null);
   const [isUploadingNotes, setIsUploadingNotes] = useState(false);
 
-  // ✅ Fix 4: Strict number validation
   const handleMetadataChange = (field, value) => {
     if (['numQuestions', 'numStudents', 'timeLimit', 'maxTabSwitches'].includes(field)) {
       if (value === "") {
@@ -91,7 +90,6 @@ export default function AdminQuizGenerator() {
     return null;
   };
 
-  // ✅ Fix 3: Handle OCR failures explicitly
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -126,7 +124,6 @@ export default function AdminQuizGenerator() {
     }
   };
 
-  // ✅ Fix 2: Immutable state update
   const handleImageUpload = async (questionIndex, file) => {
     if (!file) return;
     setUploadingQuestionImage(questionIndex);
@@ -196,19 +193,16 @@ export default function AdminQuizGenerator() {
     setPreviewQuestions(prev => prev.filter((_, i) => i !== index));
   };
 
-  // ✅ Fix 2: Immutable state update
   const addManualQuestion = () => {
     setManualQuestions(prev => [...prev, { question: "", options: ["", "", "", ""], correctOptionIndex: null, explanation: "", imageUrl: "" }]);
   };
 
-  // ✅ Fix 2: Immutable state update
   const updateManualQuestion = (idx, field, value) => {
     setManualQuestions(prev => prev.map((q, i) => 
       i === idx ? { ...q, [field]: value } : q
     ));
   };
 
-  // ✅ Fix 1, 2 & 5: Immutable update + index-based correctness
   const updateOption = (qIdx, optIdx, value) => {
     setManualQuestions(prev => prev.map((q, i) => {
       if (i !== qIdx) return q;
@@ -237,11 +231,10 @@ export default function AdminQuizGenerator() {
       }
     }
     
-    // ✅ Fix 1: Map the index back to the actual string for the backend
     const formattedQuestions = manualQuestions.map(q => ({
       ...q,
       correctAnswer: q.options[q.correctOptionIndex],
-      correctOptionIndex: undefined // Remove UI-only field before sending
+      correctOptionIndex: undefined 
     }));
 
     setIsGenerating(true);
@@ -270,7 +263,8 @@ export default function AdminQuizGenerator() {
     }`;
 
   return (
-    <div className="min-h-screen bg-muted p-4 md:p-8">
+    // ✅ FIXED: Changed bg-muted to bg-background for a single, clean, uniform color
+    <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-foreground">Quiz manager</h1>
@@ -279,7 +273,6 @@ export default function AdminQuizGenerator() {
           </button>
         </div>
 
-        {/* Global Error Note */}
         <ErrorNote>{errorMessage}</ErrorNote>
 
         <div role="tablist" className="flex w-full gap-1 rounded-xl border border-border bg-card p-1 sm:w-fit">
@@ -291,8 +284,7 @@ export default function AdminQuizGenerator() {
           </button>
         </div>
 
-        {/* Shared Metadata Form */}
-        <div className={`${card} space-y-5`}>
+        <div className={`${card} space-y-5 bg-card`}>
           <div>
             <h2 className="text-lg font-semibold text-foreground">Quiz settings</h2>
             <p className="text-sm text-muted-foreground">These apply to both AI and manual quizzes.</p>
@@ -332,7 +324,6 @@ export default function AdminQuizGenerator() {
           </div>
         </div>
 
-        {/* REVIEW STEP */}
         {isReviewing && (
           <div className="space-y-4 rounded-2xl border border-brand/30 bg-card p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex items-center justify-between gap-3">
@@ -343,7 +334,7 @@ export default function AdminQuizGenerator() {
             </div>
             <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
               {previewQuestions.map((q, idx) => (
-                <div key={idx} className="rounded-xl border border-border bg-muted p-4">
+                <div key={idx} className="rounded-xl border border-border bg-muted/50 p-4">
                   <div className="mb-3 flex items-start gap-3">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-bold text-brand">{idx + 1}</span>
                     <p className="min-w-0 flex-1 break-words pt-0.5 font-medium text-foreground">{q.question}</p>
@@ -378,9 +369,8 @@ export default function AdminQuizGenerator() {
           </div>
         )}
 
-        {/* AI Tab */}
         {activeTab === "ai" && !isReviewing && !generatedQuiz && (
-          <div className={`${card} space-y-4`}>
+          <div className={`${card} space-y-4 bg-card`}>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground"><Sparkles className="h-5 w-5 text-brand" /> AI question generator</h2>
             <div>
               <input type="file" multiple accept=".txt, image/png, image/jpeg, image/jpg" onChange={handleFileUpload} disabled={isUploadingNotes} className="peer sr-only" id="quiz-file-upload" />
@@ -404,11 +394,10 @@ export default function AdminQuizGenerator() {
           </div>
         )}
 
-        {/* Manual Tab */}
         {activeTab === "manual" && !generatedQuiz && (
           <div className="space-y-4">
             {manualQuestions.map((q, idx) => (
-              <div key={idx} className={`${card} space-y-4`}>
+              <div key={idx} className={`${card} space-y-4 bg-card`}>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="flex items-center gap-3 font-semibold text-foreground">
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-soft text-sm font-bold text-brand">{idx + 1}</span>
@@ -478,7 +467,6 @@ export default function AdminQuizGenerator() {
           </div>
         )}
 
-        {/* Generated Quiz & Codes View */}
         {generatedQuiz && (
           <div className="space-y-6 rounded-2xl border border-green-500/30 bg-green-500/5 p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
