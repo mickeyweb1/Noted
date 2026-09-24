@@ -1,4 +1,3 @@
-
 import {
   LayoutDashboard,
   Users,
@@ -42,7 +41,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
 
   return (
     <>
-      {/* ✅ Mobile Backdrop: Closes sidebar when clicking outside on small screens */}
+      {/* Mobile Backdrop */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
@@ -51,12 +50,12 @@ export default function AdminSideBar({ isOpen, onClose }) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* 1. LOGO & BRANDING */}
-        <div className="flex items-center justify-between gap-3 px-6 h-16 border-b border-gray-200 dark:border-gray-800">
+        {/* 1. LOGO & BRANDING - Fixed height */}
+        <div className="flex items-center justify-between gap-3 px-6 h-16 border-b border-gray-200 dark:border-gray-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand text-white shadow-sm">
               <Building2 className="w-5 h-5" />
@@ -70,14 +69,13 @@ export default function AdminSideBar({ isOpen, onClose }) {
               </p>
             </div>
           </div>
-          {/* ✅ Close button for mobile */}
           <button onClick={onClose} className="md:hidden p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        {/* 2. NAVIGATION MENU */}
-        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+        {/* 2. NAVIGATION MENU - Scrollable area */}
+        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 min-h-0">
           <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
             Management
           </p>
@@ -100,8 +98,8 @@ export default function AdminSideBar({ isOpen, onClose }) {
           ))}
         </nav>
 
-        {/* 3. USER PROFILE FOOTER */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
+        {/* 3. USER PROFILE FOOTER - Fixed at bottom */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2 shrink-0">
           <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             <div className="flex items-center justify-center w-9 h-9 rounded-full bg-brand/10 text-brand shrink-0">
               {userData.avatar ? (
