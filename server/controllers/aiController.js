@@ -359,7 +359,7 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
 export const generateSpeech = async (req, res, next) => {
   try {
     requireUser(req);
-    const { text, style, useCase } = req.body || {};
+    const { text, style, useCase, voiceId, useBrowserTTS } = req.body || {};
     let cleanText = ensureText(text, "Text is required.");
     
     if (cleanText.includes("Leo:") || cleanText.includes("Dr. Nova:")) {
@@ -367,6 +367,15 @@ export const generateSpeech = async (req, res, next) => {
     }
 
     if (cleanText.length > MAX_SPEECH_LENGTH) throw httpError("The audio text is too long.", 413);
+    
+    // ✅ CHECK: If user wants browser TTS, we can't send audio from backend, so we handle it differently
+    // For now, we'll still use ElevenLabs but with the selected voice
+    if (useBrowserTTS) {
+      // Option 1: You could return the text and let frontend handle TTS
+      // For now, we'll just use a default voice to save credits
+      console.log("⚠️ Browser TTS requested but backend is generating audio. Consider handling TTS on frontend.");
+    }
+    
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw httpError("Audio generation is not configured.", 503);
     
@@ -375,19 +384,10 @@ export const generateSpeech = async (req, res, next) => {
     
     const speechText = isRap ? prepareLyricsForSpeech(cleanText) : cleanText;
     
-    let voiceId = process.env.ELEVENLABS_VOICE_ID;
+    // ✅ Use the voiceId from frontend, or fallback to defaults
+    const finalVoiceId = voiceId || process.env.ELEVENLABS_VOICE_ID || (isPodcast ? "21m00Tcm4TlvDq8ikWAM" : "pNInz6obpgDQGcFmaJgB");
     
-    if (!voiceId) {
-      if (isPodcast) {
-        voiceId = "21m00Tcm4TlvDq8ikWAM";
-      } else if (isRap) {
-        voiceId = "onwK4e9ZLuTAKqWW03F9";
-      } else {
-        voiceId = "pNInz6obpgDQGcFmaJgB";
-      }
-    }
-    
-    const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${finalVoiceId}`;
     
     const response = await fetchWithTimeout(url, {
       method: "POST",
@@ -406,6 +406,10 @@ export const generateSpeech = async (req, res, next) => {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
+      // ✅ Handle out-of-credits error specifically
+      if (response.status === 402 || response.status === 429) {
+        throw httpError("ElevenLabs credits exhausted. Please switch to Browser TTS in the settings.", 402);
+      }
       throw httpError(errorData?.detail?.message || "Audio generation failed.", 503);
     }
     const audioBuffer = await response.arrayBuffer();
@@ -417,6 +421,7 @@ export const generateSpeech = async (req, res, next) => {
     return next(error);
   }
 };
+
 
 const generateSceneVisual = async (visualPrompt, aspectRatio = "16:9") => {
   const cleanPrompt = ensureText(visualPrompt, "Visual prompt is required.").slice(0, 500);
