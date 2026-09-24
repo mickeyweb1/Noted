@@ -215,6 +215,10 @@ export default function PodcastGenerator() {
   const [studioAudioUrl, setStudioAudioUrl] = useState("");
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [audioProgress, setAudioProgress] = useState(null);
+  
+  // ✅ NEW: Studio audio tracking
+  const [studioTime, setStudioTime] = useState({ current: 0, duration: 0 });
+  const usingStudio = !!studioAudioUrl && !useBrowserTTS;
 
   const [leoVoiceId, setLeoVoiceId] = useState("pNInz6obpgDQGcFmaJgB");
   const [novaVoiceId, setNovaVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
@@ -226,8 +230,8 @@ export default function PodcastGenerator() {
   const playbackSpeedRef = useRef(1);
   const studioUrlRef = useRef("");
   
-  // ✅ NEW: Ref to control the HTML5 ElevenLabs audio player
-  const audioRef = useRef(null);
+  // ✅ NEW: Ref for the HTML5 audio element
+  const studioAudioRef = useRef(null);
 
   useEffect(() => { scriptRef.current = script; }, [script]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
@@ -256,14 +260,48 @@ export default function PodcastGenerator() {
     return () => controller.abort();
   }, []);
 
+  // ✅ NEW: Wire up HTML5 audio events to React state
+  useEffect(() => {
+    const el = studioAudioRef.current;
+    if (!el) return;
+
+    const onPlay = () => { setIsPlaying(true); setIsPaused(false); };
+    const onPause = () => { if (el.ended) return; setIsPlaying(false); setIsPaused(true); };
+    const onEnded = () => {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setStudioTime({ current: 0, duration: el.duration || 0 });
+    };
+    const onTime = () => setStudioTime({ current: el.currentTime, duration: el.duration || 0 });
+
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    el.addEventListener("ended", onEnded);
+    el.addEventListener("timeupdate", onTime);
+    
+    return () => {
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
+      el.removeEventListener("ended", onEnded);
+      el.removeEventListener("timeupdate", onTime);
+    };
+  }, [studioAudioUrl]);
+
+  // If the user flips the browser-voice switch on mid-playback, stop the MP3.
+  useEffect(() => {
+    if (useBrowserTTS && studioAudioRef.current && !studioAudioRef.current.paused) {
+      studioAudioRef.current.pause();
+    }
+  }, [useBrowserTTS]);
+
   useEffect(() => {
     return () => {
       speechRunId.current += 1;
       window.speechSynthesis?.cancel();
       if (studioUrlRef.current) URL.revokeObjectURL(studioUrlRef.current);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+      if (studioAudioRef.current) {
+        studioAudioRef.current.pause();
+        studioAudioRef.current = null;
       }
     };
   }, []);
@@ -280,17 +318,19 @@ export default function PodcastGenerator() {
     setStudioAudioUrl(url || "");
   };
 
+  // ✅ FIXED: Stop both TTS and HTML5 audio
   const stopAudio = useCallback(() => {
     speechRunId.current += 1;
     window.speechSynthesis?.cancel();
-    // ✅ NEW: Also stop the ElevenLabs HTML5 audio player
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+    const el = studioAudioRef.current;
+    if (el) {
+      el.pause();
+      el.currentTime = 0;
     }
     setIsPlaying(false);
     setIsPaused(false);
     setCurrentLineIndex(-1);
+    setStudioTime({ current: 0, duration: 0 });
   }, []);
 
   const speakLine = useCallback(function speak(runId) {
@@ -358,30 +398,26 @@ export default function PodcastGenerator() {
     setTimeout(() => speakLine(runId), 80);
   };
 
-  // ✅ FIXED: Smart playback that prioritizes ElevenLabs if available
-  const toggleAudio = () => {
-    // 1. If Studio Audio is ready and we want ElevenLabs, control the HTML5 audio element
-    if (studioAudioUrl && !useBrowserTTS && audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-        setIsPaused(true);
-      } else {
-        audioRef.current.play();
-        setIsPlaying(true);
-        setIsPaused(false);
+  // ✅ FIXED: Route to HTML5 audio if studio is ready, else fallback to TTS
+  const toggleAudio = async () => {
+    if (usingStudio) {
+      const el = studioAudioRef.current;
+      if (!el) return;
+      try {
+        if (el.paused) {
+          el.playbackRate = playbackSpeedRef.current;
+          await el.play();
+        } else {
+          el.pause();
+        }
+      } catch (error) {
+        console.error("ElevenLabs audio playback failed:", error);
+        setError("Could not play the studio audio.");
       }
       return;
     }
 
-    // 2. If we want ElevenLabs but haven't generated it yet, trigger generation
-    if (!useBrowserTTS && !studioAudioUrl && !isAudioLoading) {
-      setNotice("Generating high-quality ElevenLabs audio... Please wait.");
-      generateStudioAudio();
-      return;
-    }
-
-    // 3. Otherwise, fall back to Browser TTS
+    // Browser TTS fallback
     if (isPaused) {
       window.speechSynthesis.resume();
       setIsPaused(false);
@@ -397,9 +433,16 @@ export default function PodcastGenerator() {
     startAudio(0);
   };
 
+  // ✅ FIXED: Change speed for HTML5 audio or TTS depending on active engine
   const changeSpeed = (speed) => {
     setPlaybackSpeed(speed);
     playbackSpeedRef.current = speed;
+
+    if (usingStudio) {
+      if (studioAudioRef.current) studioAudioRef.current.playbackRate = speed;
+      return;
+    }
+
     if (isPlaying && !isPaused) {
       const runId = ++speechRunId.current;
       window.speechSynthesis.cancel();
@@ -548,7 +591,18 @@ export default function PodcastGenerator() {
     URL.revokeObjectURL(url);
   };
 
-  const progress = currentLineIndex >= 0 && script.length ? ((currentLineIndex + 1) / script.length) * 100 : 0;
+  // ✅ FIXED: Progress calculation based on active engine
+  const formatTime = (sec) => {
+    if (!Number.isFinite(sec)) return "0:00";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  const progress = usingStudio
+    ? (studioTime.duration ? (studioTime.current / studioTime.duration) * 100 : 0)
+    : (currentLineIndex >= 0 && script.length ? ((currentLineIndex + 1) / script.length) * 100 : 0);
+
   const hasSpeech = typeof window !== "undefined" && !!window.speechSynthesis;
 
   return (
@@ -715,9 +769,17 @@ export default function PodcastGenerator() {
             <div className="sticky top-4 z-10 space-y-3 rounded-2xl border border-border bg-card p-4 shadow-lg">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <h2 className="truncate text-lg font-bold text-foreground">{podcastTitle}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-lg font-bold text-foreground">{podcastTitle}</h2>
+                    {/* ✅ NEW: Engine Badge */}
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${usingStudio ? "bg-brand/10 text-brand" : "bg-muted text-muted-foreground"}`}>
+                      {usingStudio ? "🎙️ Studio" : "🌐 Browser"}
+                    </span>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Leo and Dr. Nova {currentLineIndex >= 0 ? `- line ${currentLineIndex + 1} of ${script.length}` : `- ${script.length} lines`}
+                    {usingStudio
+                      ? `Studio voice — ${formatTime(studioTime.current)} / ${formatTime(studioTime.duration)}`
+                      : `Leo and Dr. Nova ${currentLineIndex >= 0 ? `- line ${currentLineIndex + 1} of ${script.length}` : `- ${script.length} lines`}`}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -756,8 +818,8 @@ export default function PodcastGenerator() {
                 role="progressbar"
                 aria-label="Podcast progress"
                 aria-valuemin={0}
-                aria-valuemax={script.length}
-                aria-valuenow={currentLineIndex >= 0 ? currentLineIndex + 1 : 0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress)}
               >
                 <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
@@ -794,16 +856,12 @@ export default function PodcastGenerator() {
               )}
               {studioAudioUrl && (
                 <div className="space-y-2 rounded-xl bg-brand-soft p-3">
-                  {/* ✅ NEW: Attached ref and event handlers to sync with the main player */}
-                  <audio 
-                    ref={audioRef}
-                    controls 
-                    preload="metadata" 
-                    src={studioAudioUrl} 
+                  {/* ✅ FIXED: Attached ref and removed native controls to rely on the main header player */}
+                  <audio
+                    ref={studioAudioRef}
+                    preload="metadata"
+                    src={studioAudioUrl}
                     className="w-full"
-                    onPlay={() => { setIsPlaying(true); setIsPaused(false); }}
-                    onPause={() => { setIsPlaying(false); setIsPaused(true); }}
-                    onEnded={() => { setIsPlaying(false); setIsPaused(false); }}
                   >
                     Your browser does not support audio playback.
                   </audio>
