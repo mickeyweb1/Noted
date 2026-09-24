@@ -11,9 +11,16 @@ const SPEEDS = [0.75, 1, 1.25, 1.5];
 const TONES = ["Funny", "Calm", "Energetic", "Serious"];
 const LEVELS = ["Beginner", "Intermediate", "Advanced"];
 
+const ELEVENLABS_VOICES = [
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel - Warm & Natural" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam - Professional" },
+  { id: "onwK4e9ZLuTAKqWW03F9", name: "Callum - Energetic" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella - Soft & Calm" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi - Strong & Confident" },
+];
+
 const removeCodeFence = (value) => value.replace(/```json/gi, "").replace(/```/g, "").trim();
 
-// ✅ UPDATED: More flexible parsing that matches backend validation
 const parsePodcastResponse = (generatedText) => {
   try {
     if (generatedText && typeof generatedText === "object") return generatedText;
@@ -25,13 +32,10 @@ const parsePodcastResponse = (generatedText) => {
     const jsonText = firstBrace >= 0 && lastBrace > firstBrace ? cleanText.slice(firstBrace, lastBrace + 1) : cleanText;
     
     const parsed = JSON.parse(jsonText);
-    
-    // ✅ More flexible validation - just check we have SOMETHING
     if (!parsed) throw new Error("Empty response");
     
     const title = parsed.title?.trim() || "Study Podcast";
     
-    // ✅ Handle script flexibly
     let script = [];
     if (Array.isArray(parsed.script)) {
       script = parsed.script
@@ -39,15 +43,11 @@ const parsePodcastResponse = (generatedText) => {
         .map((line) => {
           const text = typeof line === "string" ? line : line.text;
           const speaker = line.speaker?.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
-          return {
-            speaker,
-            text: text.trim(),
-          };
+          return { speaker, text: text.trim() };
         })
         .filter(line => line.text.length > 0);
     }
     
-    // ✅ If no script, create a simple one from the title
     if (script.length === 0) {
       script = [
         { speaker: "Leo", text: `Welcome to this study session about ${title}!` },
@@ -94,18 +94,10 @@ export default function PodcastGenerator() {
   const [copied, setCopied] = useState(false);
   const [studioAudioUrl, setStudioAudioUrl] = useState("");
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-  // Add this near your other state variables (around line 30):
-const [selectedVoice, setSelectedVoice] = useState("21m00Tcm4TlvDq8ikWAM"); // Default: Rachel
-const [useBrowserTTS, setUseBrowserTTS] = useState(false); // Fallback toggle
-
-// Add these voice options (you can add this before the component or inside):
-const ELEVENLABS_VOICES = [
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel - Warm & Natural" },
-  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam - Professional" },
-  { id: "onwK4e9ZLuTAKqWW03F9", name: "Callum - Energetic" },
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella - Soft & Calm" },
-  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi - Strong & Confident" },
-];
+  
+  // ✅ NEW: Voice selection and fallback states
+  const [selectedVoice, setSelectedVoice] = useState("21m00Tcm4TlvDq8ikWAM");
+  const [useBrowserTTS, setUseBrowserTTS] = useState(false);
 
   const speechRunId = useRef(0);
   const currentIndexRef = useRef(0);
@@ -161,16 +153,8 @@ const ELEVENLABS_VOICES = [
 
   const chooseVoices = () => {
     const allVoices = window.speechSynthesis.getVoices();
-    
-    const leoVoice = allVoices.find(v => /Daniel|Alex/i.test(v.name)) 
-                  || allVoices.find(v => /Google US English/i.test(v.name)) 
-                  || allVoices[0];
-                  
-    const novaVoice = allVoices.find(v => /Samantha|Karen/i.test(v.name)) 
-                   || allVoices.find(v => /Google UK English Female/i.test(v.name) && v !== leoVoice) 
-                   || allVoices.find(v => v !== leoVoice) 
-                   || allVoices[0];
-                   
+    const leoVoice = allVoices.find(v => /Daniel|Alex/i.test(v.name)) || allVoices.find(v => /Google US English/i.test(v.name)) || allVoices[0];
+    const novaVoice = allVoices.find(v => /Samantha|Karen/i.test(v.name)) || allVoices.find(v => /Google UK English Female/i.test(v.name) && v !== leoVoice) || allVoices.find(v => v !== leoVoice) || allVoices[0];
     return { leoVoice, novaVoice };
   };
 
@@ -220,37 +204,6 @@ const ELEVENLABS_VOICES = [
     setIsPaused(false);
     speakCurrentLine(runId);
   };
-  
-  const generateStudioAudio = async () => {
-  if (!transcriptText || isAudioLoading) return;
-  setIsAudioLoading(true);
-  setError("");
-  try {
-    const response = await api.post("/ai/text-to-speech", { 
-      text: transcriptText, 
-      style: "podcast",
-      voiceId: useBrowserTTS ? null : selectedVoice, // Send null if using browser TTS
-      useBrowserTTS: useBrowserTTS
-    }, { responseType: "blob" });
-    
-    const nextAudioUrl = URL.createObjectURL(response.data);
-    setStudioAudioUrl((previousUrl) => {
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
-      return nextAudioUrl;
-    });
-    setNotice("Studio audio is ready.");
-  } catch (requestError) {
-    console.error("Studio audio failed:", requestError);
-    // If ElevenLabs fails (e.g., out of credits), suggest browser TTS
-    if (requestError.response?.status === 402 || requestError.response?.status === 429) {
-      setError("ElevenLabs credits may be exhausted. Please enable 'Use Browser TTS' below to continue for free.");
-    } else {
-      setError(requestError.response?.data?.message || "Studio audio could not be created. Browser playback is still available.");
-    }
-  } finally {
-    setIsAudioLoading(false);
-  }
-};
 
   const toggleAudio = () => {
     if (isPaused) {
@@ -283,6 +236,38 @@ const ELEVENLABS_VOICES = [
     setSelectedNoteId(noteId);
     const note = libraryNotes.find((item) => item._id === noteId);
     if (note) setTopic((note.generatedText || note.title).slice(0, 50000));
+  };
+
+  // ✅ UPDATED: Single, clean generateStudioAudio function with fallback logic
+  const generateStudioAudio = async () => {
+    if (!transcriptText || isAudioLoading) return;
+    setIsAudioLoading(true);
+    setError("");
+    try {
+      const response = await api.post("/ai/text-to-speech", { 
+        text: transcriptText, 
+        style: "podcast",
+        voiceId: useBrowserTTS ? null : selectedVoice,
+        useBrowserTTS: useBrowserTTS
+      }, { responseType: "blob" });
+      
+      const nextAudioUrl = URL.createObjectURL(response.data);
+      setStudioAudioUrl((previousUrl) => {
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        return nextAudioUrl;
+      });
+      setNotice("Studio audio is ready.");
+    } catch (requestError) {
+      console.error("Studio audio failed:", requestError);
+      if (requestError.response?.status === 402 || requestError.response?.status === 429) {
+        setUseBrowserTTS(true); // Auto-enable the toggle for them
+        setError("ElevenLabs credits may be exhausted. Switched to free browser TTS automatically.");
+      } else {
+        setError(requestError.response?.data?.message || "Studio audio could not be created. Browser playback is still available.");
+      }
+    } finally {
+      setIsAudioLoading(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -350,26 +335,6 @@ const ELEVENLABS_VOICES = [
     link.download = `${podcastTitle || "study-podcast"}.txt`;
     link.click();
     URL.revokeObjectURL(url);
-  };
-
-  const generateStudioAudio = async () => {
-    if (!transcriptText || isAudioLoading) return;
-    setIsAudioLoading(true);
-    setError("");
-    try {
-      const response = await api.post("/ai/text-to-speech", { text: transcriptText, style: "podcast" }, { responseType: "blob" });
-      const nextAudioUrl = URL.createObjectURL(response.data);
-      setStudioAudioUrl((previousUrl) => {
-        if (previousUrl) URL.revokeObjectURL(previousUrl);
-        return nextAudioUrl;
-      });
-      setNotice("Studio audio is ready.");
-    } catch (requestError) {
-      console.error("Studio audio failed:", requestError);
-      setError(requestError.response?.data?.message || "Studio audio could not be created. Browser playback is still available.");
-    } finally {
-      setIsAudioLoading(false);
-    }
   };
 
   return (
@@ -457,6 +422,44 @@ const ELEVENLABS_VOICES = [
                   <span className="block text-[10px] opacity-80">{option === "short" ? "~3-5 mins" : option === "medium" ? "~5-8 mins" : "~10-12 mins"}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* ✅ NEW: Voice Selection & Fallback UI */}
+          <div className="space-y-3 rounded-xl border border-border bg-muted/50 p-4">
+            <div className="flex items-center justify-between">
+              <label htmlFor="voice-select" className="text-sm font-medium text-foreground">AI Voice</label>
+              <span className="text-xs text-muted-foreground">{useBrowserTTS ? "Browser (Free)" : "ElevenLabs (Premium)"}</span>
+            </div>
+            
+            {!useBrowserTTS ? (
+              <select 
+                id="voice-select" 
+                value={selectedVoice} 
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                className="flex w-full rounded-lg border border-input bg-background p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+              >
+                {ELEVENLABS_VOICES.map((voice) => (
+                  <option key={voice.id} value={voice.id}>{voice.name}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
+                Using browser's built-in voices (unlimited, free). Quality may vary.
+              </div>
+            )}
+            
+            <div className="flex items-center gap-2 pt-2">
+              <input 
+                type="checkbox" 
+                id="use-browser-tts" 
+                checked={useBrowserTTS} 
+                onChange={(e) => setUseBrowserTTS(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
+              />
+              <label htmlFor="use-browser-tts" className="text-sm text-muted-foreground cursor-pointer">
+                Use browser TTS (free, unlimited) instead of ElevenLabs
+              </label>
             </div>
           </div>
 
