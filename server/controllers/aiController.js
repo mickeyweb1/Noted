@@ -15,6 +15,12 @@ const MAX_INPUT_LENGTH = 50000;
 const MAX_SPEECH_LENGTH = 30000;
 const MAX_IMAGE_PAYLOAD_LENGTH = 12000000;
 
+// 🔧 NEW: shared constants
+const MUSIC_VIBES = ["Afrobeat Rap", "Chill Lo-Fi", "Upbeat Pop", "Epic Orchestral"];
+const VOICE_ID_PATTERN = /^[A-Za-z0-9]{15,30}$/;
+const VIDEO_MAX_TOKENS = 900;
+const VIDEO_SYSTEM_PROMPT = `You are a video director. Turn these notes into a short educational video storyboard with 4 to 6 scenes. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
+
 const httpError = (message, status = 500) => {
   const error = new Error(message);
   error.status = status;
@@ -31,6 +37,13 @@ const ensureText = (value, message = "Please provide valid text.") => {
   const text = value.trim();
   if (!text) throw httpError(message, 400);
   return text;
+};
+
+// 🔧 NEW: keeps user-supplied labels (vibe, tone, level) short and free of prompt-breaking characters
+const cleanLabel = (value, fallback, maxLength = 40) => {
+  if (typeof value !== "string") return fallback;
+  const cleaned = value.replace(/[^\w\s&+-]/g, "").trim().slice(0, maxLength);
+  return cleaned || fallback;
 };
 
 const parseJsonObject = (rawText) => {
@@ -77,7 +90,7 @@ const validatePodcast = (parsed) => {
       .filter((line) => line && (typeof line.text === "string" || typeof line === "string"))
       .map((line) => {
         const text = typeof line === "string" ? line : line.text;
-        const speaker = line.speaker?.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
+        const speaker = typeof line.speaker === "string" && line.speaker.toLowerCase().includes("leo") ? "Leo" : "Dr. Nova";
         return {
           speaker,
           text: text.trim().slice(0, 1200),
@@ -135,6 +148,7 @@ const validateVideo = (parsed) => {
   }
   const scenes = parsed.scenes.map((scene, index) => {
     if (
+      !scene ||
       typeof scene.narration !== "string" ||
       typeof scene.visualPrompt !== "string" ||
       !scene.narration.trim() ||
@@ -194,7 +208,8 @@ export const generateContent = async (req, res, next) => {
       const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant. 
       STRICT RULES:
       1. EDUCATIONAL CONTENT ONLY: Answer clearly, accurately, and concisely.
-      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name.`;
+      2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name.
+      3. YOUNG AUDIENCE: Your users are students from primary school to high school. Keep every answer age-appropriate. Politely decline sexual, violent, self-harm, or dangerous requests and steer back to studying. If a student seems upset or unsafe, kindly encourage them to talk to a trusted adult such as a parent, teacher, or counselor.`;
       const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
       aiContent = await runGroq([{ role: "system", content: tutorSystemPrompt }, ...safeMessages]);
       aiTitle = requestedTitle || "Tutor Chat";
@@ -214,15 +229,15 @@ export const generateContent = async (req, res, next) => {
         aiContent = generatedTextFull.trim();
       }
     } else if (mode === "video") {
-      const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
-      const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 500 });
+      const generatedTextFull = await runGroq([{ role: "system", content: VIDEO_SYSTEM_PROMPT }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: VIDEO_MAX_TOKENS });
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;
       aiContent = JSON.stringify(parsedVideo);
     } else if (mode === "podcast") {
       const podcastLength = req.body?.length || "short";
-      const tone = req.body?.tone || "engaging";
-      const level = req.body?.level || "beginner";
+      // 🔧 FIXED: sanitize user-supplied values before they go into the prompt
+      const tone = cleanLabel(req.body?.tone, "engaging");
+      const level = cleanLabel(req.body?.level, "beginner");
       
       if (!["short", "medium", "long"].includes(podcastLength)) throw httpError("Invalid podcast length.", 400);
       const { exchangeCount, detailLevel, maxTokens } = getPodcastInstructions(podcastLength);
@@ -277,7 +292,8 @@ export const generateContent = async (req, res, next) => {
       aiTitle = requestedTitle || parsedPodcast.title;
       aiContent = JSON.stringify(parsedPodcast);
     } else if (mode === "music") {
-      const musicVibe = vibe || "Hip-Hop and Afrobeat";
+      // 🔧 FIXED: sanitize user-supplied vibe before it goes into the prompt
+      const musicVibe = cleanLabel(vibe, "Hip-Hop and Afrobeat");
       const musicSystemPrompt = `You are a professional educational ${musicVibe} lyricist. Turn the notes into an accurate study song. 
       Structure: [Intro] 2 lines, [Verse 1] 4-6 lines, [Chorus] 4 lines, [Verse 2] 4-6 lines, [Outro] 2 lines. 
       Keep content 85% educational, 15% hype. 
@@ -310,8 +326,19 @@ Example format:
   ]
 }`;
 
-      const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 4096 });
-      const parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull), questionCount);
+      // 🔧 FIXED: one retry, since models often return the wrong question count or malformed JSON
+      let parsedQuiz = null;
+      let lastQuizError = null;
+      for (let attempt = 1; attempt <= 2 && !parsedQuiz; attempt++) {
+        try {
+          const generatedTextFull = await runGroq([{ role: "system", content: quizSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 4096 });
+          parsedQuiz = validateQuiz(parseJsonObject(generatedTextFull), questionCount);
+        } catch (quizError) {
+          lastQuizError = quizError;
+          console.warn(`Quiz generation attempt ${attempt} failed: ${quizError.message}`);
+        }
+      }
+      if (!parsedQuiz) throw lastQuizError;
       aiTitle = requestedTitle || parsedQuiz.title;
       aiContent = JSON.stringify(parsedQuiz);
     }
@@ -333,7 +360,14 @@ Example format:
       console.error("XP update failed:", xpError.message);
     }
 
-    return res.status(201).json({ success: true, message: "Content generated!", data: newContent });
+    // 🔧 NEW: xpGained / newLevel are now returned so the client can show level-ups
+    return res.status(201).json({
+      success: true,
+      message: "Content generated!",
+      data: newContent,
+      xpGained: res.locals.xpGained ?? 0,
+      newLevel: res.locals.newLevel ?? null,
+    });
   } catch (error) {
     console.error("AI generation error:", error.message);
     return next(error);
@@ -359,7 +393,8 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 45000) => {
 export const generateSpeech = async (req, res, next) => {
   try {
     requireUser(req);
-    const { text, style, useCase, voiceId, useBrowserTTS } = req.body || {};
+    // 🔧 REMOVED: useBrowserTTS (it did nothing on the backend; the frontend handles browser TTS)
+    const { text, style, useCase, voiceId } = req.body || {};
     let cleanText = ensureText(text, "Text is required.");
     
     if (cleanText.includes("Leo:") || cleanText.includes("Dr. Nova:")) {
@@ -367,14 +402,6 @@ export const generateSpeech = async (req, res, next) => {
     }
 
     if (cleanText.length > MAX_SPEECH_LENGTH) throw httpError("The audio text is too long.", 413);
-    
-    // ✅ CHECK: If user wants browser TTS, we can't send audio from backend, so we handle it differently
-    // For now, we'll still use ElevenLabs but with the selected voice
-    if (useBrowserTTS) {
-      // Option 1: You could return the text and let frontend handle TTS
-      // For now, we'll just use a default voice to save credits
-      console.log("⚠️ Browser TTS requested but backend is generating audio. Consider handling TTS on frontend.");
-    }
     
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw httpError("Audio generation is not configured.", 503);
@@ -384,8 +411,9 @@ export const generateSpeech = async (req, res, next) => {
     
     const speechText = isRap ? prepareLyricsForSpeech(cleanText) : cleanText;
     
-    // ✅ Use the voiceId from frontend, or fallback to defaults
-    const finalVoiceId = voiceId || process.env.ELEVENLABS_VOICE_ID || (isPodcast ? "21m00Tcm4TlvDq8ikWAM" : "pNInz6obpgDQGcFmaJgB");
+    // 🔧 FIXED: only accept a well-formed voice id from the client (it goes straight into the URL)
+    const safeVoiceId = typeof voiceId === "string" && VOICE_ID_PATTERN.test(voiceId) ? voiceId : null;
+    const finalVoiceId = safeVoiceId || process.env.ELEVENLABS_VOICE_ID || (isPodcast ? "21m00Tcm4TlvDq8ikWAM" : "pNInz6obpgDQGcFmaJgB");
     
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${finalVoiceId}`;
     
@@ -406,9 +434,12 @@ export const generateSpeech = async (req, res, next) => {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
-      // ✅ Handle out-of-credits error specifically
-      if (response.status === 402 || response.status === 429) {
+      // 🔧 FIXED: 429 is rate limiting, not "out of credits"
+      if (response.status === 402) {
         throw httpError("ElevenLabs credits exhausted. Please switch to Browser TTS in the settings.", 402);
+      }
+      if (response.status === 429) {
+        throw httpError("The voice service is busy. Please try again in a moment.", 429);
       }
       throw httpError(errorData?.detail?.message || "Audio generation failed.", 503);
     }
@@ -584,15 +615,21 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
         const ffmpegCmd = ffmpeg(rawPath);
         activeFfmpegProcesses.push(ffmpegCmd);
         
+        // NOTE: inputOptions() applies to the most recently added input, so these
+        // calls must stay BEFORE the audio/silence input is added below.
         if (isImage) {
           ffmpegCmd.inputOptions(['-loop 1']);
           if (!audioPath) ffmpegCmd.duration(5);
+        } else if (audioPath) {
+          // 🔧 FIXED: loop short clips so narration is never cut off; -shortest ends the scene with the audio
+          ffmpegCmd.inputOptions(['-stream_loop -1']);
         }
 
         if (audioPath) {
           ffmpegCmd.input(audioPath);
         } else {
-          ffmpegCmd.input('anullsrc=channel_layout=stereo:sample_rate=44100', { f: 'lavfi' });
+          // 🔧 FIXED: anullsrc needs the lavfi format (fluent-ffmpeg's .input() ignores a 2nd argument)
+          ffmpegCmd.input('anullsrc=channel_layout=stereo:sample_rate=44100').inputFormat('lavfi');
         }
 
         const outputOpts = [
@@ -601,7 +638,9 @@ const stitchVideos = async (scenesData, outputMode, aspectRatio = "16:9") => {
           '-r 30', '-pix_fmt yuv420p', '-movflags +faststart'
         ];
 
-        if (isImage && audioPath) outputOpts.push('-shortest');
+        // 🔧 FIXED: anullsrc and looped inputs are endless, so every case except
+        // "image + no audio" (bounded by duration(5)) must end with -shortest.
+        if (audioPath || !isImage) outputOpts.push('-shortest');
 
         ffmpegCmd
           .outputOptions(outputOpts)
@@ -670,8 +709,7 @@ export const generateVideoStoryboard = async (req, res, next) => {
     const cleanInput = ensureText(text, "Please provide at least 5 characters.");
     if (cleanInput.length > MAX_INPUT_LENGTH) throw httpError("Your notes are too long.", 413);
 
-    const videoSystemPrompt = `You are a video director. Turn these notes into a short educational video storyboard. CRITICAL: Output VALID JSON ONLY. No markdown or extra text. { "title": "Topic Name", "scenes": [ { "sceneNumber": 1, "narration": "Maximum 10 words.", "visualPrompt": "Maximum 10 words." } ] }`;
-    const generatedTextFull = await runGroq([{ role: "system", content: videoSystemPrompt }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: 500 });
+    const generatedTextFull = await runGroq([{ role: "system", content: VIDEO_SYSTEM_PROMPT }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: VIDEO_MAX_TOKENS });
     const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
     
     const newContent = await Content.create({
@@ -686,6 +724,21 @@ export const generateVideoStoryboard = async (req, res, next) => {
   } catch (error) {
     console.error("Storyboard generation error:", error.message);
     return next(error);
+  }
+};
+
+// 🔧 NEW: marks a video as failed WITHOUT wiping its scenes (checkVideoStatus needs them)
+const markVideoFailed = async (contentId, message) => {
+  try {
+    const existing = await Content.findById(contentId);
+    let previous = {};
+    try { previous = JSON.parse(existing?.generatedText || "{}"); } catch { previous = {}; }
+    await Content.findByIdAndUpdate(contentId, {
+      generatedText: JSON.stringify({ ...previous, status: "failed", error: message }),
+      mediaUrl: null,
+    });
+  } catch (dbErr) {
+    console.error("Failed to persist video failure:", dbErr);
   }
 };
 
@@ -733,14 +786,7 @@ const processVideoScenes = async (contentId) => {
     }
   } catch (error) {
     console.error("Background processing error:", error);
-    try {
-      await Content.findByIdAndUpdate(contentId, {
-        generatedText: JSON.stringify({ status: "failed", error: error.message || "Video processing failed" }),
-        mediaUrl: null,
-      });
-    } catch (dbErr) {
-      console.error("Failed to persist background error:", dbErr);
-    }
+    await markVideoFailed(contentId, error.message || "Video processing failed");
   }
 };
 
@@ -750,12 +796,14 @@ export const checkVideoStatus = async (req, res, next) => {
     if (!content) throw httpError("Video not found.", 404);
     
     const videoData = JSON.parse(content.generatedText);
-    const totalScenes = videoData.scenes.length;
+    // 🔧 FIXED: never assume scenes exists (older failure records had none)
+    const scenes = Array.isArray(videoData.scenes) ? videoData.scenes : [];
+    const totalScenes = scenes.length;
     
-    const finishedScenes = videoData.scenes.filter(s => ["completed", "failed"].includes(s.status)).length;
-    const hasFailures = videoData.scenes.some(s => s.status === "failed");
+    const finishedScenes = scenes.filter(s => ["completed", "failed"].includes(s.status)).length;
+    const hasFailures = scenes.some(s => s.status === "failed");
     
-    let progress = Math.round((finishedScenes / totalScenes) * 100);
+    let progress = totalScenes ? Math.round((finishedScenes / totalScenes) * 100) : 0;
     let statusMessage = "Generating scenes...";
     let isFinished = false;
 
@@ -763,7 +811,7 @@ export const checkVideoStatus = async (req, res, next) => {
       isFinished = true;
       progress = 100;
       statusMessage = "Failed: " + (videoData.error || "Unknown error");
-    } else if (finishedScenes === totalScenes) {
+    } else if (totalScenes > 0 && finishedScenes === totalScenes) {
       if (videoData.outputMode === "single" && !content.mediaUrl) {
         progress = 95;
         statusMessage = "Stitching final video...";
@@ -850,10 +898,7 @@ const rebuildStitchedVideo = async (contentId) => {
     }
   } catch (error) {
     console.error("Rebuild stitching failed:", error);
-    await Content.findByIdAndUpdate(contentId, {
-      generatedText: JSON.stringify({ status: "failed", error: "Rebuild stitching failed" }),
-      mediaUrl: null,
-    });
+    await markVideoFailed(contentId, "Rebuild stitching failed");
   }
 };
 
@@ -974,6 +1019,69 @@ export const extractTextFromImage = async (req, res, next) => {
     return res.status(200).json({ success: true, text: extractedText.trim(), message: extractedText.trim() ? "Text extracted." : "No text detected.", method: "ocr-space" });
   } catch (error) {
     console.error("OCR extraction error:", error.message);
+    return next(error);
+  }
+};
+
+// 🔧 NEW: lightweight vibe analysis for the Music Studio.
+// Unlike /generate, this does NOT save anything to the user's library and does NOT award XP.
+export const analyzeVibe = async (req, res, next) => {
+  try {
+    requireUser(req);
+    const notes = ensureText(req.body?.text, "Please provide some notes.").slice(0, 800);
+
+    let vibe = "";
+    let reason = "";
+
+    try {
+      const raw = await runGroq(
+        `Analyze these study notes and recommend the BEST music vibe for studying this content.
+
+Choose ONE vibe from these options:
+${MUSIC_VIBES.map((v) => `- ${v}`).join("\n")}
+
+Notes: ${notes}
+
+Answer in this exact format:
+VIBE: [exact vibe name from the list above]
+WHY: [one short sentence]`,
+        { max_tokens: 150 }
+      );
+
+      const vibeMatch = typeof raw === "string" ? raw.match(/VIBE:\s*(.+)/i) : null;
+      if (vibeMatch) {
+        const rawVibe = vibeMatch[1].replace(/[*_`"'\[\]]/g, "").trim().toLowerCase();
+        vibe =
+          MUSIC_VIBES.find((v) => v.toLowerCase() === rawVibe) ||
+          MUSIC_VIBES.find((v) => rawVibe.includes(v.toLowerCase())) ||
+          "";
+      }
+      const whyMatch = typeof raw === "string" ? raw.match(/WHY:\s*(.+)/i) : null;
+      if (whyMatch) reason = whyMatch[1].trim().slice(0, 200);
+    } catch (aiError) {
+      console.warn("Vibe analysis failed, using keyword fallback:", aiError.message);
+    }
+
+    if (!vibe) {
+      const lower = notes.toLowerCase();
+      if (/history|war|battle|important/.test(lower)) {
+        vibe = "Epic Orchestral";
+        reason = "Historical/important content benefits from dramatic music.";
+      } else if (/science|math|formula|calculate/.test(lower)) {
+        vibe = "Chill Lo-Fi";
+        reason = "Technical content requires focused, calm music.";
+      } else if (/motivational|energy|active/.test(lower)) {
+        vibe = "Afrobeat Rap";
+        reason = "Energetic content matches rhythmic beats.";
+      } else {
+        vibe = "Chill Lo-Fi";
+        reason = "General study content works best with calm music.";
+      }
+    }
+
+    return res.status(200).json({ success: true, data: { vibe, reason: reason || "Based on your notes." } });
+  } catch (error) {
+    console.error("Vibe analysis error:", error.message);
     return next(error);
   }
 };
