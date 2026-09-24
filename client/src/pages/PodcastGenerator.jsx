@@ -94,6 +94,18 @@ export default function PodcastGenerator() {
   const [copied, setCopied] = useState(false);
   const [studioAudioUrl, setStudioAudioUrl] = useState("");
   const [isAudioLoading, setIsAudioLoading] = useState(false);
+  // Add this near your other state variables (around line 30):
+const [selectedVoice, setSelectedVoice] = useState("21m00Tcm4TlvDq8ikWAM"); // Default: Rachel
+const [useBrowserTTS, setUseBrowserTTS] = useState(false); // Fallback toggle
+
+// Add these voice options (you can add this before the component or inside):
+const ELEVENLABS_VOICES = [
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel - Warm & Natural" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam - Professional" },
+  { id: "onwK4e9ZLuTAKqWW03F9", name: "Callum - Energetic" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella - Soft & Calm" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi - Strong & Confident" },
+];
 
   const speechRunId = useRef(0);
   const currentIndexRef = useRef(0);
@@ -208,6 +220,37 @@ export default function PodcastGenerator() {
     setIsPaused(false);
     speakCurrentLine(runId);
   };
+  
+  const generateStudioAudio = async () => {
+  if (!transcriptText || isAudioLoading) return;
+  setIsAudioLoading(true);
+  setError("");
+  try {
+    const response = await api.post("/ai/text-to-speech", { 
+      text: transcriptText, 
+      style: "podcast",
+      voiceId: useBrowserTTS ? null : selectedVoice, // Send null if using browser TTS
+      useBrowserTTS: useBrowserTTS
+    }, { responseType: "blob" });
+    
+    const nextAudioUrl = URL.createObjectURL(response.data);
+    setStudioAudioUrl((previousUrl) => {
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      return nextAudioUrl;
+    });
+    setNotice("Studio audio is ready.");
+  } catch (requestError) {
+    console.error("Studio audio failed:", requestError);
+    // If ElevenLabs fails (e.g., out of credits), suggest browser TTS
+    if (requestError.response?.status === 402 || requestError.response?.status === 429) {
+      setError("ElevenLabs credits may be exhausted. Please enable 'Use Browser TTS' below to continue for free.");
+    } else {
+      setError(requestError.response?.data?.message || "Studio audio could not be created. Browser playback is still available.");
+    }
+  } finally {
+    setIsAudioLoading(false);
+  }
+};
 
   const toggleAudio = () => {
     if (isPaused) {
