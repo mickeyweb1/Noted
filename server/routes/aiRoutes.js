@@ -17,7 +17,8 @@ import {
   generateVideoStoryboard, 
   checkVideoStatus, 
   regenerateScene,
-  streamGeneratedVideo
+  streamGeneratedVideo,
+  analyzeVibe // 🔧 NEW
 } from '../controllers/aiController.js';
 
 const router = express.Router();
@@ -27,6 +28,9 @@ router.get('/library', protect, getUserLibrary);
 router.get('/:id', protect, getSingleContent);
 router.delete('/:id', protect, deleteContent);
 router.post('/generate', protect, generateContent);
+
+// 🔧 NEW: vibe analysis for the Music Studio (does not save to the library or award XP)
+router.post('/music/analyze-vibe', protect, analyzeVibe);
 
 // ✅ FIXED: Removed the extra "/ai/" so it correctly maps to /api/ai/text-to-speech
 router.post('/text-to-speech', protect, generateSpeech); 
