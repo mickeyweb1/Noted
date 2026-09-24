@@ -422,7 +422,7 @@ export const generateSpeech = async (req, res, next) => {
       headers: { Accept: "audio/mpeg", "Content-Type": "application/json", "xi-api-key": apiKey },
       body: JSON.stringify({ 
         text: speechText, 
-        model_id: "eleven_monolingual_v1",
+       model_id: "eleven_flash_v2_5",
         voice_settings: { 
           stability: isRap ? 0.35 : isPodcast ? 0.40 : 0.45,
           similarity_boost: isRap ? 0.85 : 0.80,
