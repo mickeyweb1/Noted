@@ -7,7 +7,14 @@ import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-// ✅ ULTRA-BULLETPROOF: Handles AI returning text, letters (A/B/C/D), numbers (0/1/2/3), or EMPTY answers
+const ELEVENLABS_VOICES = [
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel - Warm & Natural" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam - Professional" },
+  { id: "onwK4e9ZLuTAKqWW03F9", name: "Callum - Energetic" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella - Soft & Calm" },
+  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi - Strong & Confident" },
+];
+
 const ChatQuizCard = ({ msg, onUpdateMessage }) => {
   const quizState = msg.quizState || {
     currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0,
@@ -21,38 +28,25 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
     const safeOpt = typeof opt === 'string' ? opt.trim() : '';
     const lowerOpt = safeOpt.toLowerCase();
     
-    // ✅ Handle AI returning a number (index), a letter, or full text
     let safeCorrect = '';
     if (typeof q.correctAnswer === 'number') {
-      safeCorrect = String.fromCharCode(97 + q.correctAnswer); // 0 -> 'a', 1 -> 'b', etc.
+      safeCorrect = String.fromCharCode(97 + q.correctAnswer);
     } else if (typeof q.correctAnswer === 'string') {
       safeCorrect = q.correctAnswer.trim().toLowerCase();
     }
 
-    // ✅ DEBUG: Check console to see what AI returned
-    console.log("🔍 Option:", safeOpt, "| AI Correct Answer:", safeCorrect || "(EMPTY - AI failed to provide answer)");
-
     let isCorrect = false;
-
     if (safeCorrect !== '') {
-      // 1. Exact match
       if (lowerOpt === safeCorrect) isCorrect = true;
-      
-      // 2. Substring match (e.g., AI says "the mitochondria", option is "mitochondria")
       if (!isCorrect && safeCorrect.length > 1) {
         isCorrect = lowerOpt.includes(safeCorrect) || safeCorrect.includes(lowerOpt);
       }
-      
-      // 3. Letter match (e.g., AI says "b", option is "B. Mitochondria")
       if (!isCorrect && safeCorrect.length === 1 && /^[a-d]$/.test(safeCorrect)) {
         isCorrect = lowerOpt.startsWith(safeCorrect + ".") || 
                     lowerOpt.startsWith(safeCorrect + ")") || 
                     String.fromCharCode(97 + q.options.indexOf(opt)).toLowerCase() === safeCorrect;
       }
     } else {
-      // ✅ FALLBACK: If AI provided no correct answer, mark the user's choice as correct by default
-      // This prevents the quiz from breaking when the AI fails
-      console.warn("️ AI provided no correct answer. Marking user's choice as correct.");
       isCorrect = true;
     }
 
@@ -137,8 +131,6 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
                           String.fromCharCode(97 + index).toLowerCase() === safeCorrect;
             }
           } else {
-            // ✅ FALLBACK: If no correct answer from AI, don't highlight anything as correct
-            // Just show the user's selection
             if (safeOpt === quizState.selected) isCorrect = true;
           }
           
@@ -188,7 +180,7 @@ const INITIAL_MESSAGES = [
   {
     id: 1,
     role: "ai",
-    text: "Hello! I'm your **Noted AI Tutor**.  What subject or topic would you like to explore today? You can ask me to explain a concept, break down complex notes, or quiz you!",
+    text: "Hello! I'm your **Noted AI Tutor**. What subject or topic would you like to explore today? You can ask me to explain a concept, break down complex notes, or quiz you!",
   },
 ];
 
@@ -221,8 +213,13 @@ export default function AiTeacher() {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeAudioId, setActiveAudioId] = useState(null);
+  const [activeAudio, setActiveAudio] = useState(null); // ✅ NEW: Hold HTML5 Audio object
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [generatingQuizId, setGeneratingQuizId] = useState(null);
+  
+  // ✅ NEW: Voice settings state
+  const [selectedVoice, setSelectedVoice] = useState("pNInz6obpgDQGcFmaJgB"); // Default: Adam
+  const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -251,6 +248,17 @@ export default function AiTeacher() {
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 128) + "px";
     }
   }, [inputValue]);
+
+  // ✅ NEW: Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+      }
+      window.speechSynthesis.cancel();
+    };
+  }, [activeAudio]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -293,13 +301,34 @@ export default function AiTeacher() {
     }
   };
 
-  const toggleAudioPlayback = (messageId, text) => {
+  // ✅ UPDATED: Now calls backend for ElevenLabs, with browser fallback
+  const toggleAudioPlayback = async (messageId, text) => {
+    const cleanText = text.replace(/\*\*/g, '').replace(/#/g, '');
+
+    // If clicking the same message that is currently playing, stop it
     if (activeAudioId === messageId) {
-      window.speechSynthesis.cancel();
+      if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+        setActiveAudio(null);
+      } else {
+        window.speechSynthesis.cancel();
+      }
       setActiveAudioId(null);
-    } else {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text.replace(/\*\*/g, '').replace(/#/g, '')); 
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (activeAudio) {
+      activeAudio.pause();
+      activeAudio.currentTime = 0;
+      setActiveAudio(null);
+    }
+    window.speechSynthesis.cancel();
+
+    if (useBrowserTTS) {
+      // Use Browser TTS
+      const utterance = new SpeechSynthesisUtterance(cleanText); 
       utterance.rate = 1.0;
       const voices = window.speechSynthesis.getVoices();
       const preferredVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha') || v.lang === 'en-US');
@@ -307,6 +336,42 @@ export default function AiTeacher() {
       utterance.onend = () => setActiveAudioId(null);
       setActiveAudioId(messageId);
       window.speechSynthesis.speak(utterance);
+    } else {
+      // Use ElevenLabs Backend
+      setActiveAudioId(messageId); // Show loading state
+      try {
+        const response = await api.post('/ai/text-to-speech', { 
+          text: cleanText, 
+          style: 'tutor',
+          voiceId: selectedVoice,
+          useBrowserTTS: false
+        }, { responseType: 'blob' });
+        
+        const audioUrl = URL.createObjectURL(response.data);
+        const audio = new Audio(audioUrl);
+        setActiveAudio(audio);
+        
+        audio.onended = () => {
+          setActiveAudioId(null);
+          setActiveAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        audio.onerror = () => {
+          console.error("Audio playback failed");
+          setActiveAudioId(null);
+          setActiveAudio(null);
+          URL.revokeObjectURL(audioUrl);
+          setUseBrowserTTS(true); // Auto-fallback
+        };
+        
+        await audio.play();
+      } catch (error) {
+        console.error("ElevenLabs TTS failed, falling back to browser TTS", error);
+        setActiveAudioId(null);
+        setUseBrowserTTS(true); // Auto-switch to browser TTS on error
+        // Retry immediately with browser TTS
+        setTimeout(() => toggleAudioPlayback(messageId, text), 100);
+      }
     }
   };
 
@@ -344,7 +409,7 @@ export default function AiTeacher() {
     } catch (error) {
       console.error("Generate quiz from chat error:", error);
       const errorMsg = error.response?.data?.message || "Failed to generate quiz.";
-      setMessages((prev) => [...prev, { id: Date.now(), role: "ai", text: `️ **Error:** ${errorMsg}` }]);
+      setMessages((prev) => [...prev, { id: Date.now(), role: "ai", text: `⚠️ **Error:** ${errorMsg}` }]);
     } finally {
       setGeneratingQuizId(null);
     }
@@ -364,7 +429,7 @@ export default function AiTeacher() {
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)] max-w-4xl mx-auto p-4 md:p-6">
       {/* HEADER */}
-      <div className="flex items-center justify-between mb-6 p-4 rounded-2xl bg-card border border-border shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 p-4 rounded-2xl bg-card border border-border shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-brand/80 flex items-center justify-center text-brand-foreground shadow-lg shadow-brand/20">
             <Bot className="w-5 h-5" />
@@ -385,6 +450,39 @@ export default function AiTeacher() {
           <button onClick={handleClearChat} className="p-2 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors" title="Clear chat history">
             <Trash2 className="w-4 h-4" />
           </button>
+        </div>
+      </div>
+
+      {/* ✅ NEW: VOICE SETTINGS BAR */}
+      <div className="mb-4 p-3 rounded-xl border border-border bg-card/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1">
+          <Volume2 className="w-4 h-4 text-brand" />
+          <span className="text-xs font-medium text-foreground">AI Voice:</span>
+          {!useBrowserTTS ? (
+            <select 
+              value={selectedVoice} 
+              onChange={(e) => setSelectedVoice(e.target.value)}
+              className="text-xs rounded-lg border border-border bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand"
+            >
+              {ELEVENLABS_VOICES.map((voice) => (
+                <option key={voice.id} value={voice.id}>{voice.name}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs text-muted-foreground italic">Browser Default (Free & Unlimited)</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input 
+            type="checkbox" 
+            id="tutor-browser-tts" 
+            checked={useBrowserTTS} 
+            onChange={(e) => setUseBrowserTTS(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-gray-300 text-brand focus:ring-brand"
+          />
+          <label htmlFor="tutor-browser-tts" className="text-xs text-muted-foreground cursor-pointer">
+            Use free browser voice
+          </label>
         </div>
       </div>
 
@@ -437,8 +535,8 @@ export default function AiTeacher() {
                         : "bg-card text-muted-foreground hover:bg-accent border-border"
                     }`}
                   >
-                    {activeAudioId === msg.id ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                    {activeAudioId === msg.id ? "Stop" : "Listen"}
+                    {activeAudioId === msg.id && !activeAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : activeAudioId === msg.id ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    {activeAudioId === msg.id && !activeAudio ? "Loading..." : activeAudioId === msg.id ? "Stop" : "Listen"}
                   </button>
                   <button
                     onClick={() => handleGenerateQuizFromChat(msg.text, msg.id)}
