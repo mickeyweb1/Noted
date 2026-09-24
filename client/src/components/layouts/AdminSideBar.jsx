@@ -26,8 +26,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
   };
 
   const navItems = [
-    { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" },
-    { to: "/admin/admissions", icon: UserCheck, label: "Admissions" }, 
+    { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
     { to: "/admin/students", icon: Users, label: "My Students" },
     { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
     { to: "/admin/quizzes", icon: Brain, label: "Quiz Generator" }, 
