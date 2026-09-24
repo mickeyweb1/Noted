@@ -7,7 +7,7 @@ export default function StudentTopBar({ onToggleSidebar }) {
     const searchInputRef = useRef(null);
     
     // ✅ Use your existing theme hook
-    const { theme, setTheme } = useTheme();
+    const { theme, toggleTheme } = useTheme();
 
     // Logic: Listen for Cmd+K or Ctrl+K to focus search
     useEffect(() => {
@@ -57,7 +57,7 @@ export default function StudentTopBar({ onToggleSidebar }) {
             <div className="flex items-center gap-2">
                 {/* ✅ REPLACED: Bell icon with Theme Toggle using your hook */}
                 <button 
-                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                    onClick={toggleTheme}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
                     title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
                 >
