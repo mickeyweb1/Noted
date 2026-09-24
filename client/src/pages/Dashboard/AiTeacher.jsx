@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   Send, Volume2, Bot, User, Sparkles, Mic, BookOpen, Square, 
-  Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, RotateCcw, Loader2
+  Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, Loader2
 } from "lucide-react";
 import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
@@ -16,9 +16,7 @@ const ELEVENLABS_VOICES = [
 ];
 
 const ChatQuizCard = ({ msg, onUpdateMessage }) => {
-  const quizState = msg.quizState || {
-    currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0,
-  };
+  const quizState = msg.quizState || { currentQ: 0, selected: null, showExplanation: false, completed: false, score: 0 };
   const q = msg.quizData.questions[quizState.currentQ];
 
   const handleSelect = (opt) => {
@@ -69,7 +67,6 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
         {q.options.map((opt, index) => {
           const safeOpt = typeof opt === 'string' ? opt.trim() : `Option ${index + 1}`;
           let isCorrect = false;
-          // (Simplified matching logic for brevity, same as before)
           if (quizState.selected === safeOpt) isCorrect = true; 
           
           let style = "border-border bg-background hover:bg-accent/50";
@@ -89,7 +86,6 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
 };
 
 const INITIAL_MESSAGES = [{ id: 1, role: "ai", text: "Hello! I'm your **Noted AI Tutor**. What subject or topic would you like to explore today?" }];
-const SUGGESTED_QUESTIONS = ["Explain Newton's Third Law", "What caused World War I?", "Help me understand photosynthesis"];
 const LOADING_MESSAGES = ["Thinking...", "Consulting archives...", "Drafting response..."];
 
 export default function AiTeacher() {
@@ -102,7 +98,6 @@ export default function AiTeacher() {
   const [activeAudio, setActiveAudio] = useState(null);
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   
-  // ✅ Voice Settings
   const [selectedVoice, setSelectedVoice] = useState("pNInz6obpgDQGcFmaJgB"); 
   const [useBrowserTTS, setUseBrowserTTS] = useState(false);
   
@@ -118,13 +113,16 @@ export default function AiTeacher() {
     }
   }, [isLoading]);
 
-  // ✅ Cleanup audio on unmount
+  // ✅ FIXED: Use setActiveAudio(null) instead of activeAudio = null
   useEffect(() => {
     return () => {
-      if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+      if (activeAudio) { 
+        activeAudio.pause(); 
+        setActiveAudio(null); 
+      }
       window.speechSynthesis.cancel();
     };
-  }, []);
+  }, [activeAudio]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -144,7 +142,6 @@ export default function AiTeacher() {
     }
   };
 
-  // ✅ UPDATED: Bulletproof Audio Playback
   const toggleAudioPlayback = async (messageId, text) => {
     const cleanText = text.replace(/\*\*/g, '').replace(/#/g, '');
 
@@ -196,7 +193,6 @@ export default function AiTeacher() {
         <button onClick={() => { setMessages(INITIAL_MESSAGES); localStorage.removeItem('noted_ai_tutor_messages'); }} className="p-2 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
       </div>
 
-      {/* ✅ Voice Settings Bar */}
       <div className="mb-4 p-3 rounded-xl border border-border bg-card/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1">
           <Volume2 className="w-4 h-4 text-brand" />
