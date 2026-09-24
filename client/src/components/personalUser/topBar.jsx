@@ -1,9 +1,13 @@
 import { useRef, useEffect } from "react";
-import { PanelLeft, Bell, Search } from "lucide-react";
-// import { ThemeToggle } from "../themeToggle"; // Uncomment if you have this
+import { PanelLeft, Search, Sun, Moon } from "lucide-react";
+// ✅ Import your existing theme hook (adjust the path if your folder structure is different)
+import { useTheme } from "../../hooks/useTheme"; 
 
 export default function StudentTopBar({ onToggleSidebar }) {
     const searchInputRef = useRef(null);
+    
+    // ✅ Use your existing theme hook
+    const { theme, setTheme } = useTheme();
 
     // Logic: Listen for Cmd+K or Ctrl+K to focus search
     useEffect(() => {
@@ -51,14 +55,14 @@ export default function StudentTopBar({ onToggleSidebar }) {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
-                <button className="relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
-                    <Bell className="w-4 h-4" />
-                    <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-flame opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-flame"></span>
-                    </span>
+                {/* ✅ REPLACED: Bell icon with Theme Toggle using your hook */}
+                <button 
+                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                    title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                >
+                    {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
-                {/* <ThemeToggle /> */}
             </div>
         </header>
     );
