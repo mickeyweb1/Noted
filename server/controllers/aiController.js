@@ -205,16 +205,39 @@ export const generateContent = async (req, res, next) => {
     let aiContent = "";
     
     if (mode === "tutor") {
+      // ✅ NEW: Upgraded prompt for clean, ChatGPT-style formatting and math in chat
       const tutorSystemPrompt = `You are the "Noted AI Tutor", a friendly, expert academic study assistant. 
       STRICT RULES:
       1. EDUCATIONAL CONTENT ONLY: Answer clearly, accurately, and concisely.
       2. STRICT IDENTITY: You are the Noted AI Tutor. NEVER reveal your underlying base model name.
-      3. YOUNG AUDIENCE: Your users are students from primary school to high school. Keep every answer age-appropriate. Politely decline sexual, violent, self-harm, or dangerous requests and steer back to studying. If a student seems upset or unsafe, kindly encourage them to talk to a trusted adult such as a parent, teacher, or counselor.`;
+      3. YOUNG AUDIENCE: Your users are students from primary school to high school. Keep every answer age-appropriate. Politely decline sexual, violent, self-harm, or dangerous requests and steer back to studying. If a student seems upset or unsafe, kindly encourage them to talk to a trusted adult such as a parent, teacher, or counselor.
+      
+      FORMATTING RULES (CRITICAL):
+      4. Use clean Markdown formatting. Use headings (##, ###), bold text (**text**) for key terms, and bullet points for lists.
+      5. For mathematical equations, you MUST use standard Markdown math syntax:
+         - For block equations (standalone formulas), use double dollar signs: $$ E = mc^2 $$
+         - For inline equations (inside a sentence), use single dollar signs: $E = mc^2$.
+         - DO NOT use brackets like [ x ] or ( x ) for math.
+      6. Keep responses structured and easy to read. Avoid massive walls of text.`;
+      
       const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
       aiContent = await runGroq([{ role: "system", content: tutorSystemPrompt }, ...safeMessages]);
       aiTitle = requestedTitle || "Tutor Chat";
     } else if (mode === "summary") {
-      const systemPrompt = "You are an expert academic study assistant. Create an accurate, well-structured study summary. Educational content only.";
+      // ✅ NEW: Upgraded prompt for clean, ChatGPT-style formatting and math
+      const systemPrompt = `You are an expert academic study assistant. Create a clean, well-structured, and easy-to-read study note based on the provided topic.
+      
+      FORMATTING RULES (CRITICAL):
+      1. Use clean Markdown formatting. Use headings (##, ###), bold text (**text**) for key terms, and bullet points for lists.
+      2. For mathematical equations, you MUST use standard Markdown math syntax:
+         - For block equations (standalone formulas), use double dollar signs: $$ E = mc^2 $$
+         - For inline equations (inside a sentence), use single dollar signs: $E = mc^2$.
+         - DO NOT use brackets like [ x ] or ( x ) for math.
+      3. Keep the tone educational, clear, and concise. Avoid overly dense paragraphs. Use white space.
+      4. Include a "Key Formulas" or "Summary" section at the end if applicable.
+      5. The very first line of your response MUST be the title of the note, formatted as a Markdown heading: # Title Here
+      6. Do not include any conversational filler like "Here is your note:". Start directly with the title.`;
+      
       const requestedMaxTokens = Number(max_tokens);
       const finalMaxTokens = Number.isInteger(requestedMaxTokens) ? Math.min(Math.max(requestedMaxTokens, 50), 4096) : 4096;
       
@@ -228,7 +251,7 @@ export const generateContent = async (req, res, next) => {
         aiTitle = requestedTitle || cleanInput.substring(0, 40) + (cleanInput.length > 40 ? "..." : "");
         aiContent = generatedTextFull.trim();
       }
-    } else if (mode === "video") {
+    }else if (mode === "video") {
       const generatedTextFull = await runGroq([{ role: "system", content: VIDEO_SYSTEM_PROMPT }, { role: "user", content: `Notes:\n${cleanInput}` }], { max_tokens: VIDEO_MAX_TOKENS });
       const parsedVideo = validateVideo(parseJsonObject(generatedTextFull));
       aiTitle = requestedTitle || parsedVideo.title;

@@ -5,6 +5,12 @@ import NoteScanner from "../../components/NoteScanner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// ✅ NEW: Import the math rendering plugins
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+// ✅ NEW: Import the KaTeX CSS so the math looks beautiful (like ChatGPT)
+import "katex/dist/katex.min.css"; 
+
 export default function StudentAiGenerator() {
   const [inputMethod, setInputMethod] = useState("type");
   const [notesText, setNotesText] = useState("");
@@ -151,7 +157,7 @@ export default function StudentAiGenerator() {
           {inputMethod === "scan" && (
             <NoteScanner 
               onScanComplete={(text) => { 
-                setNotesText(prev => prev ? prev + "\n\n---  New Page ---\n\n" + text : text); 
+                setNotesText(prev => prev ? prev + "\n\n--- 📄 New Page ---\n\n" + text : text); 
                 setInputMethod("type"); 
               }} 
             />
@@ -209,7 +215,7 @@ export default function StudentAiGenerator() {
           )}
         </div>
 
-        {/* GENERATED RESULTS SECTION - Now directly below input */}
+        {/* GENERATED RESULTS SECTION */}
         <div id="generated-results" className={`transition-all duration-500 ${generatedResult ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
           {generatedResult && (
             <div className="p-6 rounded-2xl bg-card border-2 border-brand/30 shadow-lg space-y-4">
@@ -234,9 +240,11 @@ export default function StudentAiGenerator() {
                 </div>
               </div>
               
+              {/* ✅ UPDATED: Added remarkMath and rehypeKatex to render beautiful equations */}
               <div className="text-sm leading-relaxed markdown-content prose prose-sm dark:prose-invert max-w-none">
                 <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
+                  remarkPlugins={[remarkGfm, remarkMath]} 
+                  rehypePlugins={[rehypeKatex]}
                   components={{
                     h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 pb-2 border-b border-border" {...props} />,
                     h2: ({node, ...props}) => <h2 className="text-xl font-bold text-foreground mt-5 mb-3" {...props} />,

@@ -7,6 +7,11 @@ import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// ✅ NEW: Import the math rendering plugins and CSS
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css"; 
+
 const ELEVENLABS_VOICES = [
   { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel - Warm & Natural" },
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam - Professional" },
@@ -100,7 +105,6 @@ const ChatQuizCard = ({ msg, onUpdateMessage }) => {
 };
 
 const INITIAL_MESSAGES = [{ id: 1, role: "ai", text: "Hello! I'm your **Noted AI Tutor**. What subject or topic would you like to explore today?" }];
-const LOADING_MESSAGES = ["Thinking...", "Consulting archives...", "Drafting response..."];
 
 export default function AiTeacher() {
   const [messages, setMessages] = useState(() => {
@@ -110,7 +114,7 @@ export default function AiTeacher() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeAudioId, setActiveAudioId] = useState(null);
   const [loadingAudioId, setLoadingAudioId] = useState(null);
-  const [generatingQuizId, setGeneratingQuizId] = useState(null); // ✅ RESTORED
+  const [generatingQuizId, setGeneratingQuizId] = useState(null);
   
   const activeAudioRef = useRef(null);
   const ttsRequestRef = useRef(0);
@@ -207,7 +211,6 @@ export default function AiTeacher() {
     }
   };
 
-  // ✅ RESTORED: Turn into Quiz functionality
   const handleGenerateQuizFromChat = async (messageText, messageId) => {
     setGeneratingQuizId(messageId);
     try {
@@ -282,7 +285,25 @@ export default function AiTeacher() {
             <div className={`max-w-[80%] space-y-2 flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
               {(msg.role === "user" || msg.role === "ai") && (
                 <div className={`p-4 rounded-2xl text-sm shadow-sm ${msg.role === "user" ? "bg-brand text-brand-foreground" : "bg-card border border-border text-foreground"}`}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                  {/* ✅ UPDATED: Added remarkMath and rehypeKatex to render beautiful equations in chat */}
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]} 
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                      h1: ({node, ...props}) => <h1 className="text-lg font-bold text-foreground mt-4 mb-2" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-base font-bold text-foreground mt-3 mb-2" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-foreground mt-2 mb-1" {...props} />,
+                      p: ({node, ...props}) => <p className="text-foreground leading-relaxed mb-2 last:mb-0" {...props} />,
+                      ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-1 ml-2 mb-2" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal list-inside space-y-1 ml-2 mb-2" {...props} />,
+                      li: ({node, ...props}) => <li className="text-foreground" {...props} />,
+                      strong: ({node, ...props}) => <strong className="font-bold text-foreground" {...props} />,
+                      code: ({node, inline, ...props}) => inline ? <code className="bg-muted/50 px-1.5 py-0.5 rounded text-xs font-mono text-brand" {...props} /> : <code className="block bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto my-2" {...props} />,
+                      blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-brand pl-3 italic text-muted-foreground my-2" {...props} />,
+                    }}
+                  >
+                    {msg.text}
+                  </ReactMarkdown>
                 </div>
               )}
               {msg.role === "quiz" && <ChatQuizCard msg={msg} onUpdateMessage={(id, m) => setMessages(prev => prev.map(x => x.id === id ? m : x))} />}
@@ -293,7 +314,6 @@ export default function AiTeacher() {
                     {loadingAudioId === msg.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : activeAudioId === msg.id ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     {loadingAudioId === msg.id ? "Loading..." : activeAudioId === msg.id ? "Stop" : "Listen"}
                   </button>
-                  {/* ✅ RESTORED: Turn into Quiz Button */}
                   <button onClick={() => handleGenerateQuizFromChat(msg.text, msg.id)} disabled={generatingQuizId === msg.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-electric/10 text-electric border border-electric/20 hover:bg-electric/20 transition-all disabled:opacity-50">
                     {generatingQuizId === msg.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</> : <><Target className="w-3.5 h-3.5" /> Turn into Quiz</>}
                   </button>
