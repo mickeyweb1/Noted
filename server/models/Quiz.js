@@ -8,7 +8,10 @@ const quizSchema = new mongoose.Schema({
   timeType: { type: String, enum: ['perQuestion', 'total'], default: 'total' },
   maxTabSwitches: { type: Number, default: null }, // ✅ NEW: Optional anti-cheat limit
   numberOfStudents: { type: Number, required: true },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  gameMode: { type: String, enum: ['test', 'gameShow'], default: 'test' },
+  baseMarks: { type: Number, default: 10 },
+  bonusMarks: { type: Number, default: 5 },
+   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   questions: [{
     question: { type: String, required: true },
     options: [{ type: String, required: true }],
