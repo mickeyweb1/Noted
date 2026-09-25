@@ -64,24 +64,27 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
 router.post('/create-manual', protect, async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const { title, difficulty, numQuestions, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, questions } = req.body;
+    const { title, difficulty, numQuestions, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, questions, gameMode = 'test', baseMarks = 10, bonusMarks = 5 } = req.body;
     
     const accessCodes = [];
     for (let i = 0; i < numStudents; i++) {
-      let code = generateAccessCode();
-      while (accessCodes.includes(code)) code = generateAccessCode();
+      let code = generateAccessCode(gameMode); // ✅ Pass the mode here
+      while (accessCodes.includes(code)) code = generateAccessCode(gameMode);
       accessCodes.push(code);
     }
 
     const quiz = await Quiz.create({
       title, difficulty, timeLimit, timeUnit, timeType, maxTabSwitches: maxTabSwitches || null,
-      numberOfStudents: numStudents, questions, accessCodes, createdBy: userId
+      numberOfStudents: numStudents, 
+      gameMode, baseMarks, bonusMarks, // ✅ Save the new fields
+      questions, accessCodes, createdBy: userId
     });
     res.json({ success: true, data: quiz, accessCodes });
   } catch (error) {
     next(error);
   }
 });
+
 
 // 🎯 3. Start Quiz Session (Server-side timer & anti-cheat init)
 router.post('/session/start', async (req, res, next) => {
