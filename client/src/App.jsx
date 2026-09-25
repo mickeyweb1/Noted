@@ -9,6 +9,7 @@ import StudentPage from "./pages/marketing/StudentPage";
 import PersonalPage from "./pages/marketing/PersonalPage";
 import ContactPage from "./pages/marketing/ContactPage";
 import StudioHub from "./pages/StudioHub";
+import GameShowBoard from "./pages/GameShowBoard";
 
 // Auth Pages
 import LoginPage from "./auth/LoginPage";
