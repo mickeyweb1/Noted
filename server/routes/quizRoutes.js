@@ -34,12 +34,17 @@ const upload = multer({
   }
 });
 
-const generateAccessCode = () => {
+// ✅ UPDATED: Generates codes with T- or G- prefix
+const generateAccessCode = (mode = 'test') => {
+  const prefix = mode === 'gameShow' ? 'G-' : 'T-';
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 10; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+  let code = prefix;
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
   return code;
 };
+
 
 // 🎯 1. AI Generate Questions PREVIEW (Does not save to DB yet, allows review)
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
