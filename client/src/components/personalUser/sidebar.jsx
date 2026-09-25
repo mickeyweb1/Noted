@@ -31,13 +31,13 @@ export default function StudentSideBar({ isOpen, onClose }) {
 
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: Home },
-    { to: "/myLibrary", label: "My Library", icon: Library },
     { to: "/ai-teacher", label: "AI Teacher", icon: Bot },
     { to: "/aiGenerator", label: "AI Summary", icon: Sparkles },
+    { to: "/podcast", label: "Podcast", icon: Mic },
     { to: "/quiz", label: "Quizzes", icon: Brain },
     { to: "/music-studio", label: "Music Studio", icon: Music },
     { to: "/video-studio", label: "Video Studio", icon: Video },
-    { to: "/podcast", label: "Podcast", icon: Mic },
+        { to: "/myLibrary", label: "My Library", icon: Library },
     { to: "/focusTime", label: "Focus Time", icon: Clock },
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
     { to: "/studentSetting", label: "Settings", icon: Settings },
