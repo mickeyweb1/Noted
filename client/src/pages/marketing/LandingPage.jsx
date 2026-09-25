@@ -229,14 +229,14 @@ export default function LandingPage() {
             Jump straight into your assessment. No account or login required.
           </p>
 
-          <form onSubmit={handleJoinQuiz} className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-lg mx-auto">
+                  <form onSubmit={handleJoinQuiz} className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-lg mx-auto">
             <div className="relative w-full">
               <input
                 type="text"
                 value={quizCode}
-                // ✅ FIXED: Now allows letters AND numbers, and auto-capitalizes
-                onChange={(e) => setQuizCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10))}
-                placeholder="Enter 10-character code (e.g., A7K9M2P4Q1)"
+                // ✅ FIXED: Now allows letters, numbers, AND hyphens (-)
+                onChange={(e) => setQuizCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase().slice(0, 10))}
+                placeholder="Enter code (e.g., T-8X92A1B3)"
                 className="w-full rounded-full border border-border bg-background px-6 py-4 text-center text-lg font-mono tracking-widest text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
               />
             </div>
@@ -249,6 +249,7 @@ export default function LandingPage() {
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
+
           
           {quizCode.length > 0 && quizCode.length < 10 && (
             <p className="mt-3 text-sm text-muted-foreground">
