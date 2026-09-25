@@ -11,7 +11,8 @@ import {
   Clock,
   Trophy,
   Sparkles,
-  Bot
+  Bot,
+  Zap
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -28,12 +29,11 @@ export default function StudentSideBar({ isOpen, onClose }) {
     navigate("/login");
   };
 
-  // ✅ RESTORED: Your exact original navigation items
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: Home },
     { to: "/myLibrary", label: "My Library", icon: Library },
     { to: "/ai-teacher", label: "AI Teacher", icon: Bot },
-    { to: "/aiGenerator", label: "AI Summary", icon: Sparkles }, // ✅ Added back!
+    { to: "/aiGenerator", label: "AI Summary", icon: Sparkles },
     { to: "/quiz", label: "Quizzes", icon: Brain },
     { to: "/music-studio", label: "Music Studio", icon: Music },
     { to: "/video-studio", label: "Video Studio", icon: Video },
@@ -42,6 +42,11 @@ export default function StudentSideBar({ isOpen, onClose }) {
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
     { to: "/studentSetting", label: "Settings", icon: Settings },
   ];
+
+  // Calculate XP for the progress bar (assuming 100 XP per level)
+  const currentLevel = user?.level || 1;
+  const currentXP = user?.xp || 0;
+  const xpProgress = currentXP % 100; 
 
   return (
     <aside
@@ -85,13 +90,32 @@ export default function StudentSideBar({ isOpen, onClose }) {
         ))}
       </nav>
 
-      {/* Footer / Logout */}
-      <div className="shrink-0 border-t border-border p-4">
-        <div className="mb-3 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand/10 text-brand font-bold">
+      {/* Footer / XP & Profile */}
+      <div className="shrink-0 border-t border-border p-4 space-y-4">
+        
+        {/* ✅ RESTORED: XP and Level Display */}
+        <div className="rounded-xl bg-gradient-to-r from-brand/10 to-brand/5 p-3 border border-brand/20">
+          <div className="flex justify-between items-center mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-brand fill-brand" />
+              <span className="text-xs font-bold text-brand">Level {currentLevel}</span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">{currentXP} XP</span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+            <div 
+              className="bg-brand h-1.5 rounded-full transition-all duration-500" 
+              style={{ width: `${xpProgress}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* User Profile & Logout */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand/10 text-brand font-bold shrink-0">
             {user?.fullName?.charAt(0).toUpperCase() || "S"}
           </div>
-          <div className="flex flex-col min-w-0">
+          <div className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-semibold text-foreground truncate">
               {user?.fullName || "Student"}
             </span>
@@ -99,15 +123,15 @@ export default function StudentSideBar({ isOpen, onClose }) {
               {user?.email || "student@noted.com"}
             </span>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            title="Log out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-        >
-          <LogOut className="h-5 w-5" />
-          Log out
-        </button>
       </div>
     </aside>
   );
