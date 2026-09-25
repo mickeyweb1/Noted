@@ -60,6 +60,7 @@ function App() {
       {/* ================= PUBLIC MARKETING ROUTES ================= */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
+           <Route path="/game-show" element={<GameShowBoard />} /> {/* ✅ ADD THIS LINE */}
       <Route path="/school" element={<SchoolPage />} />
       <Route path="/student" element={<StudentPage />} />
       <Route path="/personal" element={<PersonalPage />} />
