@@ -116,20 +116,25 @@ export default function TakeQuiz() {
     return () => clearInterval(timerRef.current);
   }, [step, timeLeft]);
 
-  const handleValidateCode = async (e) => {
+    const handleValidateCode = async (e) => {
     e.preventDefault();
-    if (code.length !== 10) return setError("Code must be 10 characters");
+    if (code.length < 3) return setError("Code is too short");
     setError("");
     
     try {
-      // Just validate the code format and fetch quiz data. 
-      // We do NOT start the timer here anymore.
       const res = await api.post("/quiz/validate-code", { code });
       const data = res.data.data;
+      
+      // ✅ NEW: Check if it's a Game Show code
+      if (data.gameMode === 'gameShow') {
+        navigate(`/game-show?code=${code}`);
+        return;
+      }
+
+      // Normal Test Flow continues here...
       setQuizData(data);
       setMaxTabSwitches(data.maxTabSwitches);
       
-      // Show total time on the info screen, but don't start countdown yet
       const totalSeconds = data.timeType === "perQuestion" 
         ? data.timeLimit * data.questions.length 
         : data.timeLimit;
@@ -142,6 +147,7 @@ export default function TakeQuiz() {
     }
   };
 
+  
   // ✅ Fix 3: Start the server session ONLY when they click "Start Quiz"
   const handleStartQuiz = async (e) => {
     e.preventDefault();
