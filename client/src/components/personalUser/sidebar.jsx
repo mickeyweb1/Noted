@@ -9,7 +9,9 @@ import {
   Video,
   Mic,
   Clock,
-  Trophy
+  Trophy,
+  Sparkles,
+  Bot
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -26,10 +28,12 @@ export default function StudentSideBar({ isOpen, onClose }) {
     navigate("/login");
   };
 
+  // ✅ RESTORED: Your exact original navigation items
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: Home },
     { to: "/myLibrary", label: "My Library", icon: Library },
-    { to: "/ai-teacher", label: "AI Teacher", icon: Brain },
+    { to: "/ai-teacher", label: "AI Teacher", icon: Bot },
+    { to: "/aiGenerator", label: "AI Summary", icon: Sparkles }, // ✅ Added back!
     { to: "/quiz", label: "Quizzes", icon: Brain },
     { to: "/music-studio", label: "Music Studio", icon: Music },
     { to: "/video-studio", label: "Video Studio", icon: Video },
