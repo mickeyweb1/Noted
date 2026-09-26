@@ -239,10 +239,13 @@ export default function AdminGameShowCreator() {
         )}
 
         {/* Generated Quiz & Codes View */}
+                {/* Generated Quiz & Codes View */}
         {generatedQuiz && (
           <div className="space-y-6 rounded-2xl border border-green-500/30 bg-green-500/5 p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-xl font-bold text-foreground"><CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" /> Game Show Created!</h2>
+              <h2 className="flex items-center gap-2 text-xl font-bold text-foreground">
+                <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" /> Game Show Created!
+              </h2>
               <button onClick={() => { setGeneratedQuiz(null); setAccessCodes([]); setPreviewQuestions([]); setNotes(""); setIsReviewing(false); setErrorMessage(""); }} className={`${secondaryBtn} py-2 text-sm`}>
                 <Plus className="h-4 w-4" /> Create another
               </button>
@@ -257,19 +260,43 @@ export default function AdminGameShowCreator() {
               </div>
             </div>
 
-            <button onClick={() => navigate(`/game-show?code=${accessCodes[0]}`)} className={`flex w-full items-center justify-center gap-2 rounded-xl border border-brand/20 bg-brand-soft py-3 font-semibold text-brand transition hover:bg-brand/20 ${focusRing}`}>
-              <Trophy className="h-5 w-5" /> Open Live Game Show Board
+            {/* ✅ NEW: Big Button to Open Live Match */}
+            <button onClick={() => navigate(`/game-show?code=${accessCodes[0]}`)} className={`flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 font-bold text-brand-foreground shadow-lg shadow-brand/20 transition hover:bg-brand/90 ${focusRing}`}>
+              <Play className="h-5 w-5" /> Open Live Match Dashboard
             </button>
 
             <div>
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="flex items-center gap-2 font-semibold text-foreground"><Users className="h-4 w-4" /> Student Access Codes ({accessCodes.length})</h3>
-                <button onClick={() => navigator.clipboard.writeText(accessCodes.join('\n'))} className={`inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-accent ${focusRing}`}>
-                  <Copy className="h-3.5 w-3.5" /> Copy all
-                </button>
+                <h3 className="flex items-center gap-2 font-semibold text-foreground">
+                  <Users className="h-4 w-4" /> Student Access Codes ({accessCodes.length})
+                </h3>
+                <div className="flex gap-2">
+                  {/* ✅ NEW: Generate New Code Button */}
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const res = await api.post(`/quiz/${generatedQuiz._id}/regenerate-code`);
+                        setAccessCodes(prev => [...prev, res.data.newCode]);
+                      } catch (err) {
+                        alert("Failed to generate new code");
+                      }
+                    }} 
+                    className={`inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent ${focusRing}`}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Generate New Code
+                  </button>
+                  
+                  <button onClick={() => navigator.clipboard.writeText(accessCodes.join('\n'))} className={`inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-accent ${focusRing}`}>
+                    <Copy className="h-3.5 w-3.5" /> Copy All
+                  </button>
+                </div>
               </div>
               <div className="grid max-h-60 grid-cols-2 gap-2 overflow-y-auto rounded-xl border border-border bg-background p-2 sm:grid-cols-4 md:grid-cols-5">
-                {accessCodes.map((code, idx) => (<div key={idx} className="rounded-lg border border-border bg-muted p-2 text-center font-mono text-sm tracking-wider text-foreground">{code}</div>))}
+                {accessCodes.map((code, idx) => (
+                  <div key={idx} className="rounded-lg border border-border bg-muted p-2 text-center font-mono text-sm tracking-wider text-foreground">
+                    {code}
+                  </div>
+                ))}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">Share these codes with your students. Each code can only be used once.</p>
             </div>
