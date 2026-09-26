@@ -17,6 +17,7 @@ import RoleSelectionPage from "./auth/RoleSelectionPage";
 import SchoolStudentRegisterPage from "./auth/SchoolStudentRegisterPage";
 import SchoolAdminRegisterPage from "./auth/SchoolAdminRegisterPage";
 import PersonalUserRegisterPage from "./auth/PersonalUserRegisterPage";
+import AdminGameShowCreator from "./pages/AdminGameShowCreator";
 
 import StudentDashboardLayout from "./components/layouts/StudentDashboardLayout";
 import StudentHome from "./pages/Dashboard/homePage";
@@ -117,6 +118,7 @@ function App() {
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
         <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
+        <Route path="/admin/game-show-creator" element={<AdminGameShowCreator />} /> {/* ✅ ADD THIS LINE */}
 <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
