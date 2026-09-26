@@ -8,6 +8,7 @@ import SchoolPage from "./pages/marketing/SchoolPage";
 import StudentPage from "./pages/marketing/StudentPage";
 import PersonalPage from "./pages/marketing/PersonalPage";
 import ContactPage from "./pages/marketing/ContactPage";
+import GameShowLobby from "./pages/GameShowLobby";
 import StudioHub from "./pages/StudioHub";
 import GameShowBoard from "./pages/GameShowBoard";
 
@@ -63,6 +64,7 @@ function App() {
       <Route path="/about" element={<AboutPage />} />
            <Route path="/game-show" element={<GameShowBoard />} /> {/* ✅ ADD THIS LINE */}
       <Route path="/school" element={<SchoolPage />} />
+      <Route path="/game-show-lobby" element={<GameShowLobby />} />
       <Route path="/student" element={<StudentPage />} />
       <Route path="/personal" element={<PersonalPage />} />
       <Route path="/contact" element={<ContactPage />} />
