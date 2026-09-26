@@ -8,7 +8,8 @@ import {
   Building2,
   BarChart3,
   UserPlus,
-  X
+  X,
+  Trophy
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
