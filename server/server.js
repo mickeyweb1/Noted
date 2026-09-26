@@ -24,10 +24,17 @@ app.set('trust proxy', 1);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// ✅ UPDATED: Define allowed origins for CORS (Localhost + Vercel)
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  process.env.CLIENT_URL // e.g., "https://your-app.vercel.app"
+].filter(Boolean); // Removes undefined if CLIENT_URL is not set locally
+
 // 2. Security & Global Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: allowedOrigins, // ✅ UPDATED: Use the array
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -71,7 +78,7 @@ const server = createServer(app); // Wrap express app with HTTP server
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: allowedOrigins, // ✅ UPDATED: Use the same allowed origins array
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -146,7 +153,6 @@ io.on('connection', (socket) => {
   // 5. Handle disconnect
   socket.on('disconnect', () => {
     console.log(`🔌 User disconnected: ${socket.id}`);
-    // Optional: You can add logic here to remove the player from the game if needed
   });
 });
 // ==========================================
@@ -161,9 +167,8 @@ const mongooseOptions = {
 mongoose.connect(MONGO_URI, mongooseOptions)
     .then(() => {
         console.log('✅ Successfully connected to MongoDB Atlas!');
-        // ✅ CHANGED: Listen on the HTTP server, not the express app
         server.listen(PORT, () => {
-            console.log(`🚀 Server is running on http://localhost:${PORT}`);
+            console.log(`🚀 Server is running on port ${PORT}`);
             console.log(`🔌 Socket.io is ready for real-time connections!`);
         });
     })
@@ -185,5 +190,4 @@ mongoose.connection.on('error', (err) => {
     console.error('❌ MongoDB connection error:', err.message);
 });
 
-// ✅ NEW: Export io so we can attach quiz data to the game room later if needed
 export { io, activeGames };
