@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Brain, FileText, Plus, Trash2, Sparkles, Loader2, CheckCircle2, Copy, Users, Clock, AlertTriangle, ArrowLeft, ChevronDown, Check, Trophy } from "lucide-react";
+import { Brain, FileText, Plus, Trash2, Sparkles, Loader2, CheckCircle2, Copy, Users, Clock, AlertTriangle, ArrowLeft, ChevronDown, Check, Trophy, Play, RefreshCw } from "lucide-react";
 import api from "../utils/api";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
