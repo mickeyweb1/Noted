@@ -121,11 +121,10 @@ export default function TakeQuiz() {
       const res = await api.post("/quiz/validate-code", { code });
       const data = res.data.data;
       
-      // ✅ NEW: Check if it's a Game Show code and redirect
-      if (data.gameMode === 'gameShow') {
-        navigate(`/game-show?code=${code}`);
-        return;
-      }
+if (data.gameMode === 'gameShow') {
+  navigate(`/game-show-lobby?code=${code}`); // ✅ CORRECT!
+  return;
+}
 
       // Normal Test Flow continues here...
       setQuizData(data);
