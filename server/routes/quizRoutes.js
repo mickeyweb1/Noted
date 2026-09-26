@@ -178,8 +178,11 @@ router.post('/:id/regenerate-code', protect, async (req, res, next) => {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found' });
     
-    let newCode = generateAccessCode();
-    while (quiz.accessCodes.includes(newCode)) newCode = generateAccessCode();
+    // ✅ FIX: Pass the quiz's gameMode so it generates the correct prefix (G- or T-)
+    let newCode = generateAccessCode(quiz.gameMode || 'test');
+    while (quiz.accessCodes.includes(newCode)) {
+      newCode = generateAccessCode(quiz.gameMode || 'test');
+    }
     
     quiz.accessCodes.push(newCode);
     quiz.numberOfStudents += 1;
