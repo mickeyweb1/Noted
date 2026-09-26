@@ -59,15 +59,13 @@ export default function TakeQuiz() {
   
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [maxTabSwitches, setMaxTabSwitches] = useState(null);
-  const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false); // ✅ Fix 6: Custom modal
+  const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
   
   const timerRef = useRef(null);
-  const answersRef = useRef({}); // ✅ Fix 1: Always hold latest answers
+  const answersRef = useRef({});
 
-  // Keep ref synced with state
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
-  // ✅ Fix 1 & 6: Tab Switch Detection with Modal
   useEffect(() => {
     if (step !== "quiz") return;
     
@@ -78,7 +76,6 @@ export default function TakeQuiz() {
           setTabSwitchCount(res.data.tabSwitchCount);
           if (res.data.shouldAutoSubmit) {
             setShowAutoSubmitModal(true);
-            // Give them 2 seconds to read the modal, then auto-submit
             setTimeout(() => {
               setShowAutoSubmitModal(false);
               handleSubmitQuiz(true);
@@ -94,7 +91,6 @@ export default function TakeQuiz() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [step, code]);
 
-  // ✅ Fix 4: Handle 0 time left properly
   useEffect(() => {
     if (step !== "quiz") return;
     
@@ -116,7 +112,7 @@ export default function TakeQuiz() {
     return () => clearInterval(timerRef.current);
   }, [step, timeLeft]);
 
-    const handleValidateCode = async (e) => {
+  const handleValidateCode = async (e) => {
     e.preventDefault();
     if (code.length < 3) return setError("Code is too short");
     setError("");
@@ -125,7 +121,7 @@ export default function TakeQuiz() {
       const res = await api.post("/quiz/validate-code", { code });
       const data = res.data.data;
       
-      // ✅ NEW: Check if it's a Game Show code
+      // ✅ NEW: Check if it's a Game Show code and redirect
       if (data.gameMode === 'gameShow') {
         navigate(`/game-show?code=${code}`);
         return;
@@ -147,19 +143,16 @@ export default function TakeQuiz() {
     }
   };
 
-  
-  // ✅ Fix 3: Start the server session ONLY when they click "Start Quiz"
   const handleStartQuiz = async (e) => {
     e.preventDefault();
     if (!studentInfo.name || !studentInfo.surname) return setError("Please enter your name and surname.");
     setError("");
-    setIsSubmitting(true); // Show loading while starting session
+    setIsSubmitting(true);
     
     try {
       const res = await api.post("/quiz/session/start", { code });
       const data = res.data.data;
       
-      // Now calculate the real countdown based on server start time
       const totalSeconds = data.timeType === "perQuestion" 
         ? data.timeLimit * data.questions.length 
         : data.timeLimit;
@@ -185,7 +178,6 @@ export default function TakeQuiz() {
     setIsSubmitting(true);
     clearInterval(timerRef.current);
     
-    // ✅ Fix 1: Use answersRef.current to guarantee we have the latest answers
     const formattedAnswers = quizData.questions.map(q => ({
       questionId: q._id,
       selectedAnswer: answersRef.current[q._id] || null
@@ -203,7 +195,6 @@ export default function TakeQuiz() {
       setStep("result");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to submit quiz.");
-      // ✅ Fix 2: Always reset isSubmitting on error so they aren't stuck
       setIsSubmitting(false); 
     }
   };
@@ -218,7 +209,6 @@ export default function TakeQuiz() {
   const answeredCount = quizData ? quizData.questions.filter((q) => answers[q._id]).length : 0;
   const progress = totalQuestions ? (answeredCount / totalQuestions) * 100 : 0;
   
-  // ✅ Fix 5: Prevent NaN%
   const percentage = result && result.totalQuestions > 0 
     ? Math.round((result.score / result.totalQuestions) * 100) 
     : 0;
@@ -236,15 +226,16 @@ export default function TakeQuiz() {
             <ListChecks className="h-8 w-8 text-brand" />
           </div>
           <h1 className="mb-2 text-2xl font-bold text-foreground">Join a quiz</h1>
-          <p className="mb-6 text-muted-foreground">Enter the 10-character code your teacher gave you.</p>
+          <p className="mb-6 text-muted-foreground">Enter the code your teacher gave you.</p>
           <form onSubmit={handleValidateCode} className="space-y-4">
             <input
               type="text"
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10))}
-              placeholder="0000000000"
+              // ✅ FIXED: Now allows letters, numbers, AND hyphens (-)
+              onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase().slice(0, 10))}
+              placeholder="e.g., T-8X92A1B3"
               aria-label="Quiz code"
-              className="w-full rounded-2xl border-2 border-input bg-background p-4 text-center font-mono text-2xl tracking-[0.3em] text-foreground placeholder:text-muted-foreground/50 transition focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-soft"
+              className="w-full rounded-2xl border-2 border-input bg-background p-4 text-center font-mono text-2xl tracking-[0.2em] text-foreground placeholder:text-muted-foreground/50 transition focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-soft"
             />
             <div className="flex gap-1.5" aria-hidden="true">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -252,7 +243,7 @@ export default function TakeQuiz() {
               ))}
             </div>
             <ErrorNote>{error}</ErrorNote>
-            <button type="submit" disabled={code.length !== 10} className={primaryBtn}>
+            <button type="submit" disabled={code.length < 3} className={primaryBtn}>
               Continue <ArrowRight className="h-4 w-4" />
             </button>
           </form>
@@ -323,7 +314,6 @@ export default function TakeQuiz() {
 
     return (
       <div className="min-h-screen bg-muted p-4 md:p-8">
-        {/* ✅ Fix 6: Auto-Submit Modal */}
         {showAutoSubmitModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="w-full max-w-sm bg-card p-6 rounded-2xl border border-border shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200">
@@ -402,7 +392,6 @@ export default function TakeQuiz() {
             <p className="text-sm text-muted-foreground">
               {answeredCount === totalQuestions ? "You've answered every question. Ready when you are." : `${totalQuestions - answeredCount} ${totalQuestions - answeredCount === 1 ? "question" : "questions"} still unanswered.`}
             </p>
-            {/* ✅ Fix 2: Show errors on the quiz screen */}
             <ErrorNote>{error}</ErrorNote>
             <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting} className={`${primaryBtn} text-lg`}>
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit quiz"}
