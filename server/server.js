@@ -8,7 +8,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { Quiz } from './models/Quiz.js'; // ✅ ADDED: To look up quiz by code
+import { Quiz } from './models/Quiz.js';
 
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -25,11 +25,7 @@ app.set('trust proxy', 1);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  process.env.CLIENT_URL
-].filter(Boolean);
+const allowedOrigins = ["http://localhost:5173", "http://localhost:5174", process.env.CLIENT_URL].filter(Boolean);
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
@@ -37,7 +33,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
-// ... (Keep your existing Rate Limiters and Routes exactly as they were) ...
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 15, message: { success: false, message: "Too many login attempts." }, standardHeaders: true, legacyHeaders: false });
 const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 15, message: { success: false, message: "AI limit reached." }, standardHeaders: true, legacyHeaders: false });
 const registrationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { success: false, message: "Too many registration attempts." }, standardHeaders: true, legacyHeaders: false });
@@ -59,7 +54,7 @@ app.use((req, res) => res.status(404).json({ success: false, message: `Route not
 app.use(errorHandler);
 
 // ==========================================
-// ✅ FIXED: SOCKET.IO SETUP
+// ✅ PREMIUM SOCKET.IO SETUP
 // ==========================================
 const PORT = process.env.PORT || 5000;
 const server = createServer(app);
@@ -73,7 +68,6 @@ const activeGames = new Map();
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
 
-  // 1. Join Game (Now uses quizId, not access code)
   socket.on('join_game', async ({ code, playerName, role = 'student' }) => {
     try {
       const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
@@ -89,14 +83,16 @@ io.on('connection', (socket) => {
         activeGames.set(quizId, {
           quizId,
           title: quiz.title,
-          baseMarks: quiz.baseMarks || 10,     // ✅ FIX 4: Save marks to state
-          bonusMarks: quiz.bonusMarks || 5,    // ✅ FIX 4: Save marks to state
+          baseMarks: quiz.baseMarks || 10,
+          bonusMarks: quiz.bonusMarks || 5,
           status: 'waiting',
           players: [],
           scores: {},
-          activeCard: null,
+          activeCard: null, // { index, player, attempt }
+          completedCards: [], // [0, 2, 5...]
+          cardResults: [], // [{ cardIndex, player, result: 'correct'|'wrong'|'steal', points }]
           activityLog: [],
-          questions: quiz.questions // ✅ FIX 2 & 3: Keep correctAnswer server-side!
+          questions: quiz.questions
         });
       }
 
@@ -110,16 +106,12 @@ io.on('connection', (socket) => {
           game.players.push({ id: socket.id, name: playerName, score: 0 });
           game.scores[playerName] = 0;
         } else {
-          existingPlayer.id = socket.id; // Reconnect
+          existingPlayer.id = socket.id;
         }
       }
 
-      io.to(quizId).emit('player_joined', { 
-        players: game.players, 
-        status: game.status 
-      });
+      io.to(quizId).emit('player_joined', { players: game.players, status: game.status });
 
-      // ✅ FIX 2: Strip correctAnswer before sending to students
       const safeState = { ...game };
       if (role !== 'admin') {
         safeState.questions = game.questions.map(q => ({
@@ -133,7 +125,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 2. Admin Starts Match
   socket.on('admin_start_game', ({ quizId }) => {
     const game = activeGames.get(quizId);
     if (game) {
@@ -143,49 +134,69 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 3. Student Picks Card
   socket.on('pick_card', ({ quizId, cardIndex, playerName }) => {
     const game = activeGames.get(quizId);
-    if (game && game.status === 'live' && !game.activeCard) {
-      game.activeCard = { index: cardIndex, player: playerName };
+    if (game && game.status === 'live' && !game.activeCard && !game.completedCards.includes(cardIndex)) {
+      game.activeCard = { index: cardIndex, player: playerName, attempt: 1 };
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
       io.to(quizId).emit('card_locked', { cardIndex, playerName });
     }
   });
 
-  // 4. ✅ FIX 3: Server-Side Answer Validation
+  // ✅ NEW: Advanced Answer & Steal Logic
   socket.on('submit_answer', ({ quizId, cardIndex, selectedAnswerIndex, playerName }) => {
     const game = activeGames.get(quizId);
-    if (game && game.activeCard && game.activeCard.index === cardIndex && game.activeCard.player === playerName) {
+    if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
+
+    const question = game.questions[cardIndex];
+    const isCorrect = selectedAnswerIndex !== -1 && question.options[selectedAnswerIndex] === question.correctAnswer;
+
+    if (isCorrect) {
+      const points = game.activeCard.attempt === 2 ? (game.bonusMarks || 5) : (game.baseMarks || 10);
+      const resultType = game.activeCard.attempt === 2 ? 'steal' : 'correct';
       
-      const question = game.questions[cardIndex];
-      const selectedOption = question.options[selectedAnswerIndex];
-      const isCorrect = selectedOption === question.correctAnswer;
-
-      // Check if it's a steal (someone else already missed it, but for simplicity, we'll just award points)
-      // In a full app, you'd track if this is the first or second attempt.
-      const points = game.baseMarks || 10; 
-
-      if (isCorrect) {
-        game.scores[playerName] = (game.scores[playerName] || 0) + points;
-        game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${playerName} got it right! (+${points} pts)` });
-      } else {
-        game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${playerName} missed it.` });
-      }
-
-      game.activeCard = null; // Unlock board
+      game.scores[playerName] = (game.scores[playerName] || 0) + points;
+      game.cardResults.push({ cardIndex, player: playerName, result: resultType, points });
+      game.completedCards.push(cardIndex);
+      game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${playerName} got it right! (+${points} pts)` });
+      
+      game.activeCard = null;
       io.to(quizId).emit('answer_result', { 
-        isCorrect, 
-        scores: game.scores, 
+        isCorrect: true, points, scores: game.scores, 
+        completedCards: game.completedCards, cardResults: game.cardResults,
+        activityLog: game.activityLog 
+      });
+    } else {
+      if (game.activeCard.attempt === 1) {
+        const otherPlayer = game.players.find(p => p.name !== playerName && p.name !== "Admin");
+        if (otherPlayer) {
+          game.activeCard.attempt = 2;
+          game.activeCard.stealPlayer = otherPlayer.name;
+          game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${playerName} missed! ${otherPlayer.name} can STEAL for +${game.bonusMarks || 5} pts!` });
+          
+          io.to(quizId).emit('answer_result', { 
+            isCorrect: false, isStealOpportunity: true, stealPlayer: otherPlayer.name,
+            scores: game.scores, activityLog: game.activityLog 
+          });
+          return; // Keep activeCard alive for the steal
+        }
+      }
+      
+      game.cardResults.push({ cardIndex, player: playerName, result: 'wrong', points: 0 });
+      game.completedCards.push(cardIndex);
+      game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${playerName} missed it. Card closed.` });
+      
+      game.activeCard = null;
+      io.to(quizId).emit('answer_result', { 
+        isCorrect: false, scores: game.scores, 
+        completedCards: game.completedCards, cardResults: game.cardResults,
         activityLog: game.activityLog 
       });
     }
   });
 
-  // 5. Cleanup on Disconnect
   socket.on('disconnect', () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
-    // Optional: Remove player from activeGames here to prevent memory leaks
   });
 });
 
