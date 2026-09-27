@@ -243,6 +243,7 @@ router.post('/validate-code', async (req, res, next) => {
     res.json({ 
       success: true, 
       data: {
+        quizId: quiz._id.toString(),
         title: quiz.title,
         gameMode: quiz.gameMode,
         difficulty: quiz.difficulty,
