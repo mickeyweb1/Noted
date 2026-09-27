@@ -4,7 +4,6 @@ import { Trophy, User, CheckCircle2, Loader2, XCircle, Clock, AlertTriangle } fr
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
-// Initialize socket connection
 const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
   withCredentials: true,
 });
@@ -14,9 +13,10 @@ export default function GameShowLobby() {
   const navigate = useNavigate();
   const code = searchParams.get("code");
 
-  const [step, setStep] = useState("enter-name"); // enter-name, waiting, playing, answered
+  const [step, setStep] = useState("enter-name");
   const [studentName, setStudentName] = useState("");
   const [quizData, setQuizData] = useState(null);
+  const [quizId, setQuizId] = useState(""); // ✅ ADDED: To track the socket room
   const [gameState, setGameState] = useState(null);
   const [activeCard, setActiveCard] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -25,14 +25,12 @@ export default function GameShowLobby() {
   
   const timerRef = useRef(null);
 
-  // Disable right-click globally on this page
   useEffect(() => {
     const handleContextMenu = (e) => e.preventDefault();
     document.addEventListener("contextmenu", handleContextMenu);
     return () => document.removeEventListener("contextmenu", handleContextMenu);
   }, []);
 
-  // Socket.io Listeners
   useEffect(() => {
     if (!code) return;
 
@@ -60,16 +58,15 @@ export default function GameShowLobby() {
       }
     });
 
-    socket.on("answer_result", ({ isCorrect, isSteal, scores, activityLog }) => {
+    socket.on("answer_result", ({ isCorrect, scores, activityLog }) => {
       setActiveCard(null);
       setSelectedAnswer(null);
       setGameState((prev) => ({ ...prev, scores, activityLog }));
       setStep("playing");
       if (timerRef.current) clearInterval(timerRef.current);
       
-      // Show a brief success/fail message
       if (isCorrect) {
-        alert(`Correct! +${isSteal ? quizData.bonusMarks : quizData.baseMarks} points!`);
+        alert(`Correct! +${quizData.baseMarks || 10} points!`);
       } else {
         alert("Incorrect! The card is now closed.");
       }
@@ -90,7 +87,7 @@ export default function GameShowLobby() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          handleAnswer(false, false); // Auto-submit wrong on timeout
+          handleAnswer(-1); // ✅ FIXED: -1 means no answer selected (treated as wrong by server)
           return 0;
         }
         return prev - 1;
@@ -107,30 +104,26 @@ export default function GameShowLobby() {
       const res = await api.post("/quiz/validate-code", { code });
       const data = res.data.data;
       setQuizData(data);
+      setQuizId(data.quizId); // ✅ ADDED: Save quizId for socket events
       
-      // ✅ Join using quizId, not the code
       socket.emit("join_game", { 
-        code, // Still send code for backend validation
+        code, 
         playerName: studentName, 
         role: "student" 
       });
-      
-      // Store quizId in a ref or state for later socket calls
-      setQuizId(data.quizId); 
       setStep("waiting");
     } catch (err) {
       setError(err.response?.data?.message || "Invalid code.");
     }
   };
 
-   const handlePickCard = (index) => {
+  const handlePickCard = (index) => {
     if (activeCard) return;
     socket.emit("pick_card", { quizId, cardIndex: index, playerName: studentName });
   };
 
   const handleAnswer = (selectedIndex) => {
     if (timerRef.current) clearInterval(timerRef.current);
-    // ✅ Send the index, let the server decide if it's correct
     socket.emit("submit_answer", { 
       quizId, 
       cardIndex: activeCard.index, 
@@ -145,7 +138,6 @@ export default function GameShowLobby() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // --- RENDER: Enter Name ---
   if (step === "enter-name") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -178,7 +170,6 @@ export default function GameShowLobby() {
     );
   }
 
-  // --- RENDER: Waiting for Admin ---
   if (step === "waiting") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -200,7 +191,6 @@ export default function GameShowLobby() {
     );
   }
 
-  // --- RENDER: Playing (Card Grid or Active Question) ---
   if (step === "playing" || step === "answered") {
     if (activeCard && activeCard.player === studentName) {
       const question = quizData.questions[activeCard.index];
@@ -236,25 +226,24 @@ export default function GameShowLobby() {
 
             <div className="flex justify-center gap-4 pt-4">
               <button 
-                onClick={() => handleAnswer(false)} 
+                onClick={() => handleAnswer(-1)} // ✅ FIXED: -1 means wrong/skip
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-destructive text-white font-bold hover:bg-destructive/90 transition"
               >
                 <XCircle className="w-5 h-5" /> Skip / Wrong
               </button>
               <button 
-  onClick={() => handleAnswer(selectedAnswer)}
-  disabled={selectedAnswer === null}
-  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
->
-  <CheckCircle2 className="w-5 h-5" /> Submit Answer
-</button>
+                onClick={() => handleAnswer(selectedAnswer)}
+                disabled={selectedAnswer === null}
+                className="flex items-center gap-2 px-8 py-3 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CheckCircle2 className="w-5 h-5" /> Submit Answer
+              </button>
             </div>
           </div>
         </div>
       );
     }
 
-    // Show Grid
     return (
       <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-4xl mx-auto text-center mb-8">
