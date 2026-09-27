@@ -213,9 +213,15 @@ router.post('/upload/quiz-image', protect, upload.single('image'), (req, res) =>
 
 router.get('/admin/quizzes', protect, async (req, res, next) => {
   try {
-    const quizzes = await Quiz.find({ createdBy: req.user._id }).select('title difficulty numberOfStudents createdAt').sort({ createdAt: -1 });
+    // ✅ UPDATED: Added 'gameMode' and 'accessCodes' to the select statement
+    const quizzes = await Quiz.find({ createdBy: req.user._id })
+      .select('title difficulty numberOfStudents createdAt gameMode accessCodes')
+      .sort({ createdAt: -1 });
+    
     res.json({ success: true, data: quizzes });
-  } catch (error) { next(error); }
+  } catch (error) { 
+    next(error); 
+  }
 });
 
 // 🎯 Validate access code and get quiz info (NO AUTH REQUIRED for students)
