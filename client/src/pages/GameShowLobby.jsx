@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, User, CheckCircle2, Loader2, XCircle, Clock, AlertTriangle } from "lucide-react";
+import { Trophy, User, CheckCircle2, Loader2, XCircle, Clock, AlertTriangle, Wifi } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
-const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
+// ✅ FIX: Strip '/api' from the end of the URL for Socket.io
+const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const socketUrl = apiUrl.replace(/\/api$/, ""); 
+
+const socket = io(socketUrl, {
   withCredentials: true,
 });
 
@@ -16,7 +20,7 @@ export default function GameShowLobby() {
   const [step, setStep] = useState("enter-name");
   const [studentName, setStudentName] = useState("");
   const [quizData, setQuizData] = useState(null);
-  const [quizId, setQuizId] = useState(""); // ✅ ADDED: To track the socket room
+  const [quizId, setQuizId] = useState("");
   const [gameState, setGameState] = useState(null);
   const [activeCard, setActiveCard] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -87,7 +91,7 @@ export default function GameShowLobby() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          handleAnswer(-1); // ✅ FIXED: -1 means no answer selected (treated as wrong by server)
+          handleAnswer(-1);
           return 0;
         }
         return prev - 1;
@@ -104,13 +108,9 @@ export default function GameShowLobby() {
       const res = await api.post("/quiz/validate-code", { code });
       const data = res.data.data;
       setQuizData(data);
-      setQuizId(data.quizId); // ✅ ADDED: Save quizId for socket events
+      setQuizId(data.quizId);
       
-      socket.emit("join_game", { 
-        code, 
-        playerName: studentName, 
-        role: "student" 
-      });
+      socket.emit("join_game", { code, playerName: studentName, role: "student" });
       setStep("waiting");
     } catch (err) {
       setError(err.response?.data?.message || "Invalid code.");
@@ -174,8 +174,12 @@ export default function GameShowLobby() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md bg-card border border-border rounded-3xl p-8 shadow-xl text-center space-y-6 animate-in fade-in zoom-in duration-300">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/10">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/10 relative">
             <Clock className="h-10 w-10 text-yellow-500 animate-pulse" />
+            {/* ✅ UI Polish: Connected indicator */}
+            <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 border-2 border-card">
+              <Wifi className="h-3 w-3 text-white" />
+            </div>
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">You're in, {studentName}!</h1>
@@ -186,6 +190,7 @@ export default function GameShowLobby() {
             <div className="h-3 w-3 rounded-full bg-brand animate-bounce" style={{ animationDelay: '150ms' }}></div>
             <div className="h-3 w-3 rounded-full bg-brand animate-bounce" style={{ animationDelay: '300ms' }}></div>
           </div>
+          <p className="text-xs text-muted-foreground pt-2 font-mono">Game Code: {code}</p>
         </div>
       </div>
     );
@@ -226,7 +231,7 @@ export default function GameShowLobby() {
 
             <div className="flex justify-center gap-4 pt-4">
               <button 
-                onClick={() => handleAnswer(-1)} // ✅ FIXED: -1 means wrong/skip
+                onClick={() => handleAnswer(-1)}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-destructive text-white font-bold hover:bg-destructive/90 transition"
               >
                 <XCircle className="w-5 h-5" /> Skip / Wrong
@@ -262,15 +267,19 @@ export default function GameShowLobby() {
                 key={idx}
                 onClick={() => handlePickCard(idx)}
                 disabled={isLocked}
-                className={`aspect-square rounded-2xl font-bold text-2xl transition-all duration-300 ${
+                className={`aspect-square rounded-2xl font-bold text-2xl transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
                   isMyLock 
                     ? "bg-brand text-brand-foreground ring-4 ring-brand/30 scale-105" 
                     : isOthersLock 
-                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50" 
+                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60" 
                     : "bg-card border-2 border-border text-foreground hover:bg-brand/10 hover:border-brand hover:scale-105 shadow-sm"
                 }`}
               >
-                {isLocked ? (isMyLock ? "You" : "🔒") : idx + 1}
+                {isLocked ? (
+                  isMyLock ? "You" : <span className="text-sm font-medium">🔒 {activeCard.player}</span>
+                ) : (
+                  idx + 1
+                )}
               </button>
             );
           })}
