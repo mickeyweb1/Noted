@@ -104,26 +104,39 @@ export default function GameShowLobby() {
     setError("");
 
     try {
-      // Fetch quiz data first
       const res = await api.post("/quiz/validate-code", { code });
-      setQuizData(res.data.data);
+      const data = res.data.data;
+      setQuizData(data);
       
-      // Join socket room
-      socket.emit("join_game", { code, playerName: studentName });
+      // ✅ Join using quizId, not the code
+      socket.emit("join_game", { 
+        code, // Still send code for backend validation
+        playerName: studentName, 
+        role: "student" 
+      });
+      
+      // Store quizId in a ref or state for later socket calls
+      setQuizId(data.quizId); 
       setStep("waiting");
     } catch (err) {
       setError(err.response?.data?.message || "Invalid code.");
     }
   };
 
-  const handlePickCard = (index) => {
-    if (activeCard) return; // Already locked
-    socket.emit("pick_card", { code, cardIndex: index, playerName: studentName });
+   const handlePickCard = (index) => {
+    if (activeCard) return;
+    socket.emit("pick_card", { quizId, cardIndex: index, playerName: studentName });
   };
 
-  const handleAnswer = (isCorrect, isSteal = false) => {
+  const handleAnswer = (selectedIndex) => {
     if (timerRef.current) clearInterval(timerRef.current);
-    socket.emit("submit_answer", { code, cardIndex: activeCard.index, isCorrect, isSteal, playerName: studentName });
+    // ✅ Send the index, let the server decide if it's correct
+    socket.emit("submit_answer", { 
+      quizId, 
+      cardIndex: activeCard.index, 
+      selectedAnswerIndex: selectedIndex, 
+      playerName: studentName 
+    });
   };
 
   const formatTime = (seconds) => {
@@ -229,12 +242,12 @@ export default function GameShowLobby() {
                 <XCircle className="w-5 h-5" /> Skip / Wrong
               </button>
               <button 
-                onClick={() => handleAnswer(selectedAnswer !== null && question.options[selectedAnswer] === question.correctAnswer)}
-                disabled={selectedAnswer === null}
-                className="flex items-center gap-2 px-8 py-3 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <CheckCircle2 className="w-5 h-5" /> Submit Answer
-              </button>
+  onClick={() => handleAnswer(selectedAnswer)}
+  disabled={selectedAnswer === null}
+  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  <CheckCircle2 className="w-5 h-5" /> Submit Answer
+</button>
             </div>
           </div>
         </div>
