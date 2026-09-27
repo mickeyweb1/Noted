@@ -62,7 +62,6 @@ function App() {
       {/* ================= PUBLIC MARKETING ROUTES ================= */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
-           <Route path="/game-show" element={<GameShowBoard />} /> {/* ✅ ADD THIS LINE */}
       <Route path="/school" element={<SchoolPage />} />
       <Route path="/game-show-lobby" element={<GameShowLobby />} />
       <Route path="/student" element={<StudentPage />} />
@@ -120,6 +119,7 @@ function App() {
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
         <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
+          <Route path="/game-show" element={<GameShowBoard />} /> 
         <Route path="/admin/game-show-creator" element={<AdminGameShowCreator />} /> {/* ✅ ADD THIS LINE */}
 <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
