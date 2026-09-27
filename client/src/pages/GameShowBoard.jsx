@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap } from "lucide-react";
+import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
@@ -28,7 +28,7 @@ export default function GameShowBoard() {
       socket.on("game_state", (state) => setGameState(state));
       socket.on("player_joined", ({ players, status }) => setGameState((prev) => ({ ...prev, players, status })));
       socket.on("game_started", (state) => setGameState(state));
-      socket.on("answer_result", (data) => setGameState((prev) => ({ ...prev, scores: data.scores, cardResults: data.cardResults, activityLog: data.activityLog })));
+      socket.on("answer_result", (data) => setGameState((prev) => ({ ...prev, scores: data.scores, cardResults: data.cardResults, completedCards: data.completedCards, activityLog: data.activityLog })));
       return () => {
         socket.off("game_state"); socket.off("player_joined"); socket.off("game_started"); socket.off("answer_result");
       };
@@ -55,6 +55,16 @@ export default function GameShowBoard() {
   }
 
   const isLive = gameState.status === "live";
+  const isGameComplete = gameState.completedCards?.length === quiz.questions.length;
+  const players = gameState.players.filter(p => p.name !== "Admin");
+  const player1 = players[0]?.name || "Player 1";
+  const player2 = players[1]?.name || "Player 2";
+
+  // Calculate totals for each player
+  const player1Results = gameState.cardResults?.filter(r => r.player === player1) || [];
+  const player2Results = gameState.cardResults?.filter(r => r.player === player2) || [];
+  const player1Total = player1Results.reduce((sum, r) => sum + r.points, 0);
+  const player2Total = player2Results.reduce((sum, r) => sum + r.points, 0);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -78,11 +88,11 @@ export default function GameShowBoard() {
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-6">
             <div>
               <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4"><Users className="w-5 h-5 text-brand" /> Players Joined</h3>
-              {gameState.players.filter(p => p.name !== "Admin").length === 0 ? (
+              {players.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">Waiting for students to join...</p>
               ) : (
                 <ul className="space-y-2">
-                  {gameState.players.filter(p => p.name !== "Admin").map((player, idx) => (
+                  {players.map((player, idx) => (
                     <li key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border">
                       <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center text-brand font-bold">{player.name.charAt(0).toUpperCase()}</div>
                       <span className="font-medium text-foreground">{player.name}</span>
@@ -93,7 +103,7 @@ export default function GameShowBoard() {
               )}
             </div>
             {!isLive ? (
-              <button onClick={handleStartMatch} disabled={gameState.players.filter(p => p.name !== "Admin").length === 0} className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-500 py-4 font-bold text-white hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20">
+              <button onClick={handleStartMatch} disabled={players.length === 0} className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-500 py-4 font-bold text-white hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20">
                 <Play className="w-5 h-5" /> Start Live Match
               </button>
             ) : (
@@ -117,44 +127,96 @@ export default function GameShowBoard() {
           </div>
         </div>
 
-        {/* RIGHT: Premium Match History Table */}
+        {/* RIGHT: Premium Battle Table (SS2 vs SS3) */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-            <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4"><Activity className="w-5 h-5 text-blue-500" /> Match History & Results</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="pb-3 text-sm font-medium text-muted-foreground">Card #</th>
-                    <th className="pb-3 text-sm font-medium text-muted-iguous">Player</th>
-                    <th className="pb-3 text-sm font-medium text-muted-foreground">Result</th>
-                    <th className="pb-3 text-sm font-medium text-muted-foreground text-right">Points</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {(gameState.cardResults || []).length === 0 ? (
-                    <tr><td colSpan="4" className="py-8 text-center text-sm text-muted-foreground italic">No cards answered yet.</td></tr>
+            <h3 className="font-semibold text-foreground flex items-center gap-2 mb-6"><Activity className="w-5 h-5 text-blue-500" /> Live Battle Results</h3>
+            
+            {/* Battle Table */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              {/* Player 1 Column */}
+              <div className="rounded-xl border-2 border-border bg-muted/30 overflow-hidden">
+                <div className="bg-brand/10 border-b border-border p-4 text-center">
+                  <h4 className="text-xl font-bold text-foreground">{player1}</h4>
+                  <p className="text-sm text-muted-foreground">Team 1</p>
+                </div>
+                <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+                  {player1Results.length === 0 ? (
+                    <p className="text-center text-sm text-muted-foreground py-4">No answers yet</p>
                   ) : (
-                    (gameState.cardResults || []).map((result, idx) => (
-                      <tr key={idx} className="group hover:bg-muted/50 transition">
-                        <td className="py-4 font-mono font-bold text-foreground">#{result.cardIndex + 1}</td>
-                        <td className="py-4 font-semibold text-foreground">{result.player}</td>
-                        <td className="py-4">
-                          {result.result === 'correct' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-bold"><CheckCircle2 className="w-3.5 h-3.5" /> Correct</span>}
-                          {result.result === 'wrong' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/10 text-destructive text-xs font-bold"><XCircle className="w-3.5 h-3.5" /> Wrong</span>}
-                          {result.result === 'steal' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-600 text-xs font-bold"><Zap className="w-3.5 h-3.5" /> Steal!</span>}
-                        </td>
-                        <td className="py-4 text-right">
-                          <span className={`font-bold ${result.points > 0 ? "text-brand" : "text-muted-foreground"}`}>
-                            {result.points > 0 ? `+${result.points}` : '0'}
-                          </span>
-                        </td>
-                      </tr>
+                    player1Results.map((result, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
+                        <span className="font-mono text-sm font-bold text-foreground">Card #{result.cardIndex + 1}</span>
+                        <div className="flex items-center gap-2">
+                          {result.result === 'correct' && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-bold"><CheckCircle2 className="w-3 h-3" /> Correct</span>}
+                          {result.result === 'wrong' && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-destructive/10 text-destructive text-xs font-bold"><XCircle className="w-3 h-3" /> Wrong</span>}
+                          {result.result === 'steal' && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-500/10 text-purple-600 text-xs font-bold"><Zap className="w-3 h-3" /> Steal</span>}
+                          <span className={`font-bold ${result.points > 0 ? "text-brand" : "text-muted-foreground"}`}>{result.points > 0 ? `+${result.points}` : '0'}</span>
+                        </div>
+                      </div>
                     ))
                   )}
-                </tbody>
-              </table>
+                </div>
+                <div className="border-t border-border p-4 bg-brand/5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-foreground">Total Mark</span>
+                    <span className="text-2xl font-bold text-brand">{player1Total} pts</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Player 2 Column */}
+              <div className="rounded-xl border-2 border-border bg-muted/30 overflow-hidden">
+                <div className="bg-brand/10 border-b border-border p-4 text-center">
+                  <h4 className="text-xl font-bold text-foreground">{player2}</h4>
+                  <p className="text-sm text-muted-foreground">Team 2</p>
+                </div>
+                <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+                  {player2Results.length === 0 ? (
+                    <p className="text-center text-sm text-muted-foreground py-4">No answers yet</p>
+                  ) : (
+                    player2Results.map((result, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
+                        <span className="font-mono text-sm font-bold text-foreground">Card #{result.cardIndex + 1}</span>
+                        <div className="flex items-center gap-2">
+                          {result.result === 'correct' && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-green-600 text-xs font-bold"><CheckCircle2 className="w-3 h-3" /> Correct</span>}
+                          {result.result === 'wrong' && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-destructive/10 text-destructive text-xs font-bold"><XCircle className="w-3 h-3" /> Wrong</span>}
+                          {result.result === 'steal' && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-500/10 text-purple-600 text-xs font-bold"><Zap className="w-3 h-3" /> Steal</span>}
+                          <span className={`font-bold ${result.points > 0 ? "text-brand" : "text-muted-foreground"}`}>{result.points > 0 ? `+${result.points}` : '0'}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="border-t border-border p-4 bg-brand/5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-foreground">Total Mark</span>
+                    <span className="text-2xl font-bold text-brand">{player2Total} pts</span>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Game Complete Banner */}
+            {isGameComplete && (
+              <div className="mt-6 p-6 rounded-2xl bg-gradient-to-r from-yellow-500/10 via-brand/10 to-purple-500/10 border-2 border-brand/30 text-center animate-in fade-in zoom-in duration-500">
+                <Award className="w-12 h-12 text-brand mx-auto mb-3" />
+                <h3 className="text-2xl font-bold text-foreground mb-2"> Game Complete!</h3>
+                <p className="text-muted-foreground mb-4">
+                  {player1Total > player2Total ? `${player1} wins!` : player2Total > player1Total ? `${player2} wins!` : "It's a tie!"}
+                </p>
+                <div className="flex justify-center gap-8 text-xl">
+                  <div className="text-center">
+                    <p className="font-bold text-foreground">{player1}</p>
+                    <p className="text-3xl font-bold text-brand">{player1Total} pts</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-foreground">{player2}</p>
+                    <p className="text-3xl font-bold text-brand">{player2Total} pts</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
