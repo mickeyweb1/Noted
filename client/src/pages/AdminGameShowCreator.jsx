@@ -240,6 +240,7 @@ export default function AdminGameShowCreator() {
 
         {/* Generated Quiz & Codes View */}
                 {/* Generated Quiz & Codes View */}
+                {/* Generated Quiz & Codes View */}
         {generatedQuiz && (
           <div className="space-y-6 rounded-2xl border border-green-500/30 bg-green-500/5 p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -260,9 +261,14 @@ export default function AdminGameShowCreator() {
               </div>
             </div>
 
-            {/* ✅ NEW: Big Button to Open Live Match */}
-            <button onClick={() => navigate(`/game-show?code=${accessCodes[0]}`)} className={`flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 font-bold text-brand-foreground shadow-lg shadow-brand/20 transition hover:bg-brand/90 ${focusRing}`}>
-              <Play className="h-5 w-5" /> Open Live Match Dashboard
+            {/* ✅ PREMIUM: Big Animated Button to Open Live Match */}
+            <button 
+              onClick={() => navigate(`/game-show?code=${accessCodes[0]}`)} 
+              className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-brand to-brand/90 py-5 font-bold text-brand-foreground shadow-xl shadow-brand/25 transition-all hover:scale-[1.02] hover:shadow-2xl hover:shadow-brand/30 active:scale-[0.98]"
+            >
+              <Play className="h-6 w-6 transition group-hover:scale-110" /> 
+              <span className="text-lg">Enter Live Match Dashboard</span>
+              <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
             </button>
 
             <div>
@@ -271,7 +277,6 @@ export default function AdminGameShowCreator() {
                   <Users className="h-4 w-4" /> Student Access Codes ({accessCodes.length})
                 </h3>
                 <div className="flex gap-2">
-                  {/* ✅ NEW: Generate New Code Button */}
                   <button 
                     onClick={async () => {
                       try {
