@@ -68,17 +68,16 @@ export function QuizResultsDashboard() {
 
   if (loading) return <PageSpinner />;
 
-  return (
-    // ✅ FIXED: Changed bg-muted to bg-background
+   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Quiz results</h1>
-            <p className="text-muted-foreground">Pick a quiz to see how your students did.</p>
+            <p className="text-muted-foreground">Pick a quiz to see how your students did, or resume a live game.</p>
           </div>
-          <button onClick={() => navigate("/admin/quizzes")} className={primaryBtn}>
-            <Plus className="h-4 w-4" /> New quiz
+          <button onClick={() => navigate("/admin/game-show-creator")} className={primaryBtn}>
+            <Plus className="h-4 w-4" /> New Game Show
           </button>
         </div>
 
@@ -88,29 +87,63 @@ export function QuizResultsDashboard() {
               <FileText className="h-7 w-7" />
             </div>
             <h3 className="text-lg font-semibold text-foreground">No quizzes yet</h3>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Create a quiz to get access codes for your students. Results will show up here.</p>
-            <button onClick={() => navigate("/admin/quizzes")} className={`${primaryBtn} mt-5`}>Go to quiz generator</button>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Create a quiz or game show to get started. Results and live matches will show up here.</p>
+            <button onClick={() => navigate("/admin/game-show-creator")} className={`${primaryBtn} mt-5`}>Go to Game Show Creator</button>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {quizzes.map((quiz) => (
-              <button
-                type="button"
-                key={quiz._id}
-                onClick={() => navigate(`/admin/quiz/${quiz._id}/results`)}
-                className={`group block w-full rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition hover:border-brand hover:shadow-md ${focusRing}`}
-              >
-                <span className="mb-4 flex items-start justify-between">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-soft text-brand"><BarChart3 className="h-6 w-6" /></span>
-                  <ArrowRight className="h-5 w-5 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-brand" />
-                </span>
-                <span className="mb-3 line-clamp-2 block text-lg font-bold text-foreground">{quiz.title}</span>
-                <span className="block space-y-2 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-2"><Calendar className="h-4 w-4" />{new Date(quiz.createdAt).toLocaleDateString()}</span>
-                  <span className="flex items-center gap-2"><Users className="h-4 w-4" />{quiz.numberOfStudents} access codes</span>
-                </span>
-              </button>
-            ))}
+            {quizzes.map((quiz) => {
+              const isGameShow = quiz.gameMode === 'gameShow';
+              const resumeCode = quiz.accessCodes?.[0];
+
+              return (
+                <div
+                  key={quiz._id}
+                  className={`group relative block w-full rounded-2xl border p-5 text-left shadow-sm transition hover:shadow-md ${
+                    isGameShow 
+                      ? "border-purple-500/30 bg-purple-500/5 hover:border-purple-500/50" 
+                      : "border-border bg-card hover:border-brand"
+                  }`}
+                >
+                  <span className="mb-4 flex items-start justify-between">
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${isGameShow ? "bg-purple-500/10 text-purple-600" : "bg-brand-soft text-brand"}`}>
+                      {isGameShow ? <Trophy className="h-6 w-6" /> : <BarChart3 className="h-6 w-6" />}
+                    </span>
+                    {isGameShow && (
+                      <span className="rounded-full bg-purple-500/10 px-2.5 py-1 text-xs font-bold text-purple-600">
+                        LIVE GAME SHOW
+                      </span>
+                    )}
+                  </span>
+                  
+                  <span className="mb-3 line-clamp-2 block text-lg font-bold text-foreground">{quiz.title}</span>
+                  
+                  <span className="block space-y-2 text-sm text-muted-foreground mb-4">
+                    <span className="flex items-center gap-2"><Calendar className="h-4 w-4" />{new Date(quiz.createdAt).toLocaleDateString()}</span>
+                    <span className="flex items-center gap-2"><Users className="h-4 w-4" />{quiz.numberOfStudents} access codes</span>
+                  </span>
+
+                  {/* ✅ ACTION BUTTONS */}
+                  <div className="mt-2 flex flex-col gap-2">
+                    {isGameShow && resumeCode ? (
+                      <button
+                        onClick={() => navigate(`/game-show?code=${resumeCode}`)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 active:scale-[0.99]"
+                      >
+                        <Trophy className="h-4 w-4" /> Resume Live Match
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => navigate(`/admin/quiz/${quiz._id}/results`)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99]"
+                      >
+                        View Results <ArrowRight className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
