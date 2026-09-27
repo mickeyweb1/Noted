@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Trophy, User, CheckCircle2, XCircle, Clock, Wifi, AlertTriangle } from "lucide-react";
+import { Trophy, User, CheckCircle2, XCircle, Clock, Wifi, AlertTriangle, Award, Medal } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
@@ -8,6 +8,42 @@ const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const socketUrl = apiUrl.replace(/\/api$/, ""); 
 
 const socket = io(socketUrl, { withCredentials: true });
+
+// Simple confetti component
+function Confetti() {
+  const colors = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#3b82f6'];
+  const confetti = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    delay: `${Math.random() * 2}s`,
+    color: colors[Math.floor(Math.random() * colors.length)]
+  }));
+
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50">
+      {confetti.map((c) => (
+        <div
+          key={c.id}
+          className="absolute w-3 h-3 rounded-full animate-bounce"
+          style={{
+            left: c.left,
+            top: '-20px',
+            backgroundColor: c.color,
+            animation: `fall 3s ease-in ${c.delay} forwards`
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes fall {
+          to {
+            transform: translateY(100vh) rotate(360deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 export default function GameShowLobby() {
   const [searchParams] = useSearchParams();
@@ -23,6 +59,7 @@ export default function GameShowLobby() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState(null);
+  const [showConfetti, setShowConfetti] = useState(false);
   
   const timerRef = useRef(null);
 
@@ -38,6 +75,13 @@ export default function GameShowLobby() {
     socket.on("game_state", (state) => {
       setGameState(state);
       if (state.status === "live" && step === "waiting") setStep("playing");
+      
+      // Check if game is complete
+      if (state.completedCards?.length === quizData?.questions.length && step === "playing") {
+        setStep("game-over");
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+      }
     });
 
     socket.on("player_joined", ({ players, status }) => {
@@ -67,7 +111,7 @@ export default function GameShowLobby() {
       if (data.isCorrect) {
         setFeedback({ type: 'success', message: `🎉 Correct! +${data.points} Points!` });
       } else if (data.isStealOpportunity && data.stealPlayer === studentName) {
-        setFeedback({ type: 'steal', message: `⚡ ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
+        setFeedback({ type: 'steal', message: ` ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
         setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
         setTimeLeft(quizData.timeLimit);
         startTimer();
@@ -172,6 +216,76 @@ export default function GameShowLobby() {
     );
   }
 
+  // Game Over Podium Screen
+  if (step === "game-over") {
+    const sortedScores = Object.entries(gameState?.scores || {})
+      .filter(([name]) => name !== "Admin")
+      .sort(([,a], [,b]) => b - a);
+    
+    const winner = sortedScores[0];
+    const secondPlace = sortedScores[1];
+
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-8 flex items-center justify-center">
+        {showConfetti && <Confetti />}
+        <div className="w-full max-w-3xl bg-card border-2 border-brand/30 rounded-3xl p-8 md:p-12 shadow-2xl text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
+          <div className="space-y-4">
+            <Award className="w-20 h-20 text-brand mx-auto animate-bounce" />
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground">🎉 Game Over!</h1>
+            <p className="text-xl text-muted-foreground">The battle is complete!</p>
+          </div>
+
+          {/* Podium */}
+          <div className="flex items-end justify-center gap-4 md:gap-8 mt-12">
+            {/* Second Place */}
+            {secondPlace && (
+              <div className="flex flex-col items-center">
+                <Medal className="w-12 h-12 text-gray-400 mb-2" />
+                <div className="w-24 md:w-32 h-24 md:h-32 rounded-2xl bg-gray-400/10 border-2 border-gray-400/30 flex items-center justify-center mb-4">
+                  <div className="text-center">
+                    <p className="text-2xl md:text-3xl font-bold text-foreground">{secondPlace[0]}</p>
+                    <p className="text-lg text-brand font-bold">{secondPlace[1]} pts</p>
+                  </div>
+                </div>
+                <div className="w-24 md:w-32 h-16 md:h-20 bg-gray-400/20 rounded-t-lg flex items-center justify-center">
+                  <span className="text-3xl font-bold text-gray-500">2</span>
+                </div>
+              </div>
+            )}
+
+            {/* First Place */}
+            {winner && (
+              <div className="flex flex-col items-center -mt-8">
+                <Trophy className="w-16 h-16 text-yellow-500 mb-2 animate-pulse" />
+                <div className="w-32 md:w-40 h-32 md:h-40 rounded-2xl bg-yellow-500/10 border-4 border-yellow-500/30 flex items-center justify-center mb-4 shadow-lg shadow-yellow-500/20">
+                  <div className="text-center">
+                    <p className="text-3xl md:text-4xl font-bold text-foreground">{winner[0]}</p>
+                    <p className="text-2xl text-brand font-bold">{winner[1]} pts</p>
+                  </div>
+                </div>
+                <div className="w-32 md:w-40 h-20 md:h-24 bg-yellow-500/20 rounded-t-lg flex items-center justify-center">
+                  <span className="text-4xl font-bold text-yellow-600">1</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-8 border-t border-border">
+            <p className="text-muted-foreground mb-2">Final Scores</p>
+            <div className="flex justify-center gap-8 text-lg">
+              {sortedScores.map(([name, score], idx) => (
+                <div key={name} className="text-center">
+                  <p className="font-bold text-foreground">{name}</p>
+                  <p className="text-2xl font-bold text-brand">{score} pts</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (step === "playing") {
     return (
       <div className="min-h-screen bg-background p-4 md:p-8 flex flex-col items-center">
@@ -229,13 +343,13 @@ export default function GameShowLobby() {
                     "bg-card border-2 border-border text-foreground hover:bg-brand/10 hover:border-brand hover:scale-105 shadow-sm"
                   }`}>
                     {isCompleted ? (result?.result === 'correct' || result?.result === 'steal' ? <CheckCircle2 className="w-8 h-8" /> : <XCircle className="w-8 h-8" />) : 
-                     isLocked ? (isMyLock ? "You" : <span className="text-sm font-medium">🔒 {activeCard.player}</span>) : idx + 1}
+                     isLocked ? (isMyLock ? "You" : <span className="text-sm font-medium"> {activeCard.player}</span>) : idx + 1}
                   </button>
                 );
               })}
             </div>
 
-            {/* ✅ Student Live Scoreboard */}
+            {/* Student Live Scoreboard */}
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm max-w-2xl mx-auto">
               <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4"><Trophy className="w-5 h-5 text-yellow-500" /> Live Scoreboard</h3>
               <div className="space-y-2">
