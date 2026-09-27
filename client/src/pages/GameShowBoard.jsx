@@ -1,10 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity } from "lucide-react";
+import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
-const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
+// ✅ FIX: Strip '/api' from the end of the URL for Socket.io
+const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const socketUrl = apiUrl.replace(/\/api$/, ""); 
+
+const socket = io(socketUrl, {
   withCredentials: true,
 });
 
@@ -12,18 +16,17 @@ export default function GameShowBoard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const code = searchParams.get("code");
+  const feedRef = useRef(null);
 
   const [quiz, setQuiz] = useState(null);
   const [gameState, setGameState] = useState(null);
 
-  // 1. Fetch quiz data first
   useEffect(() => {
     if (code) {
       fetchQuizData();
     }
   }, [code]);
 
-  // 2. Join socket room ONLY after we have the quizId
   useEffect(() => {
     if (quiz?.quizId) {
       socket.emit("join_game", { 
@@ -50,6 +53,13 @@ export default function GameShowBoard() {
       };
     }
   }, [quiz, code]);
+
+  // ✅ UI Polish: Auto-scroll activity feed to the bottom
+  useEffect(() => {
+    if (feedRef.current && gameState?.activityLog) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    }
+  }, [gameState?.activityLog]);
 
   const fetchQuizData = async () => {
     try {
@@ -80,7 +90,12 @@ export default function GameShowBoard() {
         </button>
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground">{quiz.title}</h1>
-          <p className="text-sm text-muted-foreground font-mono mt-1">Code: {code}</p>
+          <p className="text-sm text-muted-foreground font-mono mt-1 flex items-center justify-center gap-2">
+            Code: {code} 
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 text-xs font-medium">
+              <Wifi className="w-3 h-3" /> Live
+            </span>
+          </p>
         </div>
         <button onClick={() => window.location.reload()} className="p-2 rounded-lg hover:bg-accent transition"><RefreshCw className="w-5 h-5" /></button>
       </div>
@@ -117,7 +132,7 @@ export default function GameShowBoard() {
               <Play className="w-5 h-5" /> Start Live Match
             </button>
           ) : (
-            <div className="p-4 rounded-xl bg-brand/10 border border-brand/20 text-center">
+            <div className="p-4 rounded-xl bg-brand/10 border border-brand/20 text-center animate-pulse">
               <p className="font-bold text-brand">🔴 MATCH IS LIVE</p>
               <p className="text-xs text-muted-foreground mt-1">Students can now pick cards.</p>
             </div>
@@ -169,12 +184,13 @@ export default function GameShowBoard() {
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <Activity className="w-5 h-5 text-blue-500" /> Live Match Feed
             </h3>
-            <div className="h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+            {/* ✅ UI Polish: Added ref for auto-scrolling */}
+            <div ref={feedRef} className="h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar scroll-smooth">
               {gameState.activityLog.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic text-center py-8">No activity yet. Waiting for match to start...</p>
               ) : (
                 gameState.activityLog.map((log, idx) => (
-                  <div key={idx} className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-muted/50 transition">
+                  <div key={idx} className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-muted/50 transition animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <span className="font-mono text-xs text-muted-foreground mt-0.5 shrink-0">{log.time}</span>
                     <span className="text-foreground">{log.message}</span>
                   </div>
