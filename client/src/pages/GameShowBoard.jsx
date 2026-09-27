@@ -16,12 +16,22 @@ export default function GameShowBoard() {
   const [quiz, setQuiz] = useState(null);
   const [gameState, setGameState] = useState(null);
 
+  // 1. Fetch quiz data first
   useEffect(() => {
     if (code) {
       fetchQuizData();
-      
-      // Join as admin (we use "Admin" as the placeholder name)
-      socket.emit("join_game", { code, playerName: "Admin" });
+    }
+  }, [code]);
+
+  // 2. Join socket room ONLY after we have the quizId
+  useEffect(() => {
+    if (quiz?.quizId) {
+      socket.emit("join_game", { 
+        code, 
+        playerName: "Admin", 
+        role: "admin",
+        quizId: quiz.quizId 
+      });
 
       socket.on("game_state", (state) => setGameState(state));
       socket.on("player_joined", ({ players, status }) => {
@@ -39,7 +49,7 @@ export default function GameShowBoard() {
         socket.off("answer_result");
       };
     }
-  }, [code]);
+  }, [quiz, code]);
 
   const fetchQuizData = async () => {
     try {
@@ -51,7 +61,9 @@ export default function GameShowBoard() {
   };
 
   const handleStartMatch = () => {
-    socket.emit("admin_start_game", { code });
+    if (quiz?.quizId) {
+      socket.emit("admin_start_game", { quizId: quiz.quizId });
+    }
   };
 
   if (!quiz || !gameState) {
@@ -62,7 +74,6 @@ export default function GameShowBoard() {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
-      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <button onClick={() => navigate("/admin/quizzes")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition">
           <ArrowLeft className="w-5 h-5" /> Exit to Quizzes
@@ -75,23 +86,21 @@ export default function GameShowBoard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-        
-        {/* LEFT: Player List & Controls */}
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-6">
           <div>
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <Users className="w-5 h-5 text-brand" /> Players Joined
             </h3>
-            {gameState.players.filter(p => p !== "Admin").length === 0 ? (
+            {gameState.players.filter(p => p.name !== "Admin").length === 0 ? (
               <p className="text-sm text-muted-foreground italic">Waiting for students to join...</p>
             ) : (
               <ul className="space-y-2">
-                {gameState.players.filter(p => p !== "Admin").map((player, idx) => (
+                {gameState.players.filter(p => p.name !== "Admin").map((player, idx) => (
                   <li key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border">
                     <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center text-brand font-bold">
-                      {player.charAt(0).toUpperCase()}
+                      {player.name.charAt(0).toUpperCase()}
                     </div>
-                    <span className="font-medium text-foreground">{player}</span>
+                    <span className="font-medium text-foreground">{player.name}</span>
                     {isLive && <span className="ml-auto w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>}
                   </li>
                 ))}
@@ -102,7 +111,7 @@ export default function GameShowBoard() {
           {!isLive ? (
             <button 
               onClick={handleStartMatch}
-              disabled={gameState.players.filter(p => p !== "Admin").length === 0}
+              disabled={gameState.players.filter(p => p.name !== "Admin").length === 0}
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-500 py-4 font-bold text-white hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20"
             >
               <Play className="w-5 h-5" /> Start Live Match
@@ -115,10 +124,7 @@ export default function GameShowBoard() {
           )}
         </div>
 
-        {/* RIGHT: Premium Score Table & Activity Feed */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* Premium Score Table */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <Trophy className="w-5 h-5 text-yellow-500" /> Live Scoreboard
@@ -159,7 +165,6 @@ export default function GameShowBoard() {
             </div>
           </div>
 
-          {/* Live Activity Feed */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <Activity className="w-5 h-5 text-blue-500" /> Live Match Feed
@@ -177,7 +182,6 @@ export default function GameShowBoard() {
               )}
             </div>
           </div>
-
         </div>
       </div>
     </div>
