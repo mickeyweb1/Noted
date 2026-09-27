@@ -22,7 +22,7 @@ export default function GameShowLobby() {
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [error, setError] = useState("");
-  const [feedback, setFeedback] = useState(null); // For beautiful popups
+  const [feedback, setFeedback] = useState(null);
   
   const timerRef = useRef(null);
 
@@ -68,7 +68,6 @@ export default function GameShowLobby() {
         setFeedback({ type: 'success', message: `🎉 Correct! +${data.points} Points!` });
       } else if (data.isStealOpportunity && data.stealPlayer === studentName) {
         setFeedback({ type: 'steal', message: `⚡ ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
-        // Re-lock the card for the stealing player
         setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
         setTimeLeft(quizData.timeLimit);
         startTimer();
@@ -76,7 +75,6 @@ export default function GameShowLobby() {
         setFeedback({ type: 'error', message: "❌ Incorrect! Card is now closed." });
       }
 
-      // Clear feedback after 3 seconds
       setTimeout(() => setFeedback(null), 3000);
     });
 
@@ -177,7 +175,6 @@ export default function GameShowLobby() {
   if (step === "playing") {
     return (
       <div className="min-h-screen bg-background p-4 md:p-8 flex flex-col items-center">
-        {/* ✅ Beautiful Feedback Popup */}
         {feedback && (
           <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-50 px-6 py-4 rounded-2xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-top-5 fade-in duration-300 ${
             feedback.type === 'success' ? 'bg-green-500 text-white border-green-400' : 
@@ -189,7 +186,6 @@ export default function GameShowLobby() {
           </div>
         )}
 
-        {/* Active Question View */}
         {activeCard && activeCard.player === studentName && quizData ? (
           <div className="w-full max-w-2xl bg-card border-2 border-brand/30 rounded-3xl p-8 shadow-2xl text-center space-y-8 animate-in fade-in zoom-in-95 duration-300 mt-8">
             <div className="flex justify-center">
@@ -211,7 +207,6 @@ export default function GameShowLobby() {
             </div>
           </div>
         ) : (
-          // Grid View
           <div className="w-full max-w-4xl">
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-foreground">{quizData?.title}</h1>
@@ -253,7 +248,7 @@ export default function GameShowLobby() {
                         <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold ${idx === 0 ? "bg-yellow-500/20 text-yellow-600" : "bg-muted-foreground/20 text-muted-foreground"}`}>{idx + 1}</span>
                         <span className="font-semibold text-foreground">{name}</span>
                       </div>
-                      <span className="font-bold text-brand text-lg">{score} pts</span each>
+                      <span className="font-bold text-brand text-lg">{score} pts</span>
                     </div>
                   ))}
               </div>
