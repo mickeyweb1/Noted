@@ -54,7 +54,7 @@ export default function GameShowBoard() {
     }
   }, [quiz, code]);
 
-  // ✅ UI Polish: Auto-scroll activity feed to the bottom
+  // Auto-scroll activity feed to the bottom
   useEffect(() => {
     if (feedRef.current && gameState?.activityLog) {
       feedRef.current.scrollTop = feedRef.current.scrollHeight;
@@ -76,7 +76,8 @@ export default function GameShowBoard() {
     }
   };
 
-  if (!quiz || !gameState) {
+  // ✅ FIX: Wait until BOTH quiz and gameState.scores are ready
+  if (!quiz || !gameState || !gameState.scores) {
     return <div className="min-h-screen flex items-center justify-center bg-muted"><p>Loading Game Control Panel...</p></div>;
   }
 
@@ -154,7 +155,8 @@ export default function GameShowBoard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {Object.entries(gameState.scores)
+                  {/* ✅ FIX: Added || {} fallback */}
+                  {Object.entries(gameState.scores || {})
                     .filter(([name]) => name !== "Admin")
                     .sort(([,a], [,b]) => b - a)
                     .map(([name, score], idx) => (
@@ -184,12 +186,12 @@ export default function GameShowBoard() {
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <Activity className="w-5 h-5 text-blue-500" /> Live Match Feed
             </h3>
-            {/* ✅ UI Polish: Added ref for auto-scrolling */}
             <div ref={feedRef} className="h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar scroll-smooth">
-              {gameState.activityLog.length === 0 ? (
+              {/* ✅ FIX: Added || [] fallback */}
+              {(gameState.activityLog || []).length === 0 ? (
                 <p className="text-sm text-muted-foreground italic text-center py-8">No activity yet. Waiting for match to start...</p>
               ) : (
-                gameState.activityLog.map((log, idx) => (
+                (gameState.activityLog || []).map((log, idx) => (
                   <div key={idx} className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-muted/50 transition animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <span className="font-mono text-xs text-muted-foreground mt-0.5 shrink-0">{log.time}</span>
                     <span className="text-foreground">{log.message}</span>
