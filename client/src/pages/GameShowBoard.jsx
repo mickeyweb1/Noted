@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award } from "lucide-react";
+import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award, Copy, Plus } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
@@ -17,6 +17,9 @@ export default function GameShowBoard() {
 
   const [quiz, setQuiz] = useState(null);
   const [gameState, setGameState] = useState(null);
+  
+  // ✅ NEW: State for the replacement code modal
+  const [replacementCode, setReplacementCode] = useState(null);
 
   useEffect(() => {
     if (code) fetchQuizData();
@@ -50,6 +53,18 @@ export default function GameShowBoard() {
     if (quiz?.quizId) socket.emit("admin_start_game", { quizId: quiz.quizId });
   };
 
+  // ✅ NEW: Generate a replacement code for a disconnected student
+  const handleGenerateReplacementCode = async () => {
+    if (!quiz?.quizId) return;
+    try {
+      const res = await api.post(`/quiz/${quiz.quizId}/regenerate-code`);
+      setReplacementCode(res.data.newCode);
+    } catch (err) {
+      console.error("Failed to generate replacement code", err);
+      alert("Failed to generate new code. Please try again.");
+    }
+  };
+
   if (!quiz || !gameState || !gameState.scores) {
     return <div className="min-h-screen flex items-center justify-center bg-muted"><p>Loading Game Control Panel...</p></div>;
   }
@@ -57,10 +72,10 @@ export default function GameShowBoard() {
   const isLive = gameState.status === "live";
   const isGameComplete = gameState.completedCards?.length === quiz.questions.length;
   const players = gameState.players.filter(p => p.name !== "Admin");
-  const player1 = players[0]?.name || "Player 1";
-  const player2 = players[1]?.name || "Player 2";
 
   // Calculate totals for each player
+  const player1 = players[0]?.name || "Player 1";
+  const player2 = players[1]?.name || "Player 2";
   const player1Results = gameState.cardResults?.filter(r => r.player === player1) || [];
   const player2Results = gameState.cardResults?.filter(r => r.player === player2) || [];
   const player1Total = player1Results.reduce((sum, r) => sum + r.points, 0);
@@ -87,7 +102,18 @@ export default function GameShowBoard() {
         <div className="space-y-6">
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-6">
             <div>
-              <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4"><Users className="w-5 h-5 text-brand" /> Players Joined</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-brand" /> Players Joined</h3>
+                {/* ✅ NEW: Replacement Code Button */}
+                <button 
+                  onClick={handleGenerateReplacementCode}
+                  className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg bg-brand/10 text-brand hover:bg-brand/20 transition font-medium"
+                  title="Generate a new code if a student disconnected"
+                >
+                  <Plus className="w-3 h-3" /> New Code
+                </button>
+              </div>
+              
               {players.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">Waiting for students to join...</p>
               ) : (
@@ -102,6 +128,7 @@ export default function GameShowBoard() {
                 </ul>
               )}
             </div>
+
             {!isLive ? (
               <button onClick={handleStartMatch} disabled={players.length === 0} className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-500 py-4 font-bold text-white hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-500/20">
                 <Play className="w-5 h-5" /> Start Live Match
@@ -132,7 +159,6 @@ export default function GameShowBoard() {
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-6"><Activity className="w-5 h-5 text-blue-500" /> Live Battle Results</h3>
             
-            {/* Battle Table */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               {/* Player 1 Column */}
               <div className="rounded-xl border-2 border-border bg-muted/30 overflow-hidden">
@@ -201,7 +227,7 @@ export default function GameShowBoard() {
             {isGameComplete && (
               <div className="mt-6 p-6 rounded-2xl bg-gradient-to-r from-yellow-500/10 via-brand/10 to-purple-500/10 border-2 border-brand/30 text-center animate-in fade-in zoom-in duration-500">
                 <Award className="w-12 h-12 text-brand mx-auto mb-3" />
-                <h3 className="text-2xl font-bold text-foreground mb-2"> Game Complete!</h3>
+                <h3 className="text-2xl font-bold text-foreground mb-2">🏆 Game Complete!</h3>
                 <p className="text-muted-foreground mb-4">
                   {player1Total > player2Total ? `${player1} wins!` : player2Total > player1Total ? `${player2} wins!` : "It's a tie!"}
                 </p>
@@ -236,6 +262,32 @@ export default function GameShowBoard() {
           </div>
         </div>
       </div>
+
+      {/* ✅ NEW: Replacement Code Modal */}
+      {replacementCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-foreground mb-2">New Replacement Code Generated!</h3>
+            <p className="text-sm text-muted-foreground mb-4">Give this new code to the student who disconnected. It will connect them to this exact same live game.</p>
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-muted p-4 mb-6">
+              <span className="flex-1 font-mono text-2xl font-bold tracking-wider text-foreground text-center">{replacementCode}</span>
+              <button 
+                onClick={() => navigator.clipboard.writeText(replacementCode)} 
+                className="shrink-0 rounded-lg bg-brand p-2.5 text-brand-foreground hover:bg-brand/90 transition" 
+                title="Copy code"
+              >
+                <Copy className="h-5 w-5" />
+              </button>
+            </div>
+            <button 
+              onClick={() => setReplacementCode(null)} 
+              className="w-full rounded-xl bg-brand py-3 font-bold text-brand-foreground hover:bg-brand/90 transition"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
