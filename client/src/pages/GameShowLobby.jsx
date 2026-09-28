@@ -9,7 +9,6 @@ const socketUrl = apiUrl.replace(/\/api$/, "");
 
 const socket = io(socketUrl, { withCredentials: true });
 
-// Simple confetti component
 function Confetti() {
   const colors = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#3b82f6'];
   const confetti = Array.from({ length: 50 }, (_, i) => ({
@@ -35,10 +34,7 @@ function Confetti() {
       ))}
       <style>{`
         @keyframes fall {
-          to {
-            transform: translateY(100vh) rotate(360deg);
-            opacity: 0;
-          }
+          to { transform: translateY(100vh) rotate(360deg); opacity: 0; }
         }
       `}</style>
     </div>
@@ -75,13 +71,6 @@ export default function GameShowLobby() {
     socket.on("game_state", (state) => {
       setGameState(state);
       if (state.status === "live" && step === "waiting") setStep("playing");
-      
-      // Check if game is complete
-      if (state.completedCards?.length === quizData?.questions.length && step === "playing") {
-        setStep("game-over");
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
-      }
     });
 
     socket.on("player_joined", ({ players, status }) => {
@@ -105,16 +94,31 @@ export default function GameShowLobby() {
       setActiveCard(null);
       setSelectedAnswer(null);
       setGameState((prev) => ({ ...prev, scores: data.scores, completedCards: data.completedCards, cardResults: data.cardResults, activityLog: data.activityLog }));
-      setStep("playing");
-      if (timerRef.current) clearInterval(timerRef.current);
       
+      if (timerRef.current) clearInterval(timerRef.current);
+
+      // ✅ FIX 3: Check for Game Over inside answer_result
+      if (data.completedCards?.length === quizData?.questions.length) {
+        setStep("game-over");
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+        return; // Stop processing further feedback
+      }
+
+      setStep("playing");
+      
+      // ✅ FIX 4: Better messages for steal scenarios
       if (data.isCorrect) {
         setFeedback({ type: 'success', message: `🎉 Correct! +${data.points} Points!` });
-      } else if (data.isStealOpportunity && data.stealPlayer === studentName) {
-        setFeedback({ type: 'steal', message: ` ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
-        setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
-        setTimeLeft(quizData.timeLimit);
-        startTimer();
+      } else if (data.isStealOpportunity) {
+        if (data.stealPlayer === studentName) {
+          setFeedback({ type: 'steal', message: `⚡ ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
+          setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
+          setTimeLeft(quizData.timeLimit);
+          startTimer();
+        } else {
+          setFeedback({ type: 'error', message: `Missed! ${data.stealPlayer} can now steal!` });
+        }
       } else {
         setFeedback({ type: 'error', message: "❌ Incorrect! Card is now closed." });
       }
@@ -216,12 +220,8 @@ export default function GameShowLobby() {
     );
   }
 
-  // Game Over Podium Screen
   if (step === "game-over") {
-    const sortedScores = Object.entries(gameState?.scores || {})
-      .filter(([name]) => name !== "Admin")
-      .sort(([,a], [,b]) => b - a);
-    
+    const sortedScores = Object.entries(gameState?.scores || {}).filter(([name]) => name !== "Admin").sort(([,a], [,b]) => b - a);
     const winner = sortedScores[0];
     const secondPlace = sortedScores[1];
 
@@ -234,10 +234,7 @@ export default function GameShowLobby() {
             <h1 className="text-4xl md:text-5xl font-bold text-foreground">🎉 Game Over!</h1>
             <p className="text-xl text-muted-foreground">The battle is complete!</p>
           </div>
-
-          {/* Podium */}
           <div className="flex items-end justify-center gap-4 md:gap-8 mt-12">
-            {/* Second Place */}
             {secondPlace && (
               <div className="flex flex-col items-center">
                 <Medal className="w-12 h-12 text-gray-400 mb-2" />
@@ -252,8 +249,6 @@ export default function GameShowLobby() {
                 </div>
               </div>
             )}
-
-            {/* First Place */}
             {winner && (
               <div className="flex flex-col items-center -mt-8">
                 <Trophy className="w-16 h-16 text-yellow-500 mb-2 animate-pulse" />
@@ -269,11 +264,10 @@ export default function GameShowLobby() {
               </div>
             )}
           </div>
-
           <div className="pt-8 border-t border-border">
             <p className="text-muted-foreground mb-2">Final Scores</p>
             <div className="flex justify-center gap-8 text-lg">
-              {sortedScores.map(([name, score], idx) => (
+              {sortedScores.map(([name, score]) => (
                 <div key={name} className="text-center">
                   <p className="font-bold text-foreground">{name}</p>
                   <p className="text-2xl font-bold text-brand">{score} pts</p>
@@ -326,7 +320,6 @@ export default function GameShowLobby() {
               <h1 className="text-3xl font-bold text-foreground">{quizData?.title}</h1>
               <p className="text-muted-foreground mt-2">Pick an available card to answer!</p>
             </div>
-            
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-12">
               {quizData?.questions.map((q, idx) => {
                 const isCompleted = gameState?.completedCards?.includes(idx);
@@ -343,28 +336,23 @@ export default function GameShowLobby() {
                     "bg-card border-2 border-border text-foreground hover:bg-brand/10 hover:border-brand hover:scale-105 shadow-sm"
                   }`}>
                     {isCompleted ? (result?.result === 'correct' || result?.result === 'steal' ? <CheckCircle2 className="w-8 h-8" /> : <XCircle className="w-8 h-8" />) : 
-                     isLocked ? (isMyLock ? "You" : <span className="text-sm font-medium"> {activeCard.player}</span>) : idx + 1}
+                     isLocked ? (isMyLock ? "You" : <span className="text-sm font-medium">🔒 {activeCard.player}</span>) : idx + 1}
                   </button>
                 );
               })}
             </div>
-
-            {/* Student Live Scoreboard */}
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm max-w-2xl mx-auto">
               <h3 className="font-semibold text-foreground flex items-center gap-2 mb-4"><Trophy className="w-5 h-5 text-yellow-500" /> Live Scoreboard</h3>
               <div className="space-y-2">
-                {Object.entries(gameState?.scores || {})
-                  .filter(([name]) => name !== "Admin")
-                  .sort(([,a], [,b]) => b - a)
-                  .map(([name, score], idx) => (
-                    <div key={name} className={`flex items-center justify-between p-3 rounded-xl border ${name === studentName ? "bg-brand/5 border-brand/30" : "bg-muted border-border"}`}>
-                      <div className="flex items-center gap-3">
-                        <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold ${idx === 0 ? "bg-yellow-500/20 text-yellow-600" : "bg-muted-foreground/20 text-muted-foreground"}`}>{idx + 1}</span>
-                        <span className="font-semibold text-foreground">{name}</span>
-                      </div>
-                      <span className="font-bold text-brand text-lg">{score} pts</span>
+                {Object.entries(gameState?.scores || {}).filter(([name]) => name !== "Admin").sort(([,a], [,b]) => b - a).map(([name, score], idx) => (
+                  <div key={name} className={`flex items-center justify-between p-3 rounded-xl border ${name === studentName ? "bg-brand/5 border-brand/30" : "bg-muted border-border"}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold ${idx === 0 ? "bg-yellow-500/20 text-yellow-600" : "bg-muted-foreground/20 text-muted-foreground"}`}>{idx + 1}</span>
+                      <span className="font-semibold text-foreground">{name}</span>
                     </div>
-                  ))}
+                    <span className="font-bold text-brand text-lg">{score} pts</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
