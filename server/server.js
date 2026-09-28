@@ -54,7 +54,7 @@ app.use((req, res) => res.status(404).json({ success: false, message: `Route not
 app.use(errorHandler);
 
 // ==========================================
-// ✅ PREMIUM SOCKET.IO SETUP
+// ✅ PREMIUM & SECURED SOCKET.IO SETUP
 // ==========================================
 const PORT = process.env.PORT || 5000;
 const server = createServer(app);
@@ -88,9 +88,9 @@ io.on('connection', (socket) => {
           status: 'waiting',
           players: [],
           scores: {},
-          activeCard: null, // { index, player, attempt }
-          completedCards: [], // [0, 2, 5...]
-          cardResults: [], // [{ cardIndex, player, result: 'correct'|'wrong'|'steal', points }]
+          activeCard: null,
+          completedCards: [],
+          cardResults: [],
           activityLog: [],
           questions: quiz.questions
         });
@@ -125,9 +125,10 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ✅ FIX 2: SECURED - Only the admin who joined can start the game
   socket.on('admin_start_game', ({ quizId }) => {
     const game = activeGames.get(quizId);
-    if (game) {
+    if (game && socket.id === game.adminSocketId) {
       game.status = 'live';
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: "🚀 Match Started!" });
       io.to(quizId).emit('game_started', game);
@@ -143,22 +144,34 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ✅ NEW: Advanced Answer & Steal Logic
+  // ✅ FIX 2: SECURED - Verify player identity and prevent case-sensitivity score splitting
   socket.on('submit_answer', ({ quizId, cardIndex, selectedAnswerIndex, playerName }) => {
     const game = activeGames.get(quizId);
     if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
 
+    const activePlayerLower = game.activeCard.player.toLowerCase();
+    const stealPlayerLower = game.activeCard.stealPlayer ? game.activeCard.stealPlayer.toLowerCase() : null;
+    const submitterLower = playerName.toLowerCase();
+
+    // Block fake submissions from unauthorized players
+    if (activePlayerLower !== submitterLower && stealPlayerLower !== submitterLower) {
+      return; 
+    }
+
     const question = game.questions[cardIndex];
     const isCorrect = selectedAnswerIndex !== -1 && question.options[selectedAnswerIndex] === question.correctAnswer;
+
+    // Find the exact player name to prevent case-sensitivity score splitting
+    const exactPlayerName = game.players.find(p => p.name.toLowerCase() === submitterLower)?.name || playerName;
 
     if (isCorrect) {
       const points = game.activeCard.attempt === 2 ? (game.bonusMarks || 5) : (game.baseMarks || 10);
       const resultType = game.activeCard.attempt === 2 ? 'steal' : 'correct';
       
-      game.scores[playerName] = (game.scores[playerName] || 0) + points;
-      game.cardResults.push({ cardIndex, player: playerName, result: resultType, points });
+      game.scores[exactPlayerName] = (game.scores[exactPlayerName] || 0) + points;
+      game.cardResults.push({ cardIndex, player: exactPlayerName, result: resultType, points });
       game.completedCards.push(cardIndex);
-      game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${playerName} got it right! (+${points} pts)` });
+      game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${exactPlayerName} got it right! (+${points} pts)` });
       
       game.activeCard = null;
       io.to(quizId).emit('answer_result', { 
@@ -167,12 +180,12 @@ io.on('connection', (socket) => {
         activityLog: game.activityLog 
       });
     } else {
-      if (game.activeCard.attempt === 1) {
-        const otherPlayer = game.players.find(p => p.name !== playerName && p.name !== "Admin");
+      if (game.activeCard.attempt === 1 && !game.activeCard.stealPlayer) {
+        const otherPlayer = game.players.find(p => p.name.toLowerCase() !== activePlayerLower && p.name !== "Admin");
         if (otherPlayer) {
           game.activeCard.attempt = 2;
           game.activeCard.stealPlayer = otherPlayer.name;
-          game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${playerName} missed! ${otherPlayer.name} can STEAL for +${game.bonusMarks || 5} pts!` });
+          game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed! ${otherPlayer.name} can STEAL for +${game.bonusMarks || 5} pts!` });
           
           io.to(quizId).emit('answer_result', { 
             isCorrect: false, isStealOpportunity: true, stealPlayer: otherPlayer.name,
@@ -182,9 +195,9 @@ io.on('connection', (socket) => {
         }
       }
       
-      game.cardResults.push({ cardIndex, player: playerName, result: 'wrong', points: 0 });
+      game.cardResults.push({ cardIndex, player: exactPlayerName, result: 'wrong', points: 0 });
       game.completedCards.push(cardIndex);
-      game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${playerName} missed it. Card closed.` });
+      game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed it. Card closed.` });
       
       game.activeCard = null;
       io.to(quizId).emit('answer_result', { 
