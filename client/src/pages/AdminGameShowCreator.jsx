@@ -47,10 +47,10 @@ export default function AdminGameShowCreator() {
     title: "", 
     difficulty: "Intermediate", 
     numQuestions: 10, 
-    numStudents: 30,
-    timeLimit: 30, // Default to 30 seconds per question for game shows
+    numStudents: 2, // ✅ FIX 5: Capped at 2 for 1v1 Battle
+    timeLimit: 30, 
     timeUnit: "seconds", 
-    timeType: "perQuestion", // Game shows are always per question
+    timeType: "perQuestion", 
     baseMarks: 10,
     bonusMarks: 5,
   });
@@ -105,7 +105,7 @@ export default function AdminGameShowCreator() {
     try {
       const res = await api.post("/quiz/create-manual", {
         ...metadata,
-        gameMode: "gameShow", // ✅ CRITICAL: Tells the backend this is a game show
+        gameMode: "gameShow",
         numQuestions: previewQuestions.length,
         questions: previewQuestions,
       });
@@ -140,7 +140,6 @@ export default function AdminGameShowCreator() {
 
         <ErrorNote>{errorMessage}</ErrorNote>
 
-        {/* Shared Metadata Form */}
         <div className={`${card} space-y-5`}>
           <div>
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -160,9 +159,21 @@ export default function AdminGameShowCreator() {
             <Field label="Number of Questions" htmlFor="quiz-questions">
               <input id="quiz-questions" type="number" min="1" value={metadata.numQuestions} onChange={(e) => { setErrorMessage(""); handleMetadataChange("numQuestions", e.target.value); }} className={inputCls} placeholder="e.g., 10" />
             </Field>
-            <Field label="Number of Access Codes" htmlFor="quiz-students">
-              <input id="quiz-students" type="number" min="1" value={metadata.numStudents} onChange={(e) => { setErrorMessage(""); handleMetadataChange("numStudents", e.target.value); }} className={inputCls} placeholder="e.g., 30" />
+            
+            {/* ✅ FIX 5: Capped at 2 players for 1v1 battle */}
+            <Field label="Number of Teams (1v1 Battle)" htmlFor="quiz-students">
+              <input 
+                id="quiz-students" 
+                type="number" 
+                min="2" 
+                max="2" 
+                value={2} 
+                readOnly 
+                className={`${inputCls} bg-muted cursor-not-allowed`} 
+              />
+              <p className="text-xs text-muted-foreground mt-1">Game Show is optimized for a 1v1 head-to-head battle.</p>
             </Field>
+
             <Field label="Time per Question (Seconds)" htmlFor="quiz-time">
               <div className="relative">
                 <Clock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -178,7 +189,6 @@ export default function AdminGameShowCreator() {
           </div>
         </div>
 
-        {/* REVIEW STEP */}
         {isReviewing && (
           <div className="space-y-4 rounded-2xl border border-brand/30 bg-card p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex items-center justify-between gap-3">
@@ -224,7 +234,6 @@ export default function AdminGameShowCreator() {
           </div>
         )}
 
-        {/* AI Generation Step */}
         {!isReviewing && !generatedQuiz && (
           <div className={`${card} space-y-4`}>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground"><Brain className="h-5 w-5 text-brand" /> AI Question Generator</h2>
@@ -238,9 +247,6 @@ export default function AdminGameShowCreator() {
           </div>
         )}
 
-        {/* Generated Quiz & Codes View */}
-                {/* Generated Quiz & Codes View */}
-                {/* Generated Quiz & Codes View */}
         {generatedQuiz && (
           <div className="space-y-6 rounded-2xl border border-green-500/30 bg-green-500/5 p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -261,7 +267,6 @@ export default function AdminGameShowCreator() {
               </div>
             </div>
 
-            {/* ✅ PREMIUM: Big Animated Button to Open Live Match */}
             <button 
               onClick={() => navigate(`/game-show?code=${accessCodes[0]}`)} 
               className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-brand to-brand/90 py-5 font-bold text-brand-foreground shadow-xl shadow-brand/25 transition-all hover:scale-[1.02] hover:shadow-2xl hover:shadow-brand/30 active:scale-[0.98]"
