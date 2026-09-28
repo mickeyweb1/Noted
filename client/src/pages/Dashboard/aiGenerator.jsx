@@ -54,6 +54,11 @@ export default function StudentAiGenerator() {
     setGeneratedResult(null);
     setCopied(false);
 
+    // Scroll to the loading state right away so the user sees feedback immediately
+    setTimeout(() => {
+      document.getElementById('generated-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+
     try {
       const smartTitle = notesText.split("\n")[0].substring(0, 40).trim() || "AI Summary";
       const response = await api.post("/ai/generate", {
@@ -63,11 +68,6 @@ export default function StudentAiGenerator() {
         subject: "General",
       });
       setGeneratedResult(response.data.data.generatedText);
-      
-      // Smooth scroll to results
-      setTimeout(() => {
-        document.getElementById('generated-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
     } catch (err) {
       console.error("Generation failed:", err);
       setError(err.response?.data?.message || "Failed to generate content. Please try again.");
@@ -113,7 +113,7 @@ export default function StudentAiGenerator() {
         
         {/* Header */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand/10 text-brand text-sm font-semibold border border-brand/20">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-soft text-brand text-sm font-semibold border border-brand/20">
             <Sparkles className="w-4 h-4" /> AI Note Summarizer
           </div>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground tracking-tight">
@@ -129,13 +129,13 @@ export default function StudentAiGenerator() {
           
           {/* Input Method Tabs */}
           <div className="flex p-1 bg-muted rounded-lg w-fit mx-auto">
-            <button onClick={() => setInputMethod("type")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inputMethod === "type" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+            <button type="button" onClick={() => setInputMethod("type")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${inputMethod === "type" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
               <FileText className="w-4 h-4 inline mr-2" /> Type
             </button>
-            <button onClick={() => setInputMethod("scan")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inputMethod === "scan" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+            <button type="button" onClick={() => setInputMethod("scan")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${inputMethod === "scan" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
               <Camera className="w-4 h-4 inline mr-2" /> Scan
             </button>
-            <button onClick={() => setInputMethod("library")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${inputMethod === "library" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
+            <button type="button" onClick={() => setInputMethod("library")} className={`px-4 py-2 rounded-md text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${inputMethod === "library" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
               <MessageCircle className="w-4 h-4 inline mr-2" /> Library
             </button>
           </div>
@@ -144,12 +144,15 @@ export default function StudentAiGenerator() {
           {inputMethod === "library" && (
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Select a saved note</label>
-              <select value={selectedNoteId} onChange={handleLibrarySelect} className="flex w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                <option value="">Choose a note...</option>
-                {libraryNotes.map((note) => (
-                  <option key={note._id} value={note._id}>{note.title} ({new Date(note.createdAt).toLocaleDateString()})</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select value={selectedNoteId} onChange={handleLibrarySelect} className="flex w-full appearance-none rounded-lg border border-input bg-background p-3 pr-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <option value="">Choose a note...</option>
+                  {libraryNotes.map((note) => (
+                    <option key={note._id} value={note._id}>{note.title} ({new Date(note.createdAt).toLocaleDateString()})</option>
+                  ))}
+                </select>
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+              </div>
             </div>
           )}
 
@@ -166,13 +169,13 @@ export default function StudentAiGenerator() {
           {/* Text Area */}
           {(inputMethod === "type" || inputMethod === "library") && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="text-sm font-medium text-foreground">Your Notes</label>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span>{wordCount.toLocaleString()} words</span>
                   <span>{charCount.toLocaleString()} chars</span>
                   {notesText && (
-                    <button onClick={handleClear} className="text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors">
+                    <button type="button" onClick={handleClear} className="text-destructive hover:opacity-80 flex items-center gap-1 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
                       <Trash2 className="w-3 h-3" /> Clear
                     </button>
                   )}
@@ -188,7 +191,7 @@ export default function StudentAiGenerator() {
               />
               <div className="w-full bg-muted rounded-full h-1.5">
                 <div 
-                  className={`h-1.5 rounded-full transition-all duration-300 ${charCount > 45000 ? 'bg-red-500' : 'bg-brand'}`}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${charCount > 45000 ? 'bg-destructive' : 'bg-brand'}`}
                   style={{ width: `${Math.min((charCount / 50000) * 100, 100)}%` }}
                 />
               </div>
@@ -199,7 +202,7 @@ export default function StudentAiGenerator() {
           <button
             onClick={handleGenerate}
             disabled={!notesText.trim() || isGenerating}
-            className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-brand text-brand-foreground font-semibold text-base shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl"
+            className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-brand text-brand-foreground font-semibold text-base shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {isGenerating ? (
               <><Loader2 className="w-5 h-5 animate-spin" /> Summarizing...</>
@@ -209,19 +212,24 @@ export default function StudentAiGenerator() {
           </button>
 
           {error && (
-            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center animate-in fade-in slide-in-from-top-2">
+            <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm text-center animate-in fade-in slide-in-from-top-2">
               {error}
             </div>
           )}
         </div>
 
         {/* GENERATED RESULTS SECTION */}
-        <div id="generated-results" className={`transition-all duration-500 ${generatedResult ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-          {generatedResult && (
+        <div id="generated-results" className={`transition-all duration-500 ${(generatedResult || isGenerating) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+          {isGenerating ? (
+            <div className="p-10 rounded-2xl bg-card border border-border shadow-sm flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin text-brand" />
+              <p className="text-sm font-medium">Summarizing your notes...</p>
+            </div>
+          ) : generatedResult ? (
             <div className="p-6 rounded-2xl bg-card border-2 border-brand/30 shadow-lg space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-4">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-brand/10">
+                  <div className="p-2 rounded-lg bg-brand-soft">
                     <Sparkles className="w-5 h-5 text-brand" />
                   </div>
                   <div>
@@ -230,10 +238,10 @@ export default function StudentAiGenerator() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={handleDownload} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Download as text file">
-                    <Download className="w-4 h-4" />
+                  <button type="button" onClick={handleDownload} aria-label="Download as text file" className="flex items-center gap-1.5 p-2 sm:px-3 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-sm font-medium">
+                    <Download className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
                   </button>
-                  <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-brand/10 text-brand hover:bg-brand/20 transition-colors text-sm font-medium">
+                  <button type="button" onClick={handleCopy} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-soft text-brand hover:bg-brand hover:text-brand-foreground transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     {copied ? "Copied!" : "Copy"}
                   </button>
@@ -262,7 +270,7 @@ export default function StudentAiGenerator() {
                 </ReactMarkdown>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
