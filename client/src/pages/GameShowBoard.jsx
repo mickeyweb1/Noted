@@ -17,9 +17,8 @@ export default function GameShowBoard() {
 
   const [quiz, setQuiz] = useState(null);
   const [gameState, setGameState] = useState(null);
-  
-  // ✅ NEW: State for the replacement code modal
   const [replacementCode, setReplacementCode] = useState(null);
+  const [error, setError] = useState(""); // ✅ FIX: Added error state
 
   useEffect(() => {
     if (code) fetchQuizData();
@@ -46,14 +45,17 @@ export default function GameShowBoard() {
     try {
       const res = await api.post("/quiz/validate-code", { code });
       setQuiz(res.data.data);
-    } catch (err) { console.error("Failed to load game show", err); }
+      setError(""); // ✅ FIX: Clear error on success
+    } catch (err) { 
+      console.error("Failed to load game show", err);
+      setError("Failed to load game. Invalid code or network error."); // ✅ FIX: Show error instead of infinite loading
+    }
   };
 
   const handleStartMatch = () => {
     if (quiz?.quizId) socket.emit("admin_start_game", { quizId: quiz.quizId });
   };
 
-  // ✅ NEW: Generate a replacement code for a disconnected student
   const handleGenerateReplacementCode = async () => {
     if (!quiz?.quizId) return;
     try {
@@ -65,6 +67,11 @@ export default function GameShowBoard() {
     }
   };
 
+  // ✅ FIX: Show error state
+  if (error) {
+    return <div className="min-h-screen flex items-center justify-center bg-muted"><p className="text-destructive font-medium">{error}</p></div>;
+  }
+
   if (!quiz || !gameState || !gameState.scores) {
     return <div className="min-h-screen flex items-center justify-center bg-muted"><p>Loading Game Control Panel...</p></div>;
   }
@@ -73,7 +80,6 @@ export default function GameShowBoard() {
   const isGameComplete = gameState.completedCards?.length === quiz.questions.length;
   const players = gameState.players.filter(p => p.name !== "Admin");
 
-  // Calculate totals for each player
   const player1 = players[0]?.name || "Player 1";
   const player2 = players[1]?.name || "Player 2";
   const player1Results = gameState.cardResults?.filter(r => r.player === player1) || [];
@@ -98,13 +104,11 @@ export default function GameShowBoard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-        {/* LEFT: Controls & Overall Score */}
         <div className="space-y-6">
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-6">
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-brand" /> Players Joined</h3>
-                {/* ✅ NEW: Replacement Code Button */}
                 <button 
                   onClick={handleGenerateReplacementCode}
                   className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg bg-brand/10 text-brand hover:bg-brand/20 transition font-medium"
@@ -154,13 +158,11 @@ export default function GameShowBoard() {
           </div>
         </div>
 
-        {/* RIGHT: Premium Battle Table (SS2 vs SS3) */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-6"><Activity className="w-5 h-5 text-blue-500" /> Live Battle Results</h3>
             
             <div className="grid grid-cols-2 gap-4 mb-6">
-              {/* Player 1 Column */}
               <div className="rounded-xl border-2 border-border bg-muted/30 overflow-hidden">
                 <div className="bg-brand/10 border-b border-border p-4 text-center">
                   <h4 className="text-xl font-bold text-foreground">{player1}</h4>
@@ -191,7 +193,6 @@ export default function GameShowBoard() {
                 </div>
               </div>
 
-              {/* Player 2 Column */}
               <div className="rounded-xl border-2 border-border bg-muted/30 overflow-hidden">
                 <div className="bg-brand/10 border-b border-border p-4 text-center">
                   <h4 className="text-xl font-bold text-foreground">{player2}</h4>
@@ -223,7 +224,6 @@ export default function GameShowBoard() {
               </div>
             </div>
 
-            {/* Game Complete Banner */}
             {isGameComplete && (
               <div className="mt-6 p-6 rounded-2xl bg-gradient-to-r from-yellow-500/10 via-brand/10 to-purple-500/10 border-2 border-brand/30 text-center animate-in fade-in zoom-in duration-500">
                 <Award className="w-12 h-12 text-brand mx-auto mb-3" />
@@ -263,7 +263,6 @@ export default function GameShowBoard() {
         </div>
       </div>
 
-      {/* ✅ NEW: Replacement Code Modal */}
       {replacementCode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
