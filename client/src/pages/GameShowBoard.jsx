@@ -43,12 +43,13 @@ export default function GameShowBoard() {
 
   const fetchQuizData = async () => {
     try {
-      const res = await api.post("/quiz/validate-code", { code });
+      // ✅ FIX: Use the new admin-specific endpoint that doesn't block used codes
+      const res = await api.get(`/quiz/game-show/${code}`);
       setQuiz(res.data.data);
-      setError(""); // ✅ FIX: Clear error on success
+      setError(""); 
     } catch (err) { 
       console.error("Failed to load game show", err);
-      setError("Failed to load game. Invalid code or network error."); // ✅ FIX: Show error instead of infinite loading
+      setError("Failed to load game. Invalid code, or you do not have permission to view this game."); 
     }
   };
 
