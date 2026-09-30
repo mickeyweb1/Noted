@@ -1,7 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, RefreshCw, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy } from "lucide-react";
+import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, RefreshCw, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Award } from "lucide-react";
 import api from "../utils/api";
 
 /* ---------- Presentational helpers ---------- */
@@ -13,7 +13,6 @@ const td = "px-4 py-4 sm:px-6";
 
 function PageSpinner() {
   return (
-    // ✅ FIXED: Changed bg-muted to bg-background for consistency
     <div role="status" aria-label="Loading" className="flex min-h-screen items-center justify-center bg-background">
       <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-brand"></div>
     </div>
@@ -68,7 +67,7 @@ export function QuizResultsDashboard() {
 
   if (loading) return <PageSpinner />;
 
-   return (
+  return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -123,7 +122,6 @@ export function QuizResultsDashboard() {
                     <span className="flex items-center gap-2"><Users className="h-4 w-4" />{quiz.numberOfStudents} access codes</span>
                   </span>
 
-                  {/* ✅ ACTION BUTTONS */}
                   <div className="mt-2 flex flex-col gap-2">
                     {isGameShow && resumeCode ? (
                       <button
@@ -228,7 +226,6 @@ export default function QuizResultsPage() {
 
   if (error) {
     return (
-      // ✅ FIXED: Changed bg-muted to bg-background
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
@@ -250,7 +247,6 @@ export default function QuizResultsPage() {
   const avgTimeSeconds = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => acc + (sub.timeTaken || 0), 0) / submissions.length) : 0;
 
   return (
-    // ✅ FIXED: Changed bg-muted to bg-background
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -280,6 +276,87 @@ export default function QuizResultsPage() {
           <StatCard icon={Trophy} label="Average score">{avgScore}%</StatCard>
           <StatCard icon={Clock} label="Average time">{formatAvgTime(avgTimeSeconds)}</StatCard>
         </div>
+
+        {/* ✅ NEW: Game Show Access Codes Section (Only shows for Game Shows) */}
+        {quizData?.gameMode === 'gameShow' && quizData?.accessCodes && quizData.accessCodes.length >= 2 && (
+          <div className="rounded-2xl border-2 border-brand/30 bg-gradient-to-r from-brand/5 to-purple-500/5 p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-foreground mb-2 flex items-center gap-2">
+              <Copy className="w-5 h-5 text-brand" /> Game Show Access Codes
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">If a student loses their code, you can provide it to them again from here.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Team 1 Code */}
+              <div className="bg-brand/5 border-2 border-brand/30 rounded-xl p-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold text-brand uppercase tracking-wider mb-1">Team 1 Code</p>
+                  <p className="text-2xl font-mono font-bold text-foreground tracking-widest">{quizData.accessCodes[0]}</p>
+                </div>
+                <button 
+                  onClick={() => navigator.clipboard.writeText(quizData.accessCodes[0])}
+                  className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md flex-shrink-0"
+                  title="Copy Team 1 Code"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Team 2 Code */}
+              <div className="bg-purple-500/5 border-2 border-purple-500/30 rounded-xl p-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-1">Team 2 Code</p>
+                  <p className="text-2xl font-mono font-bold text-foreground tracking-widest">{quizData.accessCodes[1]}</p>
+                </div>
+                <button 
+                  onClick={() => navigator.clipboard.writeText(quizData.accessCodes[1])}
+                  className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md flex-shrink-0"
+                  title="Copy Team 2 Code"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Game Show Podium Summary (Only shows for Game Shows with results) */}
+        {quizData?.gameMode === 'gameShow' && submissions.length > 0 && (
+          <div className="rounded-2xl border-2 border-brand/30 bg-gradient-to-r from-brand/5 to-purple-500/5 p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+              <Award className="w-5 h-5 text-brand" /> Game Show Final Standings
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(() => {
+                const sorted = [...submissions].sort((a, b) => b.score - a.score);
+                const first = sorted[0];
+                const second = sorted[1];
+                
+                return (
+                  <>
+                    <div className="flex items-center gap-4 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                      <div className="flex-shrink-0 w-12 h-12 rounded-full bg-yellow-500 flex items-center justify-center text-white font-bold text-xl shadow-lg">1</div>
+                      <div>
+                        <p className="text-sm text-muted-foreground font-medium">1st Place Winner</p>
+                        <p className="text-xl font-bold text-foreground">{first.studentName} {first.studentSurname}</p>
+                        <p className="text-lg font-bold text-yellow-600">{first.score} / {first.totalQuestions} Points</p>
+                      </div>
+                    </div>
+
+                    {second && (
+                      <div className="flex items-center gap-4 p-4 rounded-xl bg-gray-400/10 border border-gray-400/20">
+                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">2</div>
+                        <div>
+                          <p className="text-sm text-muted-foreground font-medium">2nd Place Runner-Up</p>
+                          <p className="text-xl font-bold text-foreground">{second.studentName} {second.studentSurname}</p>
+                          <p className="text-lg font-bold text-gray-600">{second.score} / {second.totalQuestions} Points</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           {submissions.length > 0 && (
