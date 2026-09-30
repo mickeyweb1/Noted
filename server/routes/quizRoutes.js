@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { Quiz } from '../models/Quiz.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { QuizSession } from '../models/QuizSession.js';
@@ -10,7 +11,7 @@ import { protect } from '../middleware/protect.js';
 
 const router = express.Router();
 
-// ... (Keep your existing multer configuration exactly as it is) ...
+// ... (multer configuration unchanged) ...
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = './public/uploads/quizzes';
@@ -34,7 +35,7 @@ const upload = multer({
   }
 });
 
-// ✅ UPDATED: Generates codes with T- or G- prefix
+// Generates codes with T- (test) or G- (game show) prefix
 const generateAccessCode = (mode = 'test') => {
   const prefix = mode === 'gameShow' ? 'G-' : 'T-';
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -45,13 +46,39 @@ const generateAccessCode = (mode = 'test') => {
   return code;
 };
 
+// Safe code normaliser — a missing/non-string code gives '' instead of throwing
+const normalizeCode = (code) => (typeof code === 'string' ? code.trim().toUpperCase() : '');
+
+// Loads a quiz and confirms the logged-in user created it.
+// Sends the error response itself and returns null when access is denied.
+const getOwnedQuiz = async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    res.status(404).json({ success: false, message: 'Quiz not found' });
+    return null;
+  }
+  const quiz = await Quiz.findById(req.params.id);
+  if (!quiz) {
+    res.status(404).json({ success: false, message: 'Quiz not found' });
+    return null;
+  }
+  if (String(quiz.createdBy) !== String(req.user._id)) {
+    res.status(403).json({ success: false, message: 'You do not have access to this quiz' });
+    return null;
+  }
+  return quiz;
+};
+
 
 // 🎯 1. AI Generate Questions PREVIEW (Does not save to DB yet, allows review)
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, difficulty, numQuestions } = req.body;
-    const systemPrompt = `You are an expert examiner. Generate ${numQuestions} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. Output VALID JSON ONLY: { "questions": [{ "question": "Text?", "options": ["A", "B", "C", "D"], "correctAnswer": "A", "explanation": "Why" }] }`;
-    const response = await generateWithGroq([{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes}` }], { max_tokens: 4096 });
+    if (typeof notes !== 'string' || !notes.trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide some notes.' });
+    }
+    const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 30);
+    const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. Output VALID JSON ONLY: { "questions": [{ "question": "Text?", "options": ["A", "B", "C", "D"], "correctAnswer": "A", "explanation": "Why" }] }`;
+    const response = await generateWithGroq([{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes.slice(0, 50000)}` }], { max_tokens: 4096 });
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     res.json({ success: true, data: { questions: parsed.questions } });
@@ -64,19 +91,29 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
 router.post('/create-manual', protect, async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const { title, difficulty, numQuestions, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, questions, gameMode = 'test', baseMarks = 10, bonusMarks = 5 } = req.body;
-    
+    const { title, difficulty, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, questions, gameMode = 'test', baseMarks = 10, bonusMarks = 5 } = req.body;
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ success: false, message: 'A quiz needs at least one question.' });
+    }
+
+    const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
+    // Cap the number of codes so one request can't hang the server
+    const studentCount = Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
+
     const accessCodes = [];
-    for (let i = 0; i < numStudents; i++) {
-      let code = generateAccessCode(gameMode); // ✅ Pass the mode here
-      while (accessCodes.includes(code)) code = generateAccessCode(gameMode);
+    for (let i = 0; i < studentCount; i++) {
+      let code = generateAccessCode(mode);
+      while (accessCodes.includes(code)) code = generateAccessCode(mode);
       accessCodes.push(code);
     }
 
     const quiz = await Quiz.create({
       title, difficulty, timeLimit, timeUnit, timeType, maxTabSwitches: maxTabSwitches || null,
-      numberOfStudents: numStudents, 
-      gameMode, baseMarks, bonusMarks, // ✅ Save the new fields
+      numberOfStudents: studentCount,
+      gameMode: mode,
+      baseMarks: Number(baseMarks) || 10,
+      bonusMarks: Number(bonusMarks) || 5,
       questions, accessCodes, createdBy: userId
     });
     res.json({ success: true, data: quiz, accessCodes });
@@ -86,27 +123,38 @@ router.post('/create-manual', protect, async (req, res, next) => {
 });
 
 
-// 🎯 3. Start Quiz Session (Server-side timer & anti-cheat init)
+// 🎯 3. Start (or RESUME) a Quiz Session
+// QuizSession.code is unique, so the old "always create" version threw a
+// duplicate-key 500 whenever a student refreshed or the page called this twice.
+// Now a returning student gets their ORIGINAL startTime back, so the timer
+// keeps counting from the real start (refreshing can't reset the clock).
 router.post('/session/start', async (req, res, next) => {
   try {
-    const { code } = req.body;
-    const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
+    const code = normalizeCode(req.body?.code);
+    if (!code) return res.status(400).json({ success: false, message: 'Access code is required' });
+
+    const quiz = await Quiz.findOne({ accessCodes: code });
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
     
-    const existingSubmission = await QuizSubmission.findOne({ quiz: quiz._id, accessCode: code.toUpperCase() });
+    const existingSubmission = await QuizSubmission.findOne({ quiz: quiz._id, accessCode: code });
     if (existingSubmission) return res.status(400).json({ success: false, message: 'This code has already been used.' });
 
-    const session = await QuizSession.create({
-      code: code.toUpperCase(),
-      quizId: quiz._id,
-      startTime: Date.now(),
-      tabSwitchCount: 0
-    });
+    let session = await QuizSession.findOne({ code });
+    if (!session) {
+      try {
+        session = await QuizSession.create({ code, quizId: quiz._id, startTime: Date.now(), tabSwitchCount: 0 });
+      } catch (err) {
+        // Two requests raced (e.g. React StrictMode) — use the one that won
+        if (err.code === 11000) session = await QuizSession.findOne({ code });
+        else throw err;
+      }
+    }
 
     res.json({ 
       success: true, 
       data: { 
         startTime: session.startTime, 
+        tabSwitchCount: session.tabSwitchCount,
         maxTabSwitches: quiz.maxTabSwitches,
         timeLimit: quiz.timeLimit,
         timeUnit: quiz.timeUnit,
@@ -121,18 +169,15 @@ router.post('/session/start', async (req, res, next) => {
   }
 });
 
-// 🎯 4. Update Tab Switch Count (Anti-cheat)
+// 🎯 4. Update Tab Switch Count (Anti-cheat) — atomic increment
 router.post('/session/update-tab', async (req, res, next) => {
   try {
-    const { code } = req.body;
-    const session = await QuizSession.findOne({ code: code.toUpperCase() });
+    const code = normalizeCode(req.body?.code);
+    const session = await QuizSession.findOneAndUpdate({ code }, { $inc: { tabSwitchCount: 1 } }, { new: true });
     if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
 
-    session.tabSwitchCount += 1;
-    await session.save();
-
     const quiz = await Quiz.findById(session.quizId);
-    const shouldAutoSubmit = quiz.maxTabSwitches && session.tabSwitchCount >= quiz.maxTabSwitches;
+    const shouldAutoSubmit = Boolean(quiz?.maxTabSwitches) && session.tabSwitchCount >= quiz.maxTabSwitches;
 
     res.json({ success: true, tabSwitchCount: session.tabSwitchCount, shouldAutoSubmit });
   } catch (error) {
@@ -143,26 +188,58 @@ router.post('/session/update-tab', async (req, res, next) => {
 // 🎯 5. Submit Quiz (Strict validation)
 router.post('/submit', async (req, res, next) => {
   try {
-    const { code, studentName, studentSurname, studentClass, answers } = req.body;
-    const session = await QuizSession.findOne({ code: code.toUpperCase() });
+    const code = normalizeCode(req.body?.code);
+    const { studentName, studentSurname, studentClass, answers } = req.body || {};
+
+    if (!code) return res.status(400).json({ success: false, message: 'Access code is required.' });
+    if (typeof studentName !== 'string' || !studentName.trim() || typeof studentSurname !== 'string' || !studentSurname.trim()) {
+      return res.status(400).json({ success: false, message: 'Please enter your first name and surname.' });
+    }
+    if (!Array.isArray(answers)) return res.status(400).json({ success: false, message: 'Answers are missing.' });
+
+    const session = await QuizSession.findOne({ code });
     if (!session) return res.status(404).json({ success: false, message: 'Invalid or expired session.' });
 
     const quiz = await Quiz.findById(session.quizId);
-    const timeTakenSeconds = Math.floor((Date.now() - session.startTime) / 1000);
+    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found.' });
+
+    const timeTakenSeconds = Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000));
+
+    // Score by walking the QUIZ's questions (not the client's array) so:
+    //  - sending the same correct answer 10 times can't inflate the score
+    //  - skipped questions still appear in the teacher's breakdown as "Skipped"
+    const provided = new Map();
+    for (const ans of answers) {
+      const qid = String(ans?.questionId ?? '');
+      if (qid && !provided.has(qid)) provided.set(qid, ans);
+    }
 
     let score = 0;
-    const submissionAnswers = answers.map(ans => {
-      const question = quiz.questions.id(ans.questionId);
-      const isCorrect = question && question.correctAnswer === ans.selectedAnswer;
+    const submissionAnswers = quiz.questions.map((question) => {
+      const ans = provided.get(String(question._id));
+      const selectedAnswer = typeof ans?.selectedAnswer === 'string' ? ans.selectedAnswer : '';
+      const isCorrect = selectedAnswer !== '' && selectedAnswer === question.correctAnswer;
       if (isCorrect) score++;
-      return { questionId: ans.questionId, selectedAnswer: ans.selectedAnswer, isCorrect };
+      return { questionId: question._id, selectedAnswer, isCorrect };
     });
 
-    await QuizSubmission.create({
-      quiz: quiz._id, studentName, studentSurname, studentClass, accessCode: code.toUpperCase(),
-      answers: submissionAnswers, score, totalQuestions: quiz.questions.length,
-      timeTaken: timeTakenSeconds, tabSwitchCount: session.tabSwitchCount
-    });
+    try {
+      await QuizSubmission.create({
+        quiz: quiz._id,
+        studentName: studentName.trim().slice(0, 100),
+        studentSurname: studentSurname.trim().slice(0, 100),
+        studentClass: typeof studentClass === 'string' ? studentClass.trim().slice(0, 100) : undefined,
+        accessCode: code,
+        answers: submissionAnswers, score, totalQuestions: quiz.questions.length,
+        timeTaken: timeTakenSeconds, tabSwitchCount: session.tabSwitchCount
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        await QuizSession.deleteOne({ _id: session._id });
+        return res.status(409).json({ success: false, message: 'This code has already been used.' });
+      }
+      throw err;
+    }
 
     await QuizSession.deleteOne({ _id: session._id }); // Destroy session so code can't be reused
 
@@ -172,13 +249,12 @@ router.post('/submit', async (req, res, next) => {
   }
 });
 
-// 🎯 6. Regenerate a single new code for an existing quiz
+// 🎯 6. Regenerate a single new code for an existing quiz (owner only)
 router.post('/:id/regenerate-code', protect, async (req, res, next) => {
   try {
-    const quiz = await Quiz.findById(req.params.id);
-    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found' });
+    const quiz = await getOwnedQuiz(req, res);
+    if (!quiz) return;
     
-    // ✅ FIX: Pass the quiz's gameMode so it generates the correct prefix (G- or T-)
     let newCode = generateAccessCode(quiz.gameMode || 'test');
     while (quiz.accessCodes.includes(newCode)) {
       newCode = generateAccessCode(quiz.gameMode || 'test');
@@ -194,18 +270,18 @@ router.post('/:id/regenerate-code', protect, async (req, res, next) => {
   }
 });
 
-// 🎯 7. Get detailed results (includes answers for breakdown)
+// 🎯 7. Get detailed results (owner only — includes correct answers + student data)
 router.get('/:id/results', protect, async (req, res, next) => {
   try {
-    const quiz = await Quiz.findById(req.params.id);
-    const submissions = await QuizSubmission.find({ quiz: req.params.id }).sort({ submittedAt: -1 });
+    const quiz = await getOwnedQuiz(req, res);
+    if (!quiz) return;
+    const submissions = await QuizSubmission.find({ quiz: quiz._id }).sort({ submittedAt: -1 });
     res.json({ success: true, data: { quiz, submissions } });
   } catch (error) {
     next(error);
   }
 });
 
-// ... (Keep your existing /upload/quiz-image, /admin/quizzes endpoints as they were) ...
 router.post('/upload/quiz-image', protect, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
   res.json({ success: true, imageUrl: `/uploads/quizzes/${req.file.filename}` });
@@ -213,7 +289,6 @@ router.post('/upload/quiz-image', protect, upload.single('image'), (req, res) =>
 
 router.get('/admin/quizzes', protect, async (req, res, next) => {
   try {
-    // ✅ UPDATED: Added 'gameMode' and 'accessCodes' to the select statement
     const quizzes = await Quiz.find({ createdBy: req.user._id })
       .select('title difficulty numberOfStudents createdAt gameMode accessCodes')
       .sort({ createdAt: -1 });
@@ -227,17 +302,16 @@ router.get('/admin/quizzes', protect, async (req, res, next) => {
 // 🎯 Validate access code and get quiz info (NO AUTH REQUIRED for students)
 router.post('/validate-code', async (req, res, next) => {
   try {
-    const { code } = req.body;
-    const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
+    const code = normalizeCode(req.body?.code);
+    if (!code) return res.status(400).json({ success: false, message: 'Access code is required' });
+
+    const quiz = await Quiz.findOne({ accessCodes: code });
     
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Invalid access code' });
     }
 
-    const existingSubmission = await QuizSubmission.findOne({ 
-      quiz: quiz._id, 
-      accessCode: code.toUpperCase() 
-    });
+    const existingSubmission = await QuizSubmission.findOne({ quiz: quiz._id, accessCode: code });
 
     if (existingSubmission) {
       return res.status(400).json({ 
@@ -257,6 +331,7 @@ router.post('/validate-code', async (req, res, next) => {
         timeUnit: quiz.timeUnit,
         timeType: quiz.timeType,
         maxTabSwitches: quiz.maxTabSwitches,
+        bonusMarks: quiz.bonusMarks,
         questions: quiz.questions.map(q => ({
           _id: q._id,
           question: q.question,
