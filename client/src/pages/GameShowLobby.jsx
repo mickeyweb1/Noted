@@ -95,7 +95,7 @@ export default function GameShowLobby() {
       }
     });
 
-    socket.on("answer_result", (data) => {
+        socket.on("answer_result", (data) => {
       setActiveCard(null);
       setSelectedAnswer(null);
       setGameState((prev) => ({ ...prev, scores: data.scores, completedCards: data.completedCards, cardResults: data.cardResults, activityLog: data.activityLog }));
@@ -117,9 +117,13 @@ export default function GameShowLobby() {
         if (data.stealPlayer === studentName) {
           setFeedback({ type: 'steal', message: `⚡ ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
           setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
-          const totalTime = quizData.timeUnit === 'minutes' ? quizData.timeLimit * 60 : quizData.timeLimit;
-          setTimeLeft(totalTime);
+          
+          // ✅ FIX 3: Half the time for steal attempts!
+          const baseTime = quizData.timeUnit === 'minutes' ? quizData.timeLimit * 60 : quizData.timeLimit;
+          const stealTime = Math.ceil(baseTime / 2); // Rounds up to ensure at least 1 second
+          setTimeLeft(stealTime);
           startTimer();
+          
         } else {
           setFeedback({ type: 'error', message: `Missed! ${data.stealPlayer} can now steal!` });
         }
