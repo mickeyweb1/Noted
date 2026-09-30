@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { Quiz } from './models/Quiz.js';
+import { QuizSubmission } from './models/QuizSubmission.js'; // ✅ ADDED: To save game show results
 
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -64,6 +65,48 @@ const io = new Server(server, {
 });
 
 const activeGames = new Map();
+
+// ✅ NEW: Automatically save game show results to the database when the game ends
+const saveGameShowResults = async (game) => {
+  if (game.completedCards.length === game.questions.length && !game.savedToDb) {
+    game.savedToDb = true; // Prevent double-saving
+    
+    for (const player of game.players) {
+      if (player.name === "Admin") continue;
+      
+      const playerResults = game.cardResults.filter(r => r.player === player.name);
+      const totalScore = playerResults.reduce((sum, r) => sum + r.points, 0);
+      
+      const submissionAnswers = game.questions.map((q, idx) => {
+        const result = playerResults.find(r => r.cardIndex === idx);
+        return {
+          questionId: q._id,
+          selectedAnswer: result ? result.selectedAnswer : 'Skipped',
+          isCorrect: result ? (result.result === 'correct' || result.result === 'steal') : false
+        };
+      });
+
+      try {
+        await QuizSubmission.create({
+          quiz: game.quizId,
+          studentName: player.name,
+          studentSurname: "GameShow", 
+          studentClass: "Live Match",
+          accessCode: `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`, // Unique dummy code
+          answers: submissionAnswers,
+          score: totalScore,
+          totalQuestions: game.questions.length,
+          timeTaken: 0,
+          tabSwitchCount: 0,
+          gameMode: 'gameShow' // ✅ Marks this as a game show result
+        });
+      } catch (err) {
+        console.error("Failed to save game show result:", err);
+      }
+    }
+    console.log(`✅ Game show results permanently saved to database for quiz ${game.quizId}`);
+  }
+};
 
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
@@ -125,7 +168,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ✅ FIX 2: SECURED - Only the admin who joined can start the game
   socket.on('admin_start_game', ({ quizId }) => {
     const game = activeGames.get(quizId);
     if (game && socket.id === game.adminSocketId) {
@@ -144,8 +186,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ✅ FIX 2: SECURED - Verify player identity and prevent case-sensitivity score splitting
-  socket.on('submit_answer', ({ quizId, cardIndex, selectedAnswerIndex, playerName }) => {
+  socket.on('submit_answer', async ({ quizId, cardIndex, selectedAnswerIndex, playerName }) => {
     const game = activeGames.get(quizId);
     if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
 
@@ -153,15 +194,12 @@ io.on('connection', (socket) => {
     const stealPlayerLower = game.activeCard.stealPlayer ? game.activeCard.stealPlayer.toLowerCase() : null;
     const submitterLower = playerName.toLowerCase();
 
-    // Block fake submissions from unauthorized players
     if (activePlayerLower !== submitterLower && stealPlayerLower !== submitterLower) {
       return; 
     }
 
     const question = game.questions[cardIndex];
     const isCorrect = selectedAnswerIndex !== -1 && question.options[selectedAnswerIndex] === question.correctAnswer;
-
-    // Find the exact player name to prevent case-sensitivity score splitting
     const exactPlayerName = game.players.find(p => p.name.toLowerCase() === submitterLower)?.name || playerName;
 
     if (isCorrect) {
@@ -169,11 +207,20 @@ io.on('connection', (socket) => {
       const resultType = game.activeCard.attempt === 2 ? 'steal' : 'correct';
       
       game.scores[exactPlayerName] = (game.scores[exactPlayerName] || 0) + points;
-      game.cardResults.push({ cardIndex, player: exactPlayerName, result: resultType, points });
+      game.cardResults.push({ 
+        cardIndex, 
+        player: exactPlayerName, 
+        result: resultType, 
+        points,
+        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' // ✅ Track what they picked
+      });
       game.completedCards.push(cardIndex);
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${exactPlayerName} got it right! (+${points} pts)` });
       
       game.activeCard = null;
+      
+      await saveGameShowResults(game); // ✅ SAVE TO DB WHEN GAME ENDS
+
       io.to(quizId).emit('answer_result', { 
         isCorrect: true, points, scores: game.scores, 
         completedCards: game.completedCards, cardResults: game.cardResults,
@@ -191,15 +238,24 @@ io.on('connection', (socket) => {
             isCorrect: false, isStealOpportunity: true, stealPlayer: otherPlayer.name,
             scores: game.scores, activityLog: game.activityLog 
           });
-          return; // Keep activeCard alive for the steal
+          return; 
         }
       }
       
-      game.cardResults.push({ cardIndex, player: exactPlayerName, result: 'wrong', points: 0 });
+      game.cardResults.push({ 
+        cardIndex, 
+        player: exactPlayerName, 
+        result: 'wrong', 
+        points: 0,
+        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' // ✅ Track what they picked
+      });
       game.completedCards.push(cardIndex);
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed it. Card closed.` });
       
       game.activeCard = null;
+      
+      await saveGameShowResults(game); // ✅ SAVE TO DB WHEN GAME ENDS
+
       io.to(quizId).emit('answer_result', { 
         isCorrect: false, scores: game.scores, 
         completedCards: game.completedCards, cardResults: game.cardResults,
