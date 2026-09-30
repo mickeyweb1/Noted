@@ -111,14 +111,14 @@ export default function GameShowLobby() {
 
       setStep("playing");
       
-      if (data.isCorrect) {
+           if (data.isCorrect) {
         setFeedback({ type: 'success', message: `🎉 Correct! +${data.points} Points!` });
       } else if (data.isStealOpportunity) {
         if (data.stealPlayer === studentName) {
           setFeedback({ type: 'steal', message: `⚡ ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
           setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
           
-          // ✅ FIX 3: Half the time for steal attempts!
+          // ✅ REPLACE THESE TWO LINES TO CALCULATE HALF TIME:
           const baseTime = quizData.timeUnit === 'minutes' ? quizData.timeLimit * 60 : quizData.timeLimit;
           const stealTime = Math.ceil(baseTime / 2); // Rounds up to ensure at least 1 second
           setTimeLeft(stealTime);
