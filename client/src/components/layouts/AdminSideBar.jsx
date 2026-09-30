@@ -31,7 +31,6 @@ export default function AdminSideBar({ isOpen, onClose }) {
     { to: "/admin/quizzes", icon: Brain, label: "Formal Quizzes" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
     { to: "/admin/quiz-results", icon: BarChart3, label: "Quiz Results" }, // 👈 THIS IS IT!
-    { to: "/admin/billing", icon: CreditCard, label: "Billing & Plans" },
     { to: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 
