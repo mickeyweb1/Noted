@@ -58,6 +58,9 @@ export default function GameShowLobby() {
   const [showConfetti, setShowConfetti] = useState(false);
   
   const timerRef = useRef(null);
+  // ✅ FIX: Ref to prevent stale closure in timer
+  const activeCardRef = useRef(null);
+  useEffect(() => { activeCardRef.current = activeCard; }, [activeCard]);
 
   useEffect(() => {
     const handleContextMenu = (e) => e.preventDefault();
@@ -85,7 +88,9 @@ export default function GameShowLobby() {
     socket.on("card_locked", ({ cardIndex, playerName }) => {
       setActiveCard({ index: cardIndex, player: playerName });
       if (playerName === studentName) {
-        setTimeLeft(quizData.timeLimit);
+        // ✅ FIX: Correctly calculate time based on timeUnit (minutes vs seconds)
+        const totalTime = quizData.timeUnit === 'minutes' ? quizData.timeLimit * 60 : quizData.timeLimit;
+        setTimeLeft(totalTime);
         startTimer();
       }
     });
@@ -97,24 +102,23 @@ export default function GameShowLobby() {
       
       if (timerRef.current) clearInterval(timerRef.current);
 
-      // ✅ FIX 3: Check for Game Over inside answer_result
       if (data.completedCards?.length === quizData?.questions.length) {
         setStep("game-over");
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 5000);
-        return; // Stop processing further feedback
+        return;
       }
 
       setStep("playing");
       
-      // ✅ FIX 4: Better messages for steal scenarios
       if (data.isCorrect) {
         setFeedback({ type: 'success', message: `🎉 Correct! +${data.points} Points!` });
       } else if (data.isStealOpportunity) {
         if (data.stealPlayer === studentName) {
           setFeedback({ type: 'steal', message: `⚡ ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
           setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
-          setTimeLeft(quizData.timeLimit);
+          const totalTime = quizData.timeUnit === 'minutes' ? quizData.timeLimit * 60 : quizData.timeLimit;
+          setTimeLeft(totalTime);
           startTimer();
         } else {
           setFeedback({ type: 'error', message: `Missed! ${data.stealPlayer} can now steal!` });
@@ -141,7 +145,15 @@ export default function GameShowLobby() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          handleAnswer(-1);
+          // ✅ FIX: Use ref to ensure activeCard is not null/stale
+          if (activeCardRef.current && quizId) {
+            socket.emit("submit_answer", { 
+              quizId, 
+              cardIndex: activeCardRef.current.index, 
+              selectedAnswerIndex: -1, 
+              playerName: studentName 
+            });
+          }
           return 0;
         }
         return prev - 1;
@@ -159,7 +171,8 @@ export default function GameShowLobby() {
       const data = res.data.data;
       setQuizData(data);
       setQuizId(data.quizId);
-      socket.emit("join_game", { code, playerName: studentName, role: "student" });
+      // ✅ FIX: Explicitly send quizId to the socket
+      socket.emit("join_game", { code, playerName: studentName, role: "student", quizId: data.quizId });
       setStep("waiting");
     } catch (err) {
       setError(err.response?.data?.message || "Invalid code.");
