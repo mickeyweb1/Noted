@@ -77,7 +77,21 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide some notes.' });
     }
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 30);
-    const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. Output VALID JSON ONLY: { "questions": [{ "question": "Text?", "options": ["A", "B", "C", "D"], "correctAnswer": "A", "explanation": "Why" }] }`;
+    
+    // ✅ CRITICAL FIX: Force AI to use the EXACT TEXT of the correct option, not "A", "B", "C", or "D"
+    const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. 
+    Output VALID JSON ONLY in this exact format: 
+    { 
+      "questions": [
+        { 
+          "question": "The question text?", 
+          "options": ["Exact text of option A", "Exact text of option B", "Exact text of option C", "Exact text of option D"], 
+          "correctAnswer": "Exact text of the correct option (MUST exactly match one of the strings in the options array. DO NOT output 'A', 'B', 'C', or 'D')", 
+          "explanation": "Brief explanation why" 
+        }
+      ] 
+    }`;
+    
     const response = await generateWithGroq([{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes.slice(0, 50000)}` }], { max_tokens: 4096 });
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned);
