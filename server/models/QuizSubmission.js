@@ -11,6 +11,7 @@ const submissionSchema = new mongoose.Schema({
     selectedAnswer: String,
     isCorrect: Boolean
   }],
+  gameMode: { type: String, enum: ['test', 'gameShow'], default: 'test' },
   score: { type: Number, required: true },
   totalQuestions: { type: Number, required: true },
   timeTaken: { type: Number, required: true }, // in seconds
@@ -18,10 +19,6 @@ const submissionSchema = new mongoose.Schema({
   submittedAt: { type: Date, default: Date.now }
 });
 
-// One submission per access code. A double-click / double-request now fails
-// with a duplicate-key error (handled in /submit) instead of saving twice.
-// NOTE: if you already have duplicate submissions in the database, MongoDB
-// can't build this index until you delete the duplicates.
 submissionSchema.index({ quiz: 1, accessCode: 1 }, { unique: true });
 
 export const QuizSubmission = mongoose.model('QuizSubmission', submissionSchema);
