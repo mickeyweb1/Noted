@@ -18,7 +18,7 @@ export default function GameShowBoard() {
   const [quiz, setQuiz] = useState(null);
   const [gameState, setGameState] = useState(null);
   const [replacementCode, setReplacementCode] = useState(null);
-  const [error, setError] = useState(""); // ✅ FIX: Added error state
+  const [error, setError] = useState(""); 
 
   useEffect(() => {
     if (code) fetchQuizData();
@@ -43,7 +43,6 @@ export default function GameShowBoard() {
 
   const fetchQuizData = async () => {
     try {
-      // ✅ FIX: Use the new admin-specific endpoint that doesn't block used codes
       const res = await api.get(`/quiz/game-show/${code}`);
       setQuiz(res.data.data);
       setError(""); 
@@ -68,7 +67,6 @@ export default function GameShowBoard() {
     }
   };
 
-  // ✅ FIX: Show error state
   if (error) {
     return <div className="min-h-screen flex items-center justify-center bg-muted"><p className="text-destructive font-medium">{error}</p></div>;
   }
@@ -90,19 +88,56 @@ export default function GameShowBoard() {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <button onClick={() => navigate("/admin/quizzes")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition">
           <ArrowLeft className="w-5 h-5" /> Exit to Quizzes
         </button>
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground">{quiz.title}</h1>
           <p className="text-sm text-muted-foreground font-mono mt-1 flex items-center justify-center gap-2">
-            Code: {code} 
+            Current Code: {code} 
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 text-xs font-medium"><Wifi className="w-3 h-3" /> Live</span>
           </p>
         </div>
         <button onClick={() => window.location.reload()} className="p-2 rounded-lg hover:bg-accent transition"><RefreshCw className="w-5 h-5" /></button>
       </div>
+
+      {/* ✅ NEW: Prominent Team Access Codes Display */}
+      {quiz?.accessCodes && quiz.accessCodes.length >= 2 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 max-w-4xl mx-auto">
+          <div className="bg-brand/10 border-2 border-brand/30 rounded-2xl p-5 text-center shadow-sm">
+            <h4 className="text-lg font-bold text-brand mb-3 flex items-center justify-center gap-2">
+              🔴 TEAM 1 ACCESS CODE
+            </h4>
+            <div className="flex items-center justify-center gap-3 bg-background rounded-xl p-3 border border-border">
+              <span className="text-3xl font-mono font-bold tracking-widest text-foreground">{quiz.accessCodes[0]}</span>
+              <button 
+                onClick={() => navigator.clipboard.writeText(quiz.accessCodes[0])} 
+                className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md"
+                title="Copy Team 1 Code"
+              >
+                <Copy className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-purple-500/10 border-2 border-purple-500/30 rounded-2xl p-5 text-center shadow-sm">
+            <h4 className="text-lg font-bold text-purple-600 mb-3 flex items-center justify-center gap-2">
+              🔵 TEAM 2 ACCESS CODE
+            </h4>
+            <div className="flex items-center justify-center gap-3 bg-background rounded-xl p-3 border border-border">
+              <span className="text-3xl font-mono font-bold tracking-widest text-foreground">{quiz.accessCodes[1]}</span>
+              <button 
+                onClick={() => navigator.clipboard.writeText(quiz.accessCodes[1])} 
+                className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md"
+                title="Copy Team 2 Code"
+              >
+                <Copy className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
         <div className="space-y-6">
