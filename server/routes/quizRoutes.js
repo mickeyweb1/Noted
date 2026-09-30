@@ -346,4 +346,42 @@ router.post('/validate-code', async (req, res, next) => {
 });
 
 
+// ... (keep all your existing code above this) ...
+
+// 🎯 8. Get Game Show details by code (Admin only — bypasses "already used" check)
+router.get('/game-show/:code', protect, async (req, res, next) => {
+  try {
+    const code = normalizeCode(req.params.code);
+    // Only let the creator load their game show
+    const quiz = await Quiz.findOne({ accessCodes: code, createdBy: req.user._id });
+    
+    if (!quiz) {
+      return res.status(404).json({ success: false, message: 'Game show not found or you do not have access' });
+    }
+
+    res.json({ 
+      success: true, 
+      data: {
+        quizId: quiz._id.toString(),
+        title: quiz.title,
+        gameMode: quiz.gameMode,
+        difficulty: quiz.difficulty,
+        timeLimit: quiz.timeLimit,
+        timeUnit: quiz.timeUnit,
+        timeType: quiz.timeType,
+        maxTabSwitches: quiz.maxTabSwitches,
+        bonusMarks: quiz.bonusMarks,
+        questions: quiz.questions.map(q => ({
+          _id: q._id,
+          question: q.question,
+          options: q.options,
+          imageUrl: q.imageUrl
+        }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
