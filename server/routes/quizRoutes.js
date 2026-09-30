@@ -70,6 +70,7 @@ const getOwnedQuiz = async (req, res) => {
 
 
 // 🎯 1. AI Generate Questions PREVIEW (Does not save to DB yet, allows review)
+// 🎯 1. AI Generate Questions PREVIEW (Does not save to DB yet, allows review)
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, difficulty, numQuestions } = req.body;
@@ -78,7 +79,7 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     }
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 30);
     
-    // ✅ CRITICAL FIX: Force AI to use the EXACT TEXT of the correct option, not "A", "B", "C", or "D"
+    // ✅ REPLACE THIS ENTIRE systemPrompt VARIABLE:
     const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. 
     Output VALID JSON ONLY in this exact format: 
     { 
