@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-// ✅ CRITICAL FIX: Added 'User' to this import list!
 import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock, Copy, Check, MessageSquare, User } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useUserContext } from "../../context/userContext"; 
@@ -14,14 +13,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("🔄 Fetching admin stats...");
         const response = await api.get("/admin/stats");
-        console.log("✅ Admin stats response:", response.data);
-        
         if (response.data.success) {
           setData(response.data.data);
-        } else {
-          console.error("❌ API returned success: false", response.data);
         }
       } catch (error) {
         console.error("❌ Failed to fetch admin stats:", error);
@@ -43,7 +37,6 @@ export default function AdminDashboard() {
   const date = new Date();
   const today = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
  
-  // ✅ Show loading spinner while fetching OR while auth is still loading
   if (isLoading || isAuthLoading) {
     return (
       <div className="flex min-h-[60vh] w-full flex-col items-center justify-center gap-3 px-4">
@@ -53,21 +46,19 @@ export default function AdminDashboard() {
     );
   }
  
-  // ✅ Safe stats generation with optional chaining
   const baseStats = [
     { title: "Total Students", value: data?.stats?.totalStudents || 0, change: "All time", trend: "up", icon: Users, color: "text-brand", bg: "bg-brand-soft" },
     { title: "Active Students", value: data?.stats?.activeStudents || 0, change: "Last 7 days", trend: "up", icon: UserCheck, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
     { title: "Inactive Students", value: data?.stats?.inactiveStudents || 0, change: "Needs attention", trend: "down", icon: UserX, color: "text-destructive", bg: "bg-destructive/10" },
   ];
 
-  // ✅ Add Super Admin specific stats OR regular Admin stats
   if (user?.role === "super_admin") {
     baseStats.push({ 
       title: "Personal Users", 
       value: data?.stats?.totalPersonalUsers || 0, 
       change: "Independent learners", 
       trend: "up", 
-      icon: User, // ✅ Now this will work because 'User' is imported!
+      icon: User, 
       color: "text-electric", 
       bg: "bg-electric-soft" 
     });
@@ -90,9 +81,15 @@ export default function AdminDashboard() {
       {/* HEADER */}
       <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><Calendar className="h-4 w-4 shrink-0" /> {today}</p>
-          <h1 className="mt-1 text-2xl font-display font-bold leading-tight text-foreground sm:text-3xl lg:text-4xl">Welcome back, Admin! 👋</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">Here is what is happening at <strong>{data?.schoolName || "your school"}</strong> today.</p>
+          <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Calendar className="h-4 w-4 shrink-0" /> {today}
+          </p>
+          <h1 className="mt-1 text-2xl font-display font-bold leading-tight text-foreground sm:text-3xl lg:text-4xl">
+            Welcome back, Admin! 👋
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+            Here is what is happening at <strong>{data?.schoolName || "your school"}</strong> today.
+          </p>
         </div>
         <div className="w-full sm:w-auto">
           <NavLink to="/admin/add-student" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-brand-foreground shadow-lg shadow-brand/20 transition-all hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto sm:px-5">
@@ -106,7 +103,9 @@ export default function AdminDashboard() {
         {stats.map((stat) => (
           <div key={stat.title} className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
             <div className="mb-4 flex min-w-0 items-center justify-between gap-2">
-              <div className={`p-2.5 rounded-xl ${stat.bg}`}><stat.icon className={`w-5 h-5 ${stat.color}`} /></div>
+              <div className={`p-2.5 rounded-xl ${stat.bg}`}>
+                <stat.icon className={`w-5 h-5 ${stat.color}`} />
+              </div>
               <span className={`max-w-[62%] truncate rounded-full px-2 py-1 text-right text-xs font-medium ${stat.trend === "up" ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-destructive/10 text-destructive"}`}>
                 {stat.change}
               </span>
@@ -122,8 +121,12 @@ export default function AdminDashboard() {
         {/* LEFT: Recent Sign-ups */}
         <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground"><Clock className="h-5 w-5 shrink-0 text-muted-foreground" /> Recent Activity</h2>
-            <NavLink to="/admin/students" className="flex items-center gap-1 text-right text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">View all students <ArrowRight className="h-4 w-4 shrink-0" /></NavLink>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <Clock className="h-5 w-5 shrink-0 text-muted-foreground" /> Recent Activity
+            </h2>
+            <NavLink to="/admin/students" className="flex items-center gap-1 text-right text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
+              View all students <ArrowRight className="h-4 w-4 shrink-0" />
+            </NavLink>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[38rem] text-sm">
@@ -140,11 +143,19 @@ export default function AdminDashboard() {
                   <tr key={student.id} className="hover:bg-muted/20 transition-colors">
                     <td className="whitespace-nowrap px-4 py-4 font-medium text-foreground sm:px-5">{student.name}</td>
                     <td className="whitespace-nowrap px-4 py-4 text-muted-foreground sm:px-5">{student.class}</td>
-                    <td className="px-4 py-4 sm:px-5"><span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">{student.status}</span></td>
+                    <td className="px-4 py-4 sm:px-5">
+                      <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
+                        {student.status}
+                      </span>
+                    </td>
                     <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground sm:px-5">{student.date}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="4" className="px-4 py-8 text-center text-muted-foreground sm:px-5">No recent students found.</td></tr>
+                  <tr>
+                    <td colSpan="4" className="px-4 py-8 text-center text-muted-foreground sm:px-5">
+                      No recent students found.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -157,12 +168,14 @@ export default function AdminDashboard() {
             <h2 className="mb-4 text-lg font-semibold text-foreground">Quick Actions</h2>
             <div className="space-y-3">
               
-              {/* ✅ NEW: Super Admin Feedback Link (Only shows for you) */}
+              {/* ✅ UPDATED: Now points to the NEW Support Inbox */}
               {user?.role === "super_admin" && (
-                <NavLink to="/admin/feedback" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-brand/5 p-3 transition-all hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <NavLink to="/admin/support-inbox" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-brand/5 p-3 transition-all hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="shrink-0 rounded-lg bg-brand-soft p-2 text-brand"><MessageSquare className="h-4 w-4" /></div>
-                    <span className="text-sm font-medium text-foreground">Super Admin Inbox</span>
+                    <div className="shrink-0 rounded-lg bg-brand-soft p-2 text-brand">
+                      <MessageSquare className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">Support Inbox</span>
                   </div>
                   <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-brand" />
                 </NavLink>
@@ -170,7 +183,9 @@ export default function AdminDashboard() {
 
               <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-muted/30 p-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="shrink-0 rounded-lg bg-brand-soft p-2 text-brand"><Copy className="h-4 w-4" /></div>
+                  <div className="shrink-0 rounded-lg bg-brand-soft p-2 text-brand">
+                    <Copy className="h-4 w-4" />
+                  </div>
                   <div className="min-w-0">
                     <span className="block truncate text-sm font-medium text-foreground">School Invite Code</span>
                     <span className="block truncate font-mono text-xs text-muted-foreground">{data?.inviteCode || "Loading..."}</span>
@@ -180,9 +195,12 @@ export default function AdminDashboard() {
                   {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
+              
               <NavLink to="/admin/billing" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-muted/30 p-3 transition-all hover:border-electric/30 hover:bg-electric/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="shrink-0 rounded-lg bg-electric-soft p-2 text-electric"><TrendingUp className="h-4 w-4" /></div>
+                  <div className="shrink-0 rounded-lg bg-electric-soft p-2 text-electric">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
                   <span className="text-sm font-medium text-foreground">Upgrade Plan</span>
                 </div>
                 <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-electric" />
