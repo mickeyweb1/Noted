@@ -10,6 +10,8 @@ import PersonalPage from "./pages/marketing/PersonalPage";
 import ContactPage from "./pages/marketing/ContactPage";
 import GameShowLobby from "./pages/GameShowLobby";
 import StudioHub from "./pages/StudioHub";
+import SupportPage from "./pages/SupportPage";
+import SuperAdminSupportInbox from "./pages/schoolAdmin/SuperAdminSupportInbox";
 import GameShowBoard from "./pages/GameShowBoard";
 
 // Auth Pages
@@ -97,6 +99,7 @@ function App() {
         <Route path="/ai" element={<StudioHub />} /> 
         <Route path="/podcast" element={<PodcastGenerator />} />
         <Route path="/focusTime" element={<FocusTime />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route path="/reminder" element={<StudentSchedule />} />
         <Route path="/studentSetting" element={<StudentSetting />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
@@ -124,6 +127,8 @@ function App() {
 <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
+        <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
+        <Route path="/support" element={<SupportPage />} />
       </Route>
 
       {/* ================= CATCH-ALL (404) ================= */}
