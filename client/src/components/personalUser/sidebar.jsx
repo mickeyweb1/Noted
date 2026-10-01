@@ -12,7 +12,8 @@ import {
   Trophy,
   Sparkles,
   Bot,
-  Zap
+  Zap,
+   MessageSquare
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -40,6 +41,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
         { to: "/myLibrary", label: "My Library", icon: Library },
     { to: "/focusTime", label: "Focus Time", icon: Clock },
     { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
+    { to: "/support", label: "Report an Issue", icon: MessageSquare },
     { to: "/studentSetting", label: "Settings", icon: Settings },
   ];
 
