@@ -9,6 +9,7 @@ import {
   BarChart3,
   UserPlus,
   X,
+  MessageSquare,
   Trophy
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -30,7 +31,8 @@ export default function AdminSideBar({ isOpen, onClose }) {
     { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
     { to: "/admin/quizzes", icon: Brain, label: "Formal Quizzes" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
-    { to: "/admin/quiz-results", icon: BarChart3, label: "Quiz Results" }, // 👈 THIS IS IT!
+    { to: "/admin/quiz-results", icon: BarChart3, label: "Quiz Results" },// 👈 THIS IS IT!
+    { to: "/support", icon: MessageSquare, label: "Report an Issue" },
     { to: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 
