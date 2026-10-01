@@ -66,6 +66,31 @@ export default function TakeQuiz() {
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
+  // ✅ NEW: Auto-save progress for cross-device resume (Debounced)
+  useEffect(() => {
+    if (step !== "quiz" || !code) return;
+    
+    const saveTimer = setTimeout(async () => {
+      try {
+        const formattedAnswers = quizData.questions.map(q => ({
+          questionId: q._id,
+          selectedAnswer: answers[q._id] || null
+        }));
+        await api.post("/quiz/session/save-progress", {
+          code,
+          studentName: studentInfo.name,
+          studentSurname: studentInfo.surname,
+          studentClass: studentInfo.className,
+          answers: formattedAnswers
+        });
+      } catch (err) {
+        console.error("Failed to save progress", err);
+      }
+    }, 1000); // Saves 1 second after the last change
+
+    return () => clearTimeout(saveTimer);
+  }, [answers, studentInfo, step, code, quizData]);
+
   useEffect(() => {
     if (step !== "quiz") return;
     
@@ -121,12 +146,11 @@ export default function TakeQuiz() {
       const res = await api.post("/quiz/validate-code", { code });
       const data = res.data.data;
       
-if (data.gameMode === 'gameShow') {
-  navigate(`/game-show-lobby?code=${code}`); // ✅ CORRECT!
-  return;
-}
+      if (data.gameMode === 'gameShow') {
+        navigate(`/game-show-lobby?code=${code}`);
+        return;
+      }
 
-      // Normal Test Flow continues here...
       setQuizData(data);
       setMaxTabSwitches(data.maxTabSwitches);
       
@@ -151,6 +175,16 @@ if (data.gameMode === 'gameShow') {
     try {
       const res = await api.post("/quiz/session/start", { code });
       const data = res.data.data;
+      
+      // ✅ NEW: Restore saved progress if it exists!
+      if (data.savedStudentInfo) {
+        setStudentInfo(data.savedStudentInfo);
+        const restoredAnswers = {};
+        data.savedAnswers.forEach(a => {
+          if (a.selectedAnswer) restoredAnswers[a.questionId] = a.selectedAnswer;
+        });
+        setAnswers(restoredAnswers);
+      }
       
       const totalSeconds = data.timeType === "perQuestion" 
         ? data.timeLimit * data.questions.length 
@@ -230,7 +264,6 @@ if (data.gameMode === 'gameShow') {
             <input
               type="text"
               value={code}
-              // ✅ FIXED: Now allows letters, numbers, AND hyphens (-)
               onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase().slice(0, 10))}
               placeholder="e.g., T-8X92A1B3"
               aria-label="Quiz code"
