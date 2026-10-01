@@ -9,8 +9,8 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { Quiz } from './models/Quiz.js';
-import supportRoutes from './routes/supportRoutes.js'; // ✅ ADD THIS
-import { QuizSubmission } from './models/QuizSubmission.js'; // ✅ ADDED: To save game show results
+import { QuizSubmission } from './models/QuizSubmission.js'; 
+import supportRoutes from './routes/supportRoutes.js'; 
 
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -50,7 +50,7 @@ app.use('/api/ai/generate', aiLimiter);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/quiz', quizRoutes);
-app.use('/api/support', supportRoutes);
+app.use('/api/support', supportRoutes); 
 
 app.get('/', (req, res) => res.json({ success: true, message: '✅ Noted Backend API is running!' }));
 app.use((req, res) => res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` }));
@@ -68,10 +68,10 @@ const io = new Server(server, {
 
 const activeGames = new Map();
 
-// ✅ NEW: Automatically save game show results to the database when the game ends
+// ✅ Automatically save game show results to the database when the game ends
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
-    game.savedToDb = true; // Prevent double-saving
+    game.savedToDb = true; 
     
     for (const player of game.players) {
       if (player.name === "Admin") continue;
@@ -94,13 +94,13 @@ const saveGameShowResults = async (game) => {
           studentName: player.name,
           studentSurname: "GameShow", 
           studentClass: "Live Match",
-          accessCode: `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`, // Unique dummy code
+          accessCode: `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`, 
           answers: submissionAnswers,
           score: totalScore,
           totalQuestions: game.questions.length,
           timeTaken: 0,
           tabSwitchCount: 0,
-          gameMode: 'gameShow' // ✅ Marks this as a game show result
+          gameMode: 'gameShow' 
         });
       } catch (err) {
         console.error("Failed to save game show result:", err);
@@ -214,14 +214,13 @@ io.on('connection', (socket) => {
         player: exactPlayerName, 
         result: resultType, 
         points,
-        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' // ✅ Track what they picked
+        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' 
       });
       game.completedCards.push(cardIndex);
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${exactPlayerName} got it right! (+${points} pts)` });
       
       game.activeCard = null;
-      
-      await saveGameShowResults(game); // ✅ SAVE TO DB WHEN GAME ENDS
+      await saveGameShowResults(game); 
 
       io.to(quizId).emit('answer_result', { 
         isCorrect: true, points, scores: game.scores, 
@@ -249,14 +248,13 @@ io.on('connection', (socket) => {
         player: exactPlayerName, 
         result: 'wrong', 
         points: 0,
-        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' // ✅ Track what they picked
+        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' 
       });
       game.completedCards.push(cardIndex);
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed it. Card closed.` });
       
       game.activeCard = null;
-      
-      await saveGameShowResults(game); // ✅ SAVE TO DB WHEN GAME ENDS
+      await saveGameShowResults(game); 
 
       io.to(quizId).emit('answer_result', { 
         isCorrect: false, scores: game.scores, 
@@ -266,8 +264,46 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  // ✅ SAFETY NET: If a student disconnects mid-game, save their current score immediately!
+  socket.on('disconnect', async () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
+    
+    for (const [quizId, game] of activeGames.entries()) {
+      const player = game.players.find(p => p.id === socket.id);
+      if (player && game.status === 'live') {
+        console.log(`💾 Saving progress for disconnected player: ${player.name}`);
+        
+        const playerResults = game.cardResults.filter(r => r.player === player.name);
+        const totalScore = playerResults.reduce((sum, r) => sum + r.points, 0);
+        
+        const submissionAnswers = game.questions.map((q, idx) => {
+          const result = playerResults.find(r => r.cardIndex === idx);
+          return {
+            questionId: q._id,
+            selectedAnswer: result ? result.selectedAnswer : 'Skipped',
+            isCorrect: result ? (result.result === 'correct' || result.result === 'steal') : false
+          };
+        });
+
+        try {
+          await QuizSubmission.create({
+            quiz: game.quizId,
+            studentName: player.name,
+            studentSurname: "GameShow", 
+            studentClass: "Live Match",
+            accessCode: `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`,
+            answers: submissionAnswers,
+            score: totalScore,
+            totalQuestions: game.questions.length,
+            timeTaken: 0,
+            tabSwitchCount: 0,
+            gameMode: 'gameShow'
+          });
+        } catch (err) {
+          console.error("Failed to save disconnected player result:", err);
+        }
+      }
+    }
   });
 });
 
