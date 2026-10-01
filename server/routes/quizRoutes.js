@@ -143,6 +143,7 @@ router.post('/create-manual', protect, async (req, res, next) => {
 // duplicate-key 500 whenever a student refreshed or the page called this twice.
 // Now a returning student gets their ORIGINAL startTime back, so the timer
 // keeps counting from the real start (refreshing can't reset the clock).
+// 🎯 3. Start (or RESUME) a Quiz Session
 router.post('/session/start', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
@@ -157,9 +158,14 @@ router.post('/session/start', async (req, res, next) => {
     let session = await QuizSession.findOne({ code });
     if (!session) {
       try {
-        session = await QuizSession.create({ code, quizId: quiz._id, startTime: Date.now(), tabSwitchCount: 0 });
+        session = await QuizSession.create({ 
+          code, 
+          quizId: quiz._id, 
+          startTime: Date.now(), 
+          tabSwitchCount: 0,
+          answers: [] // ✅ Initialize empty answers array
+        });
       } catch (err) {
-        // Two requests raced (e.g. React StrictMode) — use the one that won
         if (err.code === 11000) session = await QuizSession.findOne({ code });
         else throw err;
       }
@@ -176,9 +182,39 @@ router.post('/session/start', async (req, res, next) => {
         timeType: quiz.timeType,
         title: quiz.title,
         difficulty: quiz.difficulty,
-        questions: quiz.questions.map(q => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl }))
+        questions: quiz.questions.map(q => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
+        // ✅ NEW: Return saved progress for cross-device resume
+        savedAnswers: session.answers || [],
+        savedStudentInfo: session.studentName ? {
+          name: session.studentName,
+          surname: session.studentSurname,
+          className: session.studentClass
+        } : null
       }
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🎯 3.5 Save Progress (For cross-device resume)
+router.post('/session/save-progress', async (req, res, next) => {
+  try {
+    const { code, studentName, studentSurname, studentClass, answers } = req.body;
+    const normalizedCode = normalizeCode(code);
+    
+    await QuizSession.findOneAndUpdate(
+      { code: normalizedCode },
+      { 
+        studentName, 
+        studentSurname, 
+        studentClass, 
+        $set: { answers: answers.map(a => ({ questionId: a.questionId, selectedAnswer: a.selectedAnswer })) }
+      },
+      { new: true }
+    );
+    
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }
