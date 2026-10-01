@@ -4,7 +4,7 @@ import { protect } from '../middleware/protect.js';
 
 const router = express.Router();
 
-// 🎯 1. Submit a new Support Ticket
+// 🎯 1. Submit a new Support Ticket (Available to all logged-in users)
 router.post('/ticket', protect, async (req, res, next) => {
   try {
     const { subject, message, contactEmail, contactPhone } = req.body;
@@ -29,12 +29,11 @@ router.post('/ticket', protect, async (req, res, next) => {
   }
 });
 
-// 🎯 2. Get all Support Tickets (✅ TEMPORARY FIX: Allows school_admin too)
+// 🎯 2. Get all Support Tickets (STRICT: Super Admin ONLY)
 router.get('/tickets', protect, async (req, res, next) => {
   try {
-    // ✅ CHANGED THIS LINE to allow school_admin to see tickets for testing
-    if (req.user.role !== 'super_admin' && req.user.role !== 'school_admin') {
-      return res.status(403).json({ success: false, message: 'Access denied.' });
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Access denied. Super Admin only.' });
     }
 
     const tickets = await SupportTicket.find().sort({ createdAt: -1 });
@@ -44,11 +43,11 @@ router.get('/tickets', protect, async (req, res, next) => {
   }
 });
 
-// 🎯 3. Update a Ticket Status / Add Reply
+// 🎯 3. Update a Ticket Status / Add Reply (STRICT: Super Admin ONLY)
 router.patch('/tickets/:id', protect, async (req, res, next) => {
   try {
-    if (req.user.role !== 'super_admin' && req.user.role !== 'school_admin') {
-      return res.status(403).json({ success: false, message: 'Access denied.' });
+    if (req.user.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Access denied. Super Admin only.' });
     }
 
     const { status, adminReply } = req.body;
