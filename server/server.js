@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { Quiz } from './models/Quiz.js';
+import supportRoutes from './routes/supportRoutes.js'; // ✅ ADD THIS
 import { QuizSubmission } from './models/QuizSubmission.js'; // ✅ ADDED: To save game show results
 
 import authRoutes from './routes/authRoutes.js';
@@ -49,6 +50,7 @@ app.use('/api/ai/generate', aiLimiter);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/quiz', quizRoutes);
+app.use('/api/support', supportRoutes);
 
 app.get('/', (req, res) => res.json({ success: true, message: '✅ Noted Backend API is running!' }));
 app.use((req, res) => res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` }));
