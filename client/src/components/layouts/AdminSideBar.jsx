@@ -25,7 +25,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
     avatar: null,
   };
 
-    const navItems = [
+  const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
     { to: "/admin/students", icon: Users, label: "My Students" },
     { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
@@ -40,20 +40,18 @@ export default function AdminSideBar({ isOpen, onClose }) {
     { to: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 
-
   const handleLogout = () => {
     if (typeof logout === "function") logout();
     navigate("/login");
   };
 
   return (
-    // Note: The mobile backdrop was removed from here. It is now handled by AdminDashboardLayout.jsx
     <aside
       className={`fixed inset-y-0 left-0 z-50 flex flex-col h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${
         isOpen ? "translate-x-0" : "-translate-x-full"
       }`}
     >
-      {/* 1. LOGO & BRANDING - Fixed height */}
+      {/* 1. LOGO & BRANDING */}
       <div className="flex items-center justify-between gap-3 px-6 h-16 border-b border-gray-200 dark:border-gray-800 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand text-white shadow-sm">
@@ -73,7 +71,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
         </button>
       </div>
 
-      {/* 2. NAVIGATION MENU - Scrollable area */}
+      {/* 2. NAVIGATION MENU */}
       <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 min-h-0">
         <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
           Management
@@ -97,7 +95,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
         ))}
       </nav>
 
-      {/* 3. USER PROFILE FOOTER - Fixed at bottom */}
+      {/* 3. USER PROFILE FOOTER */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2 shrink-0">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
           <div className="flex items-center justify-center w-9 h-9 rounded-full bg-brand/10 text-brand shrink-0">
