@@ -128,7 +128,7 @@ function App() {
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
         <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
-        <Route path="/support" element={<SupportPage />} />
+        <Route path="/admin/support" element={<SupportPage />} />
       </Route>
 
       {/* ================= CATCH-ALL (404) ================= */}
