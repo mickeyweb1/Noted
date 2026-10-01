@@ -25,17 +25,21 @@ export default function AdminSideBar({ isOpen, onClose }) {
     avatar: null,
   };
 
-  const navItems = [
+    const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
     { to: "/admin/students", icon: Users, label: "My Students" },
     { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
     { to: "/admin/quizzes", icon: Brain, label: "Formal Quizzes" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
     { to: "/admin/quiz-results", icon: BarChart3, label: "Quiz Results" },
-    { to: "/admin/support-inbox", icon: MessageSquare, label: "Support Inbox" }, // ✅ ADD THIS
-    { to: "/admin/support", icon: MessageSquare, label: "Report an Issue" },
+    { to: "/admin/support", icon: MessageSquare, label: "Report an Issue" }, // Everyone sees this
+    
+    // ✅ ONLY Super Admin sees the Inbox
+    ...(user?.role === "super_admin" ? [{ to: "/admin/support-inbox", icon: MessageSquare, label: "Support Inbox" }] : []),
+    
     { to: "/admin/settings", icon: Settings, label: "Settings" },
   ];
+
 
   const handleLogout = () => {
     if (typeof logout === "function") logout();
