@@ -122,22 +122,21 @@ export function QuizResultsDashboard() {
                     <span className="flex items-center gap-2"><Users className="h-4 w-4" />{quiz.numberOfStudents} access codes</span>
                   </span>
 
-                  <div className="mt-2 flex flex-col gap-2">
-                    {isGameShow && resumeCode ? (
+                                    <div className="mt-2 flex flex-col gap-2">
+                    {isGameShow && resumeCode && (
                       <button
                         onClick={() => navigate(`/game-show?code=${resumeCode}`)}
                         className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 active:scale-[0.99]"
                       >
                         <Trophy className="h-4 w-4" /> Resume Live Match
                       </button>
-                    ) : (
-                      <button
-                        onClick={() => navigate(`/admin/quiz/${quiz._id}/results`)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99]"
-                      >
-                        View Results <ArrowRight className="h-4 w-4" />
-                      </button>
                     )}
+                    <button
+                      onClick={() => navigate(`/admin/quiz/${quiz._id}/results`)}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99]"
+                    >
+                      View Results <ArrowRight className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               );
