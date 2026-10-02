@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award, Copy, Plus } from "lucide-react";
+import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award, Copy, Plus, MoreVertical, Ban } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const socketUrl = apiUrl.replace(/\/api$/, ""); 
-
 const socket = io(socketUrl, { withCredentials: true });
 
 export default function GameShowBoard() {
@@ -19,6 +18,7 @@ export default function GameShowBoard() {
   const [gameState, setGameState] = useState(null);
   const [replacementCode, setReplacementCode] = useState(null);
   const [error, setError] = useState(""); 
+  const [disqualifiedPlayers, setDisqualifiedPlayers] = useState([]); // ✅ NEW: Track disqualified
 
   useEffect(() => {
     if (code) fetchQuizData();
@@ -87,33 +87,19 @@ export default function GameShowBoard() {
   const player2Total = player2Results.reduce((sum, r) => sum + r.points, 0);
 
   return (
-    // ✅ FIX 3: Reduced phone padding
     <div className="min-h-screen bg-background p-3 sm:p-4 md:p-8">
-      
-      {/* ✅ FIX 1: Mobile-friendly header that stacks cleanly */}
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <button
-            onClick={() => navigate("/admin/quizzes")}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground transition hover:text-foreground"
-          >
-            <ArrowLeft className="h-5 w-5 shrink-0" />
+          <button onClick={() => navigate("/admin/quizzes")} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground transition hover:text-foreground">
+            <ArrowLeft className="h-5 h-5 shrink-0" />
             <span>Exit to Quizzes</span>
           </button>
-
-          <button
-            onClick={() => window.location.reload()}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-accent"
-            aria-label="Refresh game"
-          >
-            <RefreshCw className="h-5 w-5" />
+          <button onClick={() => window.location.reload()} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-accent" aria-label="Refresh game">
+            <RefreshCw className="h-5 h-5" />
           </button>
         </div>
-
         <div className="text-center">
-          <h1 className="break-words text-xl font-bold leading-tight text-foreground sm:text-2xl">
-            {quiz.title}
-          </h1>
+          <h1 className="break-words text-xl font-bold leading-tight text-foreground sm:text-2xl">{quiz.title}</h1>
           <p className="mt-2 flex flex-wrap items-center justify-center gap-2 font-mono text-xs text-muted-foreground sm:text-sm">
             <span>Code: {code}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-600">
@@ -123,41 +109,22 @@ export default function GameShowBoard() {
         </div>
       </div>
 
-      {/* ✅ NEW: Prominent Team Access Codes Display */}
       {quiz?.accessCodes && quiz.accessCodes.length >= 2 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 max-w-4xl mx-auto">
           <div className="bg-brand/10 border-2 border-brand/30 rounded-2xl p-4 sm:p-5 text-center shadow-sm">
-            <h4 className="text-lg font-bold text-brand mb-3 flex items-center justify-center gap-2">
-              🔴 TEAM 1 ACCESS CODE
-            </h4>
+            <h4 className="text-lg font-bold text-brand mb-3 flex items-center justify-center gap-2">🔴 TEAM 1 ACCESS CODE</h4>
             <div className="flex items-center justify-center gap-3 bg-background rounded-xl p-3 border border-border">
-              {/* ✅ FIX 3: Prevent oversized code text on phones */}
-              <span className="break-all text-xl font-mono font-bold tracking-wider text-foreground sm:text-3xl">
-                {quiz.accessCodes[0]}
-              </span>
-              <button 
-                onClick={() => navigator.clipboard.writeText(quiz.accessCodes[0])} 
-                className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md shrink-0"
-                title="Copy Team 1 Code"
-              >
+              <span className="break-all text-xl font-mono font-bold tracking-wider text-foreground sm:text-3xl">{quiz.accessCodes[0]}</span>
+              <button onClick={() => navigator.clipboard.writeText(quiz.accessCodes[0])} className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md shrink-0" title="Copy Team 1 Code">
                 <Copy className="w-5 h-5" />
               </button>
             </div>
           </div>
-
           <div className="bg-purple-500/10 border-2 border-purple-500/30 rounded-2xl p-4 sm:p-5 text-center shadow-sm">
-            <h4 className="text-lg font-bold text-purple-600 mb-3 flex items-center justify-center gap-2">
-              🔵 TEAM 2 ACCESS CODE
-            </h4>
+            <h4 className="text-lg font-bold text-purple-600 mb-3 flex items-center justify-center gap-2">🔵 TEAM 2 ACCESS CODE</h4>
             <div className="flex items-center justify-center gap-3 bg-background rounded-xl p-3 border border-border">
-              <span className="break-all text-xl font-mono font-bold tracking-wider text-foreground sm:text-3xl">
-                {quiz.accessCodes[1]}
-              </span>
-              <button 
-                onClick={() => navigator.clipboard.writeText(quiz.accessCodes[1])} 
-                className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md shrink-0"
-                title="Copy Team 2 Code"
-              >
+              <span className="break-all text-xl font-mono font-bold tracking-wider text-foreground sm:text-3xl">{quiz.accessCodes[1]}</span>
+              <button onClick={() => navigator.clipboard.writeText(quiz.accessCodes[1])} className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md shrink-0" title="Copy Team 2 Code">
                 <Copy className="w-5 h-5" />
               </button>
             </div>
@@ -171,11 +138,7 @@ export default function GameShowBoard() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-brand" /> Players Joined</h3>
-                <button 
-                  onClick={handleGenerateReplacementCode}
-                  className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg bg-brand/10 text-brand hover:bg-brand/20 transition font-medium"
-                  title="Generate a new code if a student disconnected"
-                >
+                <button onClick={handleGenerateReplacementCode} className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg bg-brand/10 text-brand hover:bg-brand/20 transition font-medium" title="Generate a new code if a student disconnected">
                   <Plus className="w-3 h-3" /> New Code
                 </button>
               </div>
@@ -184,13 +147,45 @@ export default function GameShowBoard() {
                 <p className="text-sm text-muted-foreground italic">Waiting for students to join...</p>
               ) : (
                 <ul className="space-y-2">
-                  {players.map((player, idx) => (
-                    <li key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-muted border border-border">
-                      <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center text-brand font-bold">{player.name.charAt(0).toUpperCase()}</div>
-                      <span className="font-medium text-foreground">{player.name}</span>
-                      {isLive && <span className="ml-auto w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>}
-                    </li>
-                  ))}
+                  {players.map((player, idx) => {
+                    const isDisqualified = disqualifiedPlayers.includes(player.name);
+                    return (
+                      <li key={idx} className={`flex items-center gap-3 p-3 rounded-xl border border-border transition-all ${isDisqualified ? "bg-destructive/5 border-destructive/20 opacity-60" : "bg-muted"}`}>
+                        <div className={`w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center text-brand font-bold ${isDisqualified ? "grayscale" : ""}`}>
+                          {player.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className={`font-medium flex-1 ${isDisqualified ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                          {player.name}
+                        </span>
+                        
+                        {/* ✅ NEW: 3-Dot Menu */}
+                        <div className="relative group">
+                          <button className="p-2 rounded-lg hover:bg-accent">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          <div className="absolute right-0 top-full mt-1 w-40 bg-card border border-border rounded-lg shadow-lg hidden group-hover:block z-10">
+                            <button 
+                              onClick={() => setDisqualifiedPlayers(prev => 
+                                prev.includes(player.name) ? prev.filter(n => n !== player.name) : [...prev, player.name]
+                              )}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2"
+                            >
+                              <Ban className="w-4 h-4" />
+                              {isDisqualified ? "Restore Player" : "Disqualify"}
+                            </button>
+                            <button 
+                              onClick={() => { navigator.clipboard.writeText(quiz.accessCodes[idx] || code); alert("Code Copied!"); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2"
+                            >
+                              <Copy className="w-4 h-4" /> Copy Code
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {isLive && !isDisqualified && <span className="ml-auto w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -223,8 +218,6 @@ export default function GameShowBoard() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-6"><Activity className="w-5 h-5 text-blue-500" /> Live Battle Results</h3>
-            
-            {/* ✅ FIX 2: Stack team results on phones, side-by-side on larger screens */}
             <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 sm:gap-4">
               <div className="rounded-xl border-2 border-border bg-muted/30 overflow-hidden">
                 <div className="bg-brand/10 border-b border-border p-4 text-center">
@@ -294,7 +287,6 @@ export default function GameShowBoard() {
                 <p className="text-muted-foreground mb-4">
                   {player1Total > player2Total ? `${player1} wins!` : player2Total > player1Total ? `${player2} wins!` : "It's a tie!"}
                 </p>
-                {/* ✅ FIX 3: Responsive final scores grid */}
                 <div className="grid grid-cols-2 gap-3 text-base sm:gap-8 sm:text-xl">
                   <div className="text-center">
                     <p className="font-bold text-foreground">{player1}</p>
@@ -334,20 +326,11 @@ export default function GameShowBoard() {
             <p className="text-sm text-muted-foreground mb-4">Give this new code to the student who disconnected. It will connect them to this exact same live game.</p>
             <div className="flex items-center gap-2 rounded-xl border border-border bg-muted p-4 mb-6">
               <span className="flex-1 font-mono text-2xl font-bold tracking-wider text-foreground text-center">{replacementCode}</span>
-              <button 
-                onClick={() => navigator.clipboard.writeText(replacementCode)} 
-                className="shrink-0 rounded-lg bg-brand p-2.5 text-brand-foreground hover:bg-brand/90 transition" 
-                title="Copy code"
-              >
+              <button onClick={() => navigator.clipboard.writeText(replacementCode)} className="shrink-0 rounded-lg bg-brand p-2.5 text-brand-foreground hover:bg-brand/90 transition" title="Copy code">
                 <Copy className="h-5 w-5" />
               </button>
             </div>
-            <button 
-              onClick={() => setReplacementCode(null)} 
-              className="w-full rounded-xl bg-brand py-3 font-bold text-brand-foreground hover:bg-brand/90 transition"
-            >
-              Done
-            </button>
+            <button onClick={() => setReplacementCode(null)} className="w-full rounded-xl bg-brand py-3 font-bold text-brand-foreground hover:bg-brand/90 transition">Done</button>
           </div>
         </div>
       )}
