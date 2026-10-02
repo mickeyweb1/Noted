@@ -70,6 +70,75 @@ export default function TakeQuiz() {
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
+  // ✅ NEW: Anti-Inspect Protection (Active during quiz)
+  useEffect(() => {
+    if (step !== "quiz") return;
+
+    // Disable right-click context menu
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // Block DevTools keyboard shortcuts
+    const handleKeyDown = (e) => {
+      // F12 key
+      if (e.key === "F12") {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+Shift+I (Inspect)
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+Shift+J (Console)
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+Shift+C (Inspect Element)
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+U (View Source)
+      if (e.ctrlKey && e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        return false;
+      }
+      // F5 and Ctrl+R (Refresh)
+      if (e.key === "F5" || (e.ctrlKey && e.key.toLowerCase() === "r")) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    // Disable text selection (optional, prevents easy copying)
+    const handleSelectStart = (e) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // Disable drag
+    const handleDragStart = (e) => {
+      e.preventDefault();
+      return false;
+    };
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("selectstart", handleSelectStart);
+    document.addEventListener("dragstart", handleDragStart);
+
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("selectstart", handleSelectStart);
+      document.removeEventListener("dragstart", handleDragStart);
+    };
+  }, [step]);
+
   // ✅ Auto-save progress for cross-device resume (Debounced)
   useEffect(() => {
     if (step !== "quiz" || !code) return;
@@ -423,7 +492,7 @@ export default function TakeQuiz() {
     const nearTabLimit = maxTabSwitches && tabSwitchCount >= maxTabSwitches - 2;
 
     return (
-      <div className="min-h-screen bg-muted p-4 md:p-8">
+      <div className="min-h-screen bg-muted p-4 md:p-8 select-none" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
         {/* ✅ NEW: Offline Warning Banner */}
         {isOffline && (
           <div className="max-w-3xl mx-auto mb-4 flex items-center gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 text-yellow-700 dark:text-yellow-400 text-sm font-medium animate-pulse">
@@ -474,7 +543,7 @@ export default function TakeQuiz() {
               const isAnswered = !!answers[q._id];
               return (
                 <section key={q._id} className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby={`q-${q._id}`}>
-                  {q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" />}
+                  {q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" draggable="false" />}
                   <div className="mb-4 flex items-start gap-3">
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${isAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"}`}>
                       {idx + 1}
