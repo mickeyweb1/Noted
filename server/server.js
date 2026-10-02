@@ -57,7 +57,7 @@ app.use((req, res) => res.status(404).json({ success: false, message: `Route not
 app.use(errorHandler);
 
 // ==========================================
-// ✅ PREMIUM & SECURED SOCKET.IO SETUP (FINAL ERROR-FREE VERSION)
+// ✅ PREMIUM & SECURED SOCKET.IO SETUP
 // ==========================================
 const PORT = process.env.PORT || 5000;
 const server = createServer(app);
@@ -68,7 +68,6 @@ const io = new Server(server, {
 
 const activeGames = new Map();
 
-// ✅ FINAL FIX: Only save to database ONCE when the game is 100% complete, then clean up memory
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
     game.savedToDb = true; 
@@ -91,7 +90,6 @@ const saveGameShowResults = async (game) => {
       const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
 
       try {
-        // ✅ FIX: Use findOneAndUpdate with upsert to absolutely prevent duplicate key errors
         await QuizSubmission.findOneAndUpdate(
           { quiz: game.quizId, accessCode: safeAccessCode },
           {
@@ -114,8 +112,6 @@ const saveGameShowResults = async (game) => {
       }
     }
     console.log(`✅ Game show results permanently saved to database for quiz ${game.quizId}`);
-    
-    // ✅ FIX: Clean up memory to prevent server memory leaks after games finish
     activeGames.delete(game.quizId);
   }
 };
@@ -147,6 +143,7 @@ io.on('connection', (socket) => {
           completedCards: [],
           cardResults: [],
           activityLog: [],
+          lastPicker: null, // ✅ NEW: Track who picked last for cooldown
           questions: quiz.questions
         });
       }
@@ -156,13 +153,12 @@ io.on('connection', (socket) => {
       if (role === 'admin') {
         game.adminSocketId = socket.id;
       } else {
-        // ✅ FIX: Safely handle reconnects without duplicating players
         const existingPlayer = game.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
         if (!existingPlayer) {
           game.players.push({ id: socket.id, name: playerName, score: 0 });
           game.scores[playerName] = 0;
         } else {
-          existingPlayer.id = socket.id; // Just update the socket ID for the existing player
+          existingPlayer.id = socket.id;
         }
       }
 
@@ -193,7 +189,15 @@ io.on('connection', (socket) => {
   socket.on('pick_card', ({ quizId, cardIndex, playerName }) => {
     const game = activeGames.get(quizId);
     if (game && game.status === 'live' && !game.activeCard && !game.completedCards.includes(cardIndex)) {
+      
+      // ✅ NEW: Turn-Taking Cooldown Rule
+      if (game.lastPicker === playerName && game.completedCards.length > 0) {
+        console.log(`⚠️ ${playerName} tried to pick twice in a row. Blocked.`);
+        return; 
+      }
+
       game.activeCard = { index: cardIndex, player: playerName, attempt: 1 };
+      game.lastPicker = playerName; // ✅ Track who picked
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
       io.to(quizId).emit('card_locked', { cardIndex, playerName });
     }
@@ -232,7 +236,6 @@ io.on('connection', (socket) => {
       
       game.activeCard = null;
       
-      // ✅ FIX: Only call save function when the game is 100% complete
       if (game.completedCards.length === game.questions.length) {
         await saveGameShowResults(game);
       }
@@ -244,7 +247,6 @@ io.on('connection', (socket) => {
       });
     } else {
       if (game.activeCard.attempt === 1 && !game.activeCard.stealPlayer) {
-        // ✅ FIX: Safer steal logic that filters out Admin and current player
         const otherPlayer = game.players.find(p => 
           p.name.toLowerCase() !== activePlayerLower && p.name.toLowerCase() !== "admin"
         );
@@ -274,7 +276,6 @@ io.on('connection', (socket) => {
       
       game.activeCard = null;
       
-      // ✅ FIX: Only call save function when the game is 100% complete
       if (game.completedCards.length === game.questions.length) {
         await saveGameShowResults(game);
       }
@@ -287,9 +288,52 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ✅ FIX: Removed DB save from disconnect. Reconnects are safely handled by 'join_game' updating the socket ID.
-  socket.on('disconnect', () => {
+  // ✅ RESTORED: Disconnect Auto-Save to prevent data loss on server restarts
+  socket.on('disconnect', async () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
+    
+    for (const [quizId, game] of activeGames.entries()) {
+      const player = game.players.find(p => p.id === socket.id);
+      if (player && game.status === 'live') {
+        console.log(`💾 Auto-saving progress for disconnected player: ${player.name}`);
+        
+        const playerResults = game.cardResults.filter(r => r.player === player.name);
+        const totalScore = playerResults.reduce((sum, r) => sum + r.points, 0);
+        
+        const submissionAnswers = game.questions.map((q, idx) => {
+          const result = playerResults.find(r => r.cardIndex === idx);
+          return {
+            questionId: q._id,
+            selectedAnswer: result ? result.selectedAnswer : 'Skipped',
+            isCorrect: result ? (result.result === 'correct' || result.result === 'steal') : false
+          };
+        });
+
+        const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
+
+        try {
+          await QuizSubmission.findOneAndUpdate(
+            { quiz: game.quizId, accessCode: safeAccessCode },
+            {
+              quiz: game.quizId,
+              studentName: player.name,
+              studentSurname: "GameShow", 
+              studentClass: "Live Match",
+              accessCode: safeAccessCode,
+              answers: submissionAnswers,
+              score: totalScore,
+              totalQuestions: game.questions.length,
+              timeTaken: 0,
+              tabSwitchCount: 0,
+              gameMode: 'gameShow'
+            },
+            { upsert: true, new: true }
+          );
+        } catch (err) {
+          console.error("Failed to auto-save disconnected player result:", err);
+        }
+      }
+    }
   });
 });
 
