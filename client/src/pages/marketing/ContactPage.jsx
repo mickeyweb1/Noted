@@ -9,13 +9,13 @@ const CONTACT_INFO = [
   { 
     icon: Mail, 
     title: "Email Us", 
-    detail: "hello@notedstudy.com", 
+    detail: "anuoluwajanet90@gmail.com", 
     description: "We usually reply within 24 hours."
   },
   { 
     icon: Phone, 
     title: "Call Us", 
-    detail: "+234 (0) 800 000 0000", 
+    detail: "+234 (0) 706 264 0714", 
     description: "Mon-Fri from 8am to 5pm WAT."
   },
   { 
