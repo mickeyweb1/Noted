@@ -97,11 +97,11 @@ export default function SchoolPage() {
                 Register your school
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
+                <Link
                 to="/contact"
                 className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3.5 text-sm font-medium text-foreground transition hover:bg-accent"
               >
-                Book a demo
+                Contact us
               </Link>
             </div>
             
