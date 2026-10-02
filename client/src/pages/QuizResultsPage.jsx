@@ -1,7 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, RefreshCw, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Award } from "lucide-react";
+import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, RefreshCw, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Award, Eye, X } from "lucide-react";
 import api from "../utils/api";
 
 /* ---------- Presentational helpers ---------- */
@@ -160,6 +160,7 @@ export default function QuizResultsPage() {
   const [error, setError] = useState(""); 
   const [expandedSubmission, setExpandedSubmission] = useState(null);
   const [regenModal, setRegenModal] = useState({ open: false, step: 'confirm', code: '', loading: false });
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false); // ✅ NEW: State for Questions Modal
 
   useEffect(() => { fetchResults(); }, [quizId]);
 
@@ -260,6 +261,10 @@ export default function QuizResultsPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* ✅ NEW: View Questions Button */}
+            <button onClick={() => setShowQuestionsModal(true)} className={secondaryBtn}>
+              <Eye className="h-4 w-4" /> View Questions
+            </button>
             <button onClick={handleRegenerateCode} className={secondaryBtn}>
               <RefreshCw className="h-4 w-4" /> Regenerate code
             </button>
@@ -277,7 +282,7 @@ export default function QuizResultsPage() {
           <StatCard icon={Clock} label="Average time">{formatAvgTime(avgTimeSeconds)}</StatCard>
         </div>
 
-        {/* ✅ NEW: Game Show Access Codes Section (Only shows for Game Shows) */}
+        {/* Game Show Access Codes Section */}
         {quizData?.gameMode === 'gameShow' && quizData?.accessCodes && quizData.accessCodes.length >= 2 && (
           <div className="rounded-2xl border-2 border-brand/30 bg-gradient-to-r from-brand/5 to-purple-500/5 p-6 shadow-sm">
             <h3 className="text-lg font-bold text-foreground mb-2 flex items-center gap-2">
@@ -285,32 +290,21 @@ export default function QuizResultsPage() {
             </h3>
             <p className="text-sm text-muted-foreground mb-4">If a student loses their code, you can provide it to them again from here.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Team 1 Code */}
               <div className="bg-brand/5 border-2 border-brand/30 rounded-xl p-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold text-brand uppercase tracking-wider mb-1">Team 1 Code</p>
                   <p className="text-2xl font-mono font-bold text-foreground tracking-widest">{quizData.accessCodes[0]}</p>
                 </div>
-                <button 
-                  onClick={() => navigator.clipboard.writeText(quizData.accessCodes[0])}
-                  className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md flex-shrink-0"
-                  title="Copy Team 1 Code"
-                >
+                <button onClick={() => navigator.clipboard.writeText(quizData.accessCodes[0])} className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md flex-shrink-0" title="Copy Team 1 Code">
                   <Copy className="w-5 h-5" />
                 </button>
               </div>
-
-              {/* Team 2 Code */}
               <div className="bg-purple-500/5 border-2 border-purple-500/30 rounded-xl p-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-1">Team 2 Code</p>
                   <p className="text-2xl font-mono font-bold text-foreground tracking-widest">{quizData.accessCodes[1]}</p>
                 </div>
-                <button 
-                  onClick={() => navigator.clipboard.writeText(quizData.accessCodes[1])}
-                  className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md flex-shrink-0"
-                  title="Copy Team 2 Code"
-                >
+                <button onClick={() => navigator.clipboard.writeText(quizData.accessCodes[1])} className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md flex-shrink-0" title="Copy Team 2 Code">
                   <Copy className="w-5 h-5" />
                 </button>
               </div>
@@ -318,7 +312,7 @@ export default function QuizResultsPage() {
           </div>
         )}
 
-        {/* ✅ Game Show Podium Summary (Only shows for Game Shows with results) */}
+        {/* Game Show Podium Summary */}
         {quizData?.gameMode === 'gameShow' && submissions.length > 0 && (
           <div className="rounded-2xl border-2 border-brand/30 bg-gradient-to-r from-brand/5 to-purple-500/5 p-6 shadow-sm">
             <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
@@ -329,7 +323,6 @@ export default function QuizResultsPage() {
                 const sorted = [...submissions].sort((a, b) => b.score - a.score);
                 const first = sorted[0];
                 const second = sorted[1];
-                
                 return (
                   <>
                     <div className="flex items-center gap-4 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
@@ -340,7 +333,6 @@ export default function QuizResultsPage() {
                         <p className="text-lg font-bold text-yellow-600">{first.score} / {first.totalQuestions} Points</p>
                       </div>
                     </div>
-
                     {second && (
                       <div className="flex items-center gap-4 p-4 rounded-xl bg-gray-400/10 border border-gray-400/20">
                         <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">2</div>
@@ -486,6 +478,7 @@ export default function QuizResultsPage() {
         </div>
       </div>
 
+      {/* Regenerate Code Modal */}
       {regenModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -521,6 +514,32 @@ export default function QuizResultsPage() {
                 <button onClick={() => setRegenModal({ open: false, step: 'confirm', code: '', loading: false })} className={`${primaryBtn} w-full`}>Close</button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: View Questions Modal */}
+      {showQuestionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border bg-card p-6 shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-foreground">Quiz Questions ({quizData?.questions.length})</h3>
+              <button onClick={() => setShowQuestionsModal(false)} className="p-2 rounded-lg hover:bg-accent"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4 overflow-y-auto pr-2">
+              {quizData?.questions.map((q, idx) => (
+                <div key={idx} className="p-4 rounded-xl border border-border bg-muted/30">
+                  <p className="font-bold text-foreground mb-2">Q{idx + 1}. {q.question}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                    {q.options.map((opt, i) => (
+                      <div key={i} className={`p-2 rounded border ${opt === q.correctAnswer ? 'bg-green-500/10 border-green-500/30 text-green-700 font-bold' : 'bg-card border-border text-foreground'}`}>
+                        {String.fromCharCode(65 + i)}. {opt} {opt === q.correctAnswer && <CheckCircle2 className="inline w-4 h-4 ml-1" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
