@@ -87,33 +87,57 @@ export default function GameShowBoard() {
   const player2Total = player2Results.reduce((sum, r) => sum + r.points, 0);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => navigate("/admin/quizzes")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition">
-          <ArrowLeft className="w-5 h-5" /> Exit to Quizzes
-        </button>
+    // ✅ FIX 3: Reduced phone padding
+    <div className="min-h-screen bg-background p-3 sm:p-4 md:p-8">
+      
+      {/* ✅ FIX 1: Mobile-friendly header that stacks cleanly */}
+      <div className="mb-6 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => navigate("/admin/quizzes")}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground transition hover:text-foreground"
+          >
+            <ArrowLeft className="h-5 w-5 shrink-0" />
+            <span>Exit to Quizzes</span>
+          </button>
+
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-accent"
+            aria-label="Refresh game"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </button>
+        </div>
+
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground">{quiz.title}</h1>
-          <p className="text-sm text-muted-foreground font-mono mt-1 flex items-center justify-center gap-2">
-            Current Code: {code} 
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 text-xs font-medium"><Wifi className="w-3 h-3" /> Live</span>
+          <h1 className="break-words text-xl font-bold leading-tight text-foreground sm:text-2xl">
+            {quiz.title}
+          </h1>
+          <p className="mt-2 flex flex-wrap items-center justify-center gap-2 font-mono text-xs text-muted-foreground sm:text-sm">
+            <span>Code: {code}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-600">
+              <Wifi className="h-3 w-3" /> Live
+            </span>
           </p>
         </div>
-        <button onClick={() => window.location.reload()} className="p-2 rounded-lg hover:bg-accent transition"><RefreshCw className="w-5 h-5" /></button>
       </div>
 
       {/* ✅ NEW: Prominent Team Access Codes Display */}
       {quiz?.accessCodes && quiz.accessCodes.length >= 2 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 max-w-4xl mx-auto">
-          <div className="bg-brand/10 border-2 border-brand/30 rounded-2xl p-5 text-center shadow-sm">
+          <div className="bg-brand/10 border-2 border-brand/30 rounded-2xl p-4 sm:p-5 text-center shadow-sm">
             <h4 className="text-lg font-bold text-brand mb-3 flex items-center justify-center gap-2">
               🔴 TEAM 1 ACCESS CODE
             </h4>
             <div className="flex items-center justify-center gap-3 bg-background rounded-xl p-3 border border-border">
-              <span className="text-3xl font-mono font-bold tracking-widest text-foreground">{quiz.accessCodes[0]}</span>
+              {/* ✅ FIX 3: Prevent oversized code text on phones */}
+              <span className="break-all text-xl font-mono font-bold tracking-wider text-foreground sm:text-3xl">
+                {quiz.accessCodes[0]}
+              </span>
               <button 
                 onClick={() => navigator.clipboard.writeText(quiz.accessCodes[0])} 
-                className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md"
+                className="p-3 rounded-lg bg-brand text-white hover:bg-brand/90 transition shadow-md shrink-0"
                 title="Copy Team 1 Code"
               >
                 <Copy className="w-5 h-5" />
@@ -121,15 +145,17 @@ export default function GameShowBoard() {
             </div>
           </div>
 
-          <div className="bg-purple-500/10 border-2 border-purple-500/30 rounded-2xl p-5 text-center shadow-sm">
+          <div className="bg-purple-500/10 border-2 border-purple-500/30 rounded-2xl p-4 sm:p-5 text-center shadow-sm">
             <h4 className="text-lg font-bold text-purple-600 mb-3 flex items-center justify-center gap-2">
               🔵 TEAM 2 ACCESS CODE
             </h4>
             <div className="flex items-center justify-center gap-3 bg-background rounded-xl p-3 border border-border">
-              <span className="text-3xl font-mono font-bold tracking-widest text-foreground">{quiz.accessCodes[1]}</span>
+              <span className="break-all text-xl font-mono font-bold tracking-wider text-foreground sm:text-3xl">
+                {quiz.accessCodes[1]}
+              </span>
               <button 
                 onClick={() => navigator.clipboard.writeText(quiz.accessCodes[1])} 
-                className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md"
+                className="p-3 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition shadow-md shrink-0"
                 title="Copy Team 2 Code"
               >
                 <Copy className="w-5 h-5" />
@@ -198,7 +224,8 @@ export default function GameShowBoard() {
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <h3 className="font-semibold text-foreground flex items-center gap-2 mb-6"><Activity className="w-5 h-5 text-blue-500" /> Live Battle Results</h3>
             
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            {/* ✅ FIX 2: Stack team results on phones, side-by-side on larger screens */}
+            <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 sm:gap-4">
               <div className="rounded-xl border-2 border-border bg-muted/30 overflow-hidden">
                 <div className="bg-brand/10 border-b border-border p-4 text-center">
                   <h4 className="text-xl font-bold text-foreground">{player1}</h4>
@@ -267,14 +294,15 @@ export default function GameShowBoard() {
                 <p className="text-muted-foreground mb-4">
                   {player1Total > player2Total ? `${player1} wins!` : player2Total > player1Total ? `${player2} wins!` : "It's a tie!"}
                 </p>
-                <div className="flex justify-center gap-8 text-xl">
+                {/* ✅ FIX 3: Responsive final scores grid */}
+                <div className="grid grid-cols-2 gap-3 text-base sm:gap-8 sm:text-xl">
                   <div className="text-center">
                     <p className="font-bold text-foreground">{player1}</p>
-                    <p className="text-3xl font-bold text-brand">{player1Total} pts</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-brand">{player1Total} pts</p>
                   </div>
                   <div className="text-center">
                     <p className="font-bold text-foreground">{player2}</p>
-                    <p className="text-3xl font-bold text-brand">{player2Total} pts</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-brand">{player2Total} pts</p>
                   </div>
                 </div>
               </div>
