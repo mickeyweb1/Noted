@@ -9,6 +9,7 @@ const navItems = [
   { to: "/school", label: "For School" },
   { to: "/student", label: "For Student" }, 
   { to: "/personal", label: "For Personal" },
+  { to: "/contact", label: "Contact"}
 ];
 
 export default function MarketingLayout({ children }) {
