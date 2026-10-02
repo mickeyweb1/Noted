@@ -1,3 +1,4 @@
+import { SupportTicket } from '../models/SupportTicket.js';
 import { sendContactEmail } from '../utils/sendEmail.js';
 
 export const submitContactForm = async (req, res, next) => {
@@ -8,7 +9,20 @@ export const submitContactForm = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Please fill in all required fields." });
     }
 
-    // Send the email in the background
+    // ✅ NEW: Save the message to the SupportTicket database 
+    // so it shows up in your Super Admin Support Inbox!
+    await SupportTicket.create({
+      userId: null, // Guest submission (not logged in)
+      userRole: 'guest',
+      userName: `${firstName} ${lastName}`,
+      contactEmail: email,
+      contactPhone: '', // Can be added to the frontend form later if you want
+      subject: role ? `Contact Form: ${role}` : 'General Inquiry',
+      message: message,
+      status: 'pending'
+    });
+
+    // Send the email in the background (keeping your existing functionality)
     sendContactEmail(firstName, lastName, email, role, message).catch(err => {
       console.error("Contact email notification failed:", err.message);
     });
