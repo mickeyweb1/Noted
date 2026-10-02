@@ -57,7 +57,7 @@ app.use((req, res) => res.status(404).json({ success: false, message: `Route not
 app.use(errorHandler);
 
 // ==========================================
-// ✅ PREMIUM & SECURED SOCKET.IO SETUP
+// ✅ PREMIUM & SECURED SOCKET.IO SETUP (FINAL ERROR-FREE VERSION)
 // ==========================================
 const PORT = process.env.PORT || 5000;
 const server = createServer(app);
@@ -68,13 +68,13 @@ const io = new Server(server, {
 
 const activeGames = new Map();
 
-// ✅ Automatically save game show results to the database when the game ends
+// ✅ FINAL FIX: Only save to database ONCE when the game is 100% complete, then clean up memory
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
     game.savedToDb = true; 
     
     for (const player of game.players) {
-      if (player.name === "Admin") continue;
+      if (player.name === "Admin" || player.name.toLowerCase() === "admin") continue;
       
       const playerResults = game.cardResults.filter(r => r.player === player.name);
       const totalScore = playerResults.reduce((sum, r) => sum + r.points, 0);
@@ -88,25 +88,35 @@ const saveGameShowResults = async (game) => {
         };
       });
 
+      const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
+
       try {
-        await QuizSubmission.create({
-          quiz: game.quizId,
-          studentName: player.name,
-          studentSurname: "GameShow", 
-          studentClass: "Live Match",
-          accessCode: `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`, 
-          answers: submissionAnswers,
-          score: totalScore,
-          totalQuestions: game.questions.length,
-          timeTaken: 0,
-          tabSwitchCount: 0,
-          gameMode: 'gameShow' 
-        });
+        // ✅ FIX: Use findOneAndUpdate with upsert to absolutely prevent duplicate key errors
+        await QuizSubmission.findOneAndUpdate(
+          { quiz: game.quizId, accessCode: safeAccessCode },
+          {
+            quiz: game.quizId,
+            studentName: player.name,
+            studentSurname: "GameShow", 
+            studentClass: "Live Match",
+            accessCode: safeAccessCode,
+            answers: submissionAnswers,
+            score: totalScore,
+            totalQuestions: game.questions.length,
+            timeTaken: 0,
+            tabSwitchCount: 0,
+            gameMode: 'gameShow'
+          },
+          { upsert: true, new: true }
+        );
       } catch (err) {
         console.error("Failed to save game show result:", err);
       }
     }
     console.log(`✅ Game show results permanently saved to database for quiz ${game.quizId}`);
+    
+    // ✅ FIX: Clean up memory to prevent server memory leaks after games finish
+    activeGames.delete(game.quizId);
   }
 };
 
@@ -146,12 +156,13 @@ io.on('connection', (socket) => {
       if (role === 'admin') {
         game.adminSocketId = socket.id;
       } else {
+        // ✅ FIX: Safely handle reconnects without duplicating players
         const existingPlayer = game.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
         if (!existingPlayer) {
           game.players.push({ id: socket.id, name: playerName, score: 0 });
           game.scores[playerName] = 0;
         } else {
-          existingPlayer.id = socket.id;
+          existingPlayer.id = socket.id; // Just update the socket ID for the existing player
         }
       }
 
@@ -220,7 +231,11 @@ io.on('connection', (socket) => {
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${exactPlayerName} got it right! (+${points} pts)` });
       
       game.activeCard = null;
-      await saveGameShowResults(game); 
+      
+      // ✅ FIX: Only call save function when the game is 100% complete
+      if (game.completedCards.length === game.questions.length) {
+        await saveGameShowResults(game);
+      }
 
       io.to(quizId).emit('answer_result', { 
         isCorrect: true, points, scores: game.scores, 
@@ -229,7 +244,11 @@ io.on('connection', (socket) => {
       });
     } else {
       if (game.activeCard.attempt === 1 && !game.activeCard.stealPlayer) {
-        const otherPlayer = game.players.find(p => p.name.toLowerCase() !== activePlayerLower && p.name !== "Admin");
+        // ✅ FIX: Safer steal logic that filters out Admin and current player
+        const otherPlayer = game.players.find(p => 
+          p.name.toLowerCase() !== activePlayerLower && p.name.toLowerCase() !== "admin"
+        );
+        
         if (otherPlayer) {
           game.activeCard.attempt = 2;
           game.activeCard.stealPlayer = otherPlayer.name;
@@ -254,7 +273,11 @@ io.on('connection', (socket) => {
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed it. Card closed.` });
       
       game.activeCard = null;
-      await saveGameShowResults(game); 
+      
+      // ✅ FIX: Only call save function when the game is 100% complete
+      if (game.completedCards.length === game.questions.length) {
+        await saveGameShowResults(game);
+      }
 
       io.to(quizId).emit('answer_result', { 
         isCorrect: false, scores: game.scores, 
@@ -264,46 +287,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ✅ SAFETY NET: If a student disconnects mid-game, save their current score immediately!
-  socket.on('disconnect', async () => {
+  // ✅ FIX: Removed DB save from disconnect. Reconnects are safely handled by 'join_game' updating the socket ID.
+  socket.on('disconnect', () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
-    
-    for (const [quizId, game] of activeGames.entries()) {
-      const player = game.players.find(p => p.id === socket.id);
-      if (player && game.status === 'live') {
-        console.log(`💾 Saving progress for disconnected player: ${player.name}`);
-        
-        const playerResults = game.cardResults.filter(r => r.player === player.name);
-        const totalScore = playerResults.reduce((sum, r) => sum + r.points, 0);
-        
-        const submissionAnswers = game.questions.map((q, idx) => {
-          const result = playerResults.find(r => r.cardIndex === idx);
-          return {
-            questionId: q._id,
-            selectedAnswer: result ? result.selectedAnswer : 'Skipped',
-            isCorrect: result ? (result.result === 'correct' || result.result === 'steal') : false
-          };
-        });
-
-        try {
-          await QuizSubmission.create({
-            quiz: game.quizId,
-            studentName: player.name,
-            studentSurname: "GameShow", 
-            studentClass: "Live Match",
-            accessCode: `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`,
-            answers: submissionAnswers,
-            score: totalScore,
-            totalQuestions: game.questions.length,
-            timeTaken: 0,
-            tabSwitchCount: 0,
-            gameMode: 'gameShow'
-          });
-        } catch (err) {
-          console.error("Failed to save disconnected player result:", err);
-        }
-      }
-    }
   });
 });
 
