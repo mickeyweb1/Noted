@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Trophy, User, CheckCircle2, XCircle, Clock, Wifi, AlertTriangle, Award, Medal } from "lucide-react";
+import { Trophy, User, CheckCircle2, XCircle, Clock, Wifi, AlertTriangle, Award, Medal, ListChecks, Zap } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
@@ -58,7 +58,6 @@ export default function GameShowLobby() {
   const [showConfetti, setShowConfetti] = useState(false);
   
   const timerRef = useRef(null);
-  // ✅ FIX: Ref to prevent stale closure in timer
   const activeCardRef = useRef(null);
   useEffect(() => { activeCardRef.current = activeCard; }, [activeCard]);
 
@@ -88,14 +87,13 @@ export default function GameShowLobby() {
     socket.on("card_locked", ({ cardIndex, playerName }) => {
       setActiveCard({ index: cardIndex, player: playerName });
       if (playerName === studentName) {
-        // ✅ FIX: Correctly calculate time based on timeUnit (minutes vs seconds)
         const totalTime = quizData.timeUnit === 'minutes' ? quizData.timeLimit * 60 : quizData.timeLimit;
         setTimeLeft(totalTime);
         startTimer();
       }
     });
 
-        socket.on("answer_result", (data) => {
+    socket.on("answer_result", (data) => {
       setActiveCard(null);
       setSelectedAnswer(null);
       setGameState((prev) => ({ ...prev, scores: data.scores, completedCards: data.completedCards, cardResults: data.cardResults, activityLog: data.activityLog }));
@@ -111,16 +109,15 @@ export default function GameShowLobby() {
 
       setStep("playing");
       
-           if (data.isCorrect) {
+      if (data.isCorrect) {
         setFeedback({ type: 'success', message: `🎉 Correct! +${data.points} Points!` });
       } else if (data.isStealOpportunity) {
         if (data.stealPlayer === studentName) {
           setFeedback({ type: 'steal', message: `⚡ ${data.stealPlayer} missed! You can STEAL for +${quizData.bonusMarks || 5} pts!` });
           setActiveCard({ index: activeCard.index, player: studentName, isSteal: true });
           
-          // ✅ REPLACE THESE TWO LINES TO CALCULATE HALF TIME:
           const baseTime = quizData.timeUnit === 'minutes' ? quizData.timeLimit * 60 : quizData.timeLimit;
-          const stealTime = Math.ceil(baseTime / 2); // Rounds up to ensure at least 1 second
+          const stealTime = Math.ceil(baseTime / 2); 
           setTimeLeft(stealTime);
           startTimer();
           
@@ -149,7 +146,6 @@ export default function GameShowLobby() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          // ✅ FIX: Use ref to ensure activeCard is not null/stale
           if (activeCardRef.current && quizId) {
             socket.emit("submit_answer", { 
               quizId, 
@@ -175,7 +171,6 @@ export default function GameShowLobby() {
       const data = res.data.data;
       setQuizData(data);
       setQuizId(data.quizId);
-      // ✅ FIX: Explicitly send quizId to the socket
       socket.emit("join_game", { code, playerName: studentName, role: "student", quizId: data.quizId });
       setStep("waiting");
     } catch (err) {
@@ -281,6 +276,7 @@ export default function GameShowLobby() {
               </div>
             )}
           </div>
+          
           <div className="pt-8 border-t border-border">
             <p className="text-muted-foreground mb-2">Final Scores</p>
             <div className="flex justify-center gap-8 text-lg">
@@ -292,6 +288,38 @@ export default function GameShowLobby() {
               ))}
             </div>
           </div>
+
+          {/* ✅ NEW: Question Breakdown for Students */}
+          <div className="pt-8 border-t border-border text-left">
+            <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2 justify-center">
+              <ListChecks className="w-5 h-5 text-brand" /> Question Breakdown
+            </h3>
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+              {quizData?.questions.map((q, idx) => {
+                const result = gameState?.cardResults?.find(r => r.cardIndex === idx);
+                return (
+                  <div key={idx} className="p-4 rounded-xl border border-border bg-muted/30">
+                    <p className="font-medium text-foreground mb-2 text-sm">Q{idx + 1}. {q.question}</p>
+                    {result ? (
+                      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${
+                        result.result === 'correct' ? 'bg-green-500/10 text-green-600' :
+                        result.result === 'steal' ? 'bg-purple-500/10 text-purple-600' :
+                        'bg-destructive/10 text-destructive'
+                      }`}>
+                        {result.result === 'correct' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                        {result.result === 'steal' && <Zap className="w-3.5 h-3.5" />}
+                        {result.result === 'wrong' && <XCircle className="w-3.5 h-3.5" />}
+                        {result.result === 'wrong' ? 'No one got it' : `${result.player} got it! (+${result.points} pts)`}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Not played</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
         </div>
       </div>
     );
