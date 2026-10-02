@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award, Copy, Plus, MoreVertical, Ban } from "lucide-react";
+import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award, Copy, Plus, MoreVertical, Ban, Eye, X } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const socketUrl = apiUrl.replace(/\/api$/, ""); 
+
 const socket = io(socketUrl, { withCredentials: true });
 
 export default function GameShowBoard() {
@@ -18,7 +19,8 @@ export default function GameShowBoard() {
   const [gameState, setGameState] = useState(null);
   const [replacementCode, setReplacementCode] = useState(null);
   const [error, setError] = useState(""); 
-  const [disqualifiedPlayers, setDisqualifiedPlayers] = useState([]); // ✅ NEW: Track disqualified
+  const [disqualifiedPlayers, setDisqualifiedPlayers] = useState([]);
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false); // ✅ NEW: Questions modal state
 
   useEffect(() => {
     if (code) fetchQuizData();
@@ -91,11 +93,11 @@ export default function GameShowBoard() {
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <button onClick={() => navigate("/admin/quizzes")} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground transition hover:text-foreground">
-            <ArrowLeft className="h-5 h-5 shrink-0" />
+            <ArrowLeft className="h-5 w-5 shrink-0" />
             <span>Exit to Quizzes</span>
           </button>
           <button onClick={() => window.location.reload()} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-accent" aria-label="Refresh game">
-            <RefreshCw className="h-5 h-5" />
+            <RefreshCw className="h-5 w-5" />
           </button>
         </div>
         <div className="text-center">
@@ -106,6 +108,13 @@ export default function GameShowBoard() {
               <Wifi className="h-3 w-3" /> Live
             </span>
           </p>
+          {/* ✅ NEW: View All Questions Button */}
+          <button
+            onClick={() => setShowQuestionsModal(true)}
+            className="mt-3 inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent shadow-sm"
+          >
+            <Eye className="h-4 w-4 text-brand" /> View All Questions
+          </button>
         </div>
       </div>
 
@@ -158,7 +167,6 @@ export default function GameShowBoard() {
                           {player.name}
                         </span>
                         
-                        {/* ✅ NEW: 3-Dot Menu */}
                         <div className="relative group">
                           <button className="p-2 rounded-lg hover:bg-accent">
                             <MoreVertical className="w-4 h-4" />
@@ -319,6 +327,7 @@ export default function GameShowBoard() {
         </div>
       </div>
 
+      {/* Replacement Code Modal */}
       {replacementCode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -331,6 +340,39 @@ export default function GameShowBoard() {
               </button>
             </div>
             <button onClick={() => setReplacementCode(null)} className="w-full rounded-xl bg-brand py-3 font-bold text-brand-foreground hover:bg-brand/90 transition">Done</button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: View All Questions Modal */}
+      {showQuestionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border bg-card p-6 shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+              <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <Eye className="w-5 h-5 text-brand" /> All Questions ({quiz.questions.length})
+              </h3>
+              <button onClick={() => setShowQuestionsModal(false)} className="p-2 rounded-lg hover:bg-accent" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4 overflow-y-auto pr-2">
+              {quiz.questions.map((q, idx) => (
+                <div key={idx} className="p-4 rounded-xl border border-border bg-muted/30">
+                  <p className="font-bold text-foreground mb-2">Q{idx + 1}. {q.question}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                    {q.options.map((opt, i) => (
+                      <div key={i} className={`p-2 rounded border ${opt === q.correctAnswer ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400 font-bold' : 'bg-card border-border text-foreground'}`}>
+                        {String.fromCharCode(65 + i)}. {opt} {opt === q.correctAnswer && <CheckCircle2 className="inline w-4 h-4 ml-1" />}
+                      </div>
+                    ))}
+                  </div>
+                  {q.explanation && (
+                    <p className="mt-2 text-xs text-muted-foreground"><span className="font-semibold text-foreground">Explanation:</span> {q.explanation}</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
