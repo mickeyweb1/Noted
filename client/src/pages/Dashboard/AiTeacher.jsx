@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   Send, Volume2, Bot, User, Sparkles, Mic, BookOpen, Square, 
-  Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, RotateCcw, Loader2
+  Target, CheckCircle2, XCircle, Trophy, Brain, Trash2, RotateCcw, Loader2, Copy, Check
 } from "lucide-react";
 import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
@@ -115,6 +115,7 @@ export default function AiTeacher() {
   const [activeAudioId, setActiveAudioId] = useState(null);
   const [loadingAudioId, setLoadingAudioId] = useState(null);
   const [generatingQuizId, setGeneratingQuizId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null); // ✅ FIX 1: Added state for copy button
   
   const activeAudioRef = useRef(null);
   const ttsRequestRef = useRef(0);
@@ -129,10 +130,17 @@ export default function AiTeacher() {
   useEffect(() => {
     return () => {
       ttsRequestRef.current += 1;
-      if (activeAudioRef.current) activeAudioRef.current.pause();
-      window.speechSynthesis.cancel();
+      // ✅ FIX 2: REMOVED the pause/cancel lines! 
+      // Now the audio will keep playing in the background even if you navigate to another page.
     };
   }, []);
+
+  // ✅ FIX 1: Copy function
+  const handleCopyText = (msgId, text) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(msgId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -220,7 +228,8 @@ export default function AiTeacher() {
         title: 'Chat Concept Quiz',
         subject: 'General',
         numQuestions: 3,
-        difficulty: 'Medium'
+        difficulty: 'Easy', // ✅ FIX 4: Changed from Medium to Easy
+        instructions: "Generate simple, straightforward questions suitable for high school students. Avoid overly complex university-level scenarios, advanced C++ memory management, or deep computer science jargon unless the source text specifically demands it." // ✅ FIX 4: Added strict instructions
       });
 
       let quizData = null;
@@ -285,7 +294,6 @@ export default function AiTeacher() {
             <div className={`max-w-[80%] space-y-2 flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
               {(msg.role === "user" || msg.role === "ai") && (
                 <div className={`p-4 rounded-2xl text-sm shadow-sm ${msg.role === "user" ? "bg-brand text-brand-foreground" : "bg-card border border-border text-foreground"}`}>
-                  {/* ✅ UPDATED: Added remarkMath and rehypeKatex to render beautiful equations in chat */}
                   <ReactMarkdown 
                     remarkPlugins={[remarkGfm, remarkMath]} 
                     rehypePlugins={[rehypeKatex]}
@@ -314,6 +322,12 @@ export default function AiTeacher() {
                     {loadingAudioId === msg.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : activeAudioId === msg.id ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     {loadingAudioId === msg.id ? "Loading..." : activeAudioId === msg.id ? "Stop" : "Listen"}
                   </button>
+                  
+                  {/* ✅ FIX 1: Copy Button Added */}
+                  <button onClick={() => handleCopyText(msg.id, msg.text)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border hover:bg-accent transition-all">
+                    {copiedId === msg.id ? <><Check className="w-3.5 h-3.5 text-green-500" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Notes</>}
+                  </button>
+
                   <button onClick={() => handleGenerateQuizFromChat(msg.text, msg.id)} disabled={generatingQuizId === msg.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-electric/10 text-electric border border-electric/20 hover:bg-electric/20 transition-all disabled:opacity-50">
                     {generatingQuizId === msg.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</> : <><Target className="w-3.5 h-3.5" /> Turn into Quiz</>}
                   </button>
