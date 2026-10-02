@@ -10,6 +10,8 @@ import {
   MessageCircle,
   Bell,
   RefreshCw,
+  Volume2,
+  Square,
 } from "lucide-react";
 import api from "../utils/api";
 import NoteScanner from "../components/NoteScanner";
@@ -32,6 +34,13 @@ export default function VideoGenerator() {
   const [isFinished, setIsFinished] = useState(false);
   const [regeneratingScene, setRegeneratingScene] = useState(null);
   const [statusMessage, setStatusMessage] = useState("Generating scenes...");
+
+  // ✅ NEW: Voiceover state
+  const [narratingIndex, setNarratingIndex] = useState(null);
+  const [isNarratingAll, setIsNarratingAll] = useState(false);
+  const narrationAudioRef = useRef(null);
+  const narrationTokenRef = useRef(0);
+  const narrationResolveRef = useRef(null);
 
   const [libraryNotes, setLibraryNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState("");
@@ -60,6 +69,16 @@ export default function VideoGenerator() {
     }
   }, []);
 
+  // ✅ Stop narration cleanly when leaving the page
+  useEffect(() => {
+    return () => {
+      narrationTokenRef.current += 1;
+      if (narrationAudioRef.current) { narrationAudioRef.current.pause(); narrationAudioRef.current = null; }
+      window.speechSynthesis.cancel();
+      if (narrationResolveRef.current) narrationResolveRef.current();
+    };
+  }, []);
+
   useEffect(() => {
     let timeoutId;
 
@@ -82,7 +101,7 @@ export default function VideoGenerator() {
             if ("Notification" in window && Notification.permission === "granted") {
               new Notification("Noted AI Video Ready!", { body: `Your video "${videoTitle}" has finished generating!` });
             }
-            return; // Stop polling
+            return;
           }
         }
       } catch (err) { 
@@ -99,6 +118,70 @@ export default function VideoGenerator() {
 
     return () => clearTimeout(timeoutId);
   }, [videoId, isFinished]);
+
+  /* ========== ✅ NEW: VOICEOVER HELPERS (Uses existing /ai/text-to-speech — NO backend changes!) ========== */
+  const stopNarration = () => {
+    narrationTokenRef.current += 1;
+    if (narrationAudioRef.current) { narrationAudioRef.current.pause(); narrationAudioRef.current = null; }
+    window.speechSynthesis.cancel();
+    if (narrationResolveRef.current) { narrationResolveRef.current(); narrationResolveRef.current = null; }
+    setNarratingIndex(null);
+    setIsNarratingAll(false);
+  };
+
+  const speakFallback = (text, onDone) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onend = onDone;
+    utterance.onerror = onDone;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const playNarration = (text) => new Promise((resolve) => {
+    const token = narrationTokenRef.current;
+    const finish = () => { narrationResolveRef.current = null; resolve(); };
+    narrationResolveRef.current = finish;
+    if (!text) return finish();
+
+    api.post('/ai/text-to-speech', { text, style: 'tutor', voiceId: "pNInz6obpgDQGcFmaJgB" }, { responseType: 'blob' })
+      .then((res) => {
+        if (token !== narrationTokenRef.current) return finish();
+        const url = URL.createObjectURL(res.data);
+        const audio = new Audio(url);
+        narrationAudioRef.current = audio;
+        audio.onended = () => { URL.revokeObjectURL(url); narrationAudioRef.current = null; finish(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); narrationAudioRef.current = null; speakFallback(text, finish); };
+        audio.play().catch(() => speakFallback(text, finish));
+      })
+      .catch(() => {
+        if (token === narrationTokenRef.current) speakFallback(text, finish);
+        else finish();
+      });
+  });
+
+  const handleNarrateScene = async (index) => {
+    stopNarration();
+    const token = narrationTokenRef.current;
+    setNarratingIndex(index);
+    await playNarration(scenes[index]?.narration || "");
+    if (narrationTokenRef.current === token) setNarratingIndex(null);
+  };
+
+  const handleNarrateAll = async () => {
+    stopNarration();
+    const token = narrationTokenRef.current;
+    setIsNarratingAll(true);
+    for (let i = 0; i < scenes.length; i++) {
+      if (narrationTokenRef.current !== token) return;
+      setNarratingIndex(i);
+      await playNarration(scenes[i]?.narration || "");
+      if (narrationTokenRef.current !== token) return;
+    }
+    if (narrationTokenRef.current === token) {
+      setNarratingIndex(null);
+      setIsNarratingAll(false);
+    }
+  };
+  /* ========== END VOICEOVER HELPERS ========== */
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -132,7 +215,7 @@ export default function VideoGenerator() {
       const res = await api.post("/ai/video/generate-storyboard", {
         text: notes,
         aspectRatio,
-        outputMode, // Always "story"
+        outputMode,
       });
       if (res.data.success) {
         setVideoId(res.data.data._id);
@@ -272,7 +355,6 @@ export default function VideoGenerator() {
             </select>
           </div>
           
-          {/* ✅ REPLACED: Output Mode dropdown with a static info badge */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
               Output Mode
@@ -323,33 +405,63 @@ export default function VideoGenerator() {
 
       {scenes.length > 0 && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-          <h2 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
-            <Film className="w-5 h-5 text-blue-500" /> {videoTitle}
-          </h2>
+          {/* ✅ NEW: Title row with "Narrate All" button */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
+              <Film className="w-5 h-5 text-blue-500" /> {videoTitle}
+            </h2>
+            <button
+              onClick={isNarratingAll ? stopNarration : handleNarrateAll}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                isNarratingAll
+                  ? "bg-destructive text-white hover:bg-destructive/90"
+                  : "bg-brand text-brand-foreground hover:bg-brand/90 shadow-sm"
+              }`}
+            >
+              {isNarratingAll ? <Square className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {isNarratingAll ? "Stop Narration" : "Narrate All Scenes"}
+            </button>
+          </div>
 
           <div className="space-y-4">
             {scenes.map((scene, index) => (
               <div
                 key={index}
-                className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-4"
+                className={`rounded-2xl border bg-card p-5 shadow-sm space-y-4 transition-all ${
+                  narratingIndex === index ? "border-brand ring-2 ring-brand/20" : "border-border"
+                }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="font-bold text-foreground flex items-center gap-2">
                     <span className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm">
                       {scene.sceneNumber}
                     </span>
                     Scene {scene.sceneNumber}
                   </h3>
-                  <button
-                    onClick={() => handleRegenerateScene(scene, index)}
-                    disabled={regeneratingScene === index}
-                    className="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs font-bold hover:bg-accent transition-all flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <RefreshCw
-                      className={`w-3 h-3 ${regeneratingScene === index ? "animate-spin" : ""}`}
-                    />{" "}
-                    Regenerate
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* ✅ NEW: Per-scene Voiceover button */}
+                    <button
+                      onClick={() => narratingIndex === index ? stopNarration() : handleNarrateScene(index)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                        narratingIndex === index
+                          ? "bg-destructive/10 text-destructive hover:bg-destructive/20"
+                          : "bg-brand/10 text-brand hover:bg-brand/20"
+                      }`}
+                    >
+                      {narratingIndex === index ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                      {narratingIndex === index ? "Stop" : "Voiceover"}
+                    </button>
+                    <button
+                      onClick={() => handleRegenerateScene(scene, index)}
+                      disabled={regeneratingScene === index}
+                      className="px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs font-bold hover:bg-accent transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <RefreshCw
+                        className={`w-3 h-3 ${regeneratingScene === index ? "animate-spin" : ""}`}
+                      />{" "}
+                      Regenerate
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
