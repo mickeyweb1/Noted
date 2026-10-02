@@ -10,19 +10,18 @@ export const submitContactForm = async (req, res, next) => {
     }
 
     // ✅ NEW: Save the message to the SupportTicket database 
-    // so it shows up in your Super Admin Support Inbox!
     await SupportTicket.create({
       userId: null, // Guest submission (not logged in)
       userRole: 'guest',
       userName: `${firstName} ${lastName}`,
       contactEmail: email,
-      contactPhone: '', // Can be added to the frontend form later if you want
+      contactPhone: '', 
       subject: role ? `Contact Form: ${role}` : 'General Inquiry',
       message: message,
       status: 'pending'
     });
 
-    // Send the email in the background (keeping your existing functionality)
+    // Send the email in the background
     sendContactEmail(firstName, lastName, email, role, message).catch(err => {
       console.error("Contact email notification failed:", err.message);
     });
