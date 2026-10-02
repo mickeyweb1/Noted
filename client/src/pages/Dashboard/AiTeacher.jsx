@@ -6,8 +6,6 @@ import {
 import api from "../../utils/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-// ✅ NEW: Import the math rendering plugins and CSS
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css"; 
@@ -21,6 +19,10 @@ const ELEVENLABS_VOICES = [
 ];
 
 const STORAGE_KEY = "noted_ai_tutor_messages";
+
+// ✅ GLOBAL AUDIO STORE: Lives outside the component so narration
+// keeps playing even when the student navigates to another page.
+const ttsStore = { audio: null, messageId: null, browserVoice: false, requestId: 0 };
 
 const matchesCorrect = (q, opt) => {
   const o = typeof opt === "string" ? opt.trim().toLowerCase() : "";
@@ -115,11 +117,7 @@ export default function AiTeacher() {
   const [activeAudioId, setActiveAudioId] = useState(null);
   const [loadingAudioId, setLoadingAudioId] = useState(null);
   const [generatingQuizId, setGeneratingQuizId] = useState(null);
-  const [copiedId, setCopiedId] = useState(null); // ✅ FIX 1: Added state for copy button
-  
-  const activeAudioRef = useRef(null);
-  const ttsRequestRef = useRef(0);
-  const updateActiveAudio = (audio) => { activeAudioRef.current = audio; };
+  const [copiedId, setCopiedId] = useState(null);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -127,15 +125,24 @@ export default function AiTeacher() {
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); }, [messages]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isLoading]);
 
+  // ✅ On mount: restore the "Stop/playing" UI if narration is still running from another page.
+  // ✅ On unmount: we do NOTHING, so the voice keeps playing across pages.
   useEffect(() => {
-    return () => {
-      ttsRequestRef.current += 1;
-      // ✅ FIX 2: REMOVED the pause/cancel lines! 
-      // Now the audio will keep playing in the background even if you navigate to another page.
-    };
+    const stillPlaying =
+      (ttsStore.audio && !ttsStore.audio.paused && !ttsStore.audio.ended) ||
+      (ttsStore.browserVoice && window.speechSynthesis.speaking);
+    if (stillPlaying && ttsStore.messageId) setActiveAudioId(ttsStore.messageId);
   }, []);
 
-  // ✅ FIX 1: Copy function
+  const stopPlayback = () => {
+    if (ttsStore.audio) { ttsStore.audio.pause(); ttsStore.audio = null; }
+    window.speechSynthesis.cancel();
+    ttsStore.browserVoice = false;
+    ttsStore.messageId = null;
+    setActiveAudioId(null);
+    setLoadingAudioId(null);
+  };
+
   const handleCopyText = (msgId, text) => {
     navigator.clipboard.writeText(text);
     setCopiedId(msgId);
@@ -165,12 +172,20 @@ export default function AiTeacher() {
 
   const speakWithBrowser = (messageId, cleanText, requestId) => {
     const chunks = (cleanText.match(/[^.!?\n]+[.!?]*/g) || [cleanText]).map((s) => s.trim()).filter(Boolean);
-    if (chunks.length === 0) { setActiveAudioId(null); return; }
+    if (chunks.length === 0) { setActiveAudioId(null); ttsStore.messageId = null; return; }
+    ttsStore.browserVoice = true;
+    ttsStore.messageId = messageId;
     setActiveAudioId(messageId);
     chunks.forEach((chunk, i) => {
       const utterance = new SpeechSynthesisUtterance(chunk);
       if (i === chunks.length - 1) {
-        utterance.onend = () => { if (requestId === ttsRequestRef.current) setActiveAudioId(null); };
+        utterance.onend = () => {
+          if (requestId === ttsStore.requestId) {
+            ttsStore.browserVoice = false;
+            ttsStore.messageId = null;
+            setActiveAudioId(null);
+          }
+        };
       }
       window.speechSynthesis.speak(utterance);
     });
@@ -178,43 +193,42 @@ export default function AiTeacher() {
 
   const toggleAudioPlayback = async (messageId, text) => {
     const cleanText = text.replace(/```[\s\S]*?```/g, "").replace(/`([^`]*)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^\s*>\s?/gm, "").replace(/[*#]/g, "").trim();
-    const requestId = ++ttsRequestRef.current;
+    const requestId = ++ttsStore.requestId;
 
     if (activeAudioId === messageId || loadingAudioId === messageId) {
-      if (activeAudioRef.current) { activeAudioRef.current.pause(); updateActiveAudio(null); }
-      window.speechSynthesis.cancel();
-      setActiveAudioId(null);
-      setLoadingAudioId(null);
+      stopPlayback();
       return;
     }
 
-    if (activeAudioRef.current) { activeAudioRef.current.pause(); updateActiveAudio(null); }
-    window.speechSynthesis.cancel();
-    setLoadingAudioId(null);
+    stopPlayback();
     if (!cleanText) return;
 
     setActiveAudioId(messageId);
     setLoadingAudioId(messageId);
     try {
       const response = await api.post('/ai/text-to-speech', { text: cleanText, style: 'tutor', voiceId: "pNInz6obpgDQGcFmaJgB" }, { responseType: 'blob' });
-      if (requestId !== ttsRequestRef.current) return;
+      if (requestId !== ttsStore.requestId) return;
 
       setLoadingAudioId(null);
       const audioUrl = URL.createObjectURL(response.data);
       const audio = new Audio(audioUrl);
-      updateActiveAudio(audio);
-      
-      audio.onended = () => { setActiveAudioId(null); updateActiveAudio(null); URL.revokeObjectURL(audioUrl); };
+      ttsStore.audio = audio;
+      ttsStore.messageId = messageId;
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (requestId === ttsStore.requestId) stopPlayback();
+      };
       audio.onerror = () => {
         URL.revokeObjectURL(audioUrl);
-        updateActiveAudio(null);
-        if (requestId === ttsRequestRef.current) speakWithBrowser(messageId, cleanText, requestId);
+        ttsStore.audio = null;
+        if (requestId === ttsStore.requestId) speakWithBrowser(messageId, cleanText, requestId);
       };
       await audio.play();
     } catch (error) {
-      if (requestId !== ttsRequestRef.current) return;
+      if (requestId !== ttsStore.requestId) return;
       setLoadingAudioId(null);
-      updateActiveAudio(null);
+      ttsStore.audio = null;
       speakWithBrowser(messageId, cleanText, requestId);
     }
   };
@@ -228,8 +242,8 @@ export default function AiTeacher() {
         title: 'Chat Concept Quiz',
         subject: 'General',
         numQuestions: 3,
-        difficulty: 'Easy', // ✅ FIX 4: Changed from Medium to Easy
-        instructions: "Generate simple, straightforward questions suitable for high school students. Avoid overly complex university-level scenarios, advanced C++ memory management, or deep computer science jargon unless the source text specifically demands it." // ✅ FIX 4: Added strict instructions
+        difficulty: 'Easy',
+        instructions: "Generate simple, straightforward questions suitable for high school students. Avoid overly complex university-level scenarios, advanced C++ memory management, or deep computer science jargon unless the source text specifically demands it."
       });
 
       let quizData = null;
@@ -261,12 +275,7 @@ export default function AiTeacher() {
 
   const handleClearChat = () => {
     if (window.confirm("Are you sure you want to clear this chat history?")) {
-      ttsRequestRef.current += 1;
-      if (activeAudioRef.current) activeAudioRef.current.pause();
-      updateActiveAudio(null);
-      window.speechSynthesis.cancel();
-      setActiveAudioId(null);
-      setLoadingAudioId(null);
+      stopPlayback();
       setMessages(INITIAL_MESSAGES);
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -322,12 +331,9 @@ export default function AiTeacher() {
                     {loadingAudioId === msg.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : activeAudioId === msg.id ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     {loadingAudioId === msg.id ? "Loading..." : activeAudioId === msg.id ? "Stop" : "Listen"}
                   </button>
-                  
-                  {/* ✅ FIX 1: Copy Button Added */}
                   <button onClick={() => handleCopyText(msg.id, msg.text)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border hover:bg-accent transition-all">
                     {copiedId === msg.id ? <><Check className="w-3.5 h-3.5 text-green-500" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Notes</>}
                   </button>
-
                   <button onClick={() => handleGenerateQuizFromChat(msg.text, msg.id)} disabled={generatingQuizId === msg.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-electric/10 text-electric border border-electric/20 hover:bg-electric/20 transition-all disabled:opacity-50">
                     {generatingQuizId === msg.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</> : <><Target className="w-3.5 h-3.5" /> Turn into Quiz</>}
                   </button>
