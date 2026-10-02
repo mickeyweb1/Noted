@@ -182,7 +182,13 @@ router.post('/session/start', async (req, res, next) => {
         timeType: quiz.timeType,
         title: quiz.title,
         difficulty: quiz.difficulty,
-        questions: quiz.questions.map(q => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
+        questions: quiz.questions.map(q => ({ 
+  _id: q._id, 
+  question: q.question, 
+  options: q.options, 
+  imageUrl: q.imageUrl,
+  correctAnswer: q.correctAnswer  // ✅ NEW: Needed for offline scoring
+})),
         // ✅ NEW: Return saved progress for cross-device resume
         savedAnswers: session.answers || [],
         savedStudentInfo: session.studentName ? {
