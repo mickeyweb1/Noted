@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { 
-  ArrowRight, Mail, MapPin, Phone, MessageSquare, Loader2, CheckCircle2 
+  ArrowRight, Mail, MapPin, Phone, Loader2, CheckCircle2 
 } from "lucide-react";
 import MarketingLayout from "./MarketingLayout";
 import api from "../../utils/api";
@@ -84,18 +84,8 @@ export default function ContactPage() {
                 </div>
               ))}
             </div>
-
-            <div className="rounded-[30px] border border-border bg-gradient-to-br from-brand-soft to-electric-soft p-6 text-center">
-              <MessageSquare className="h-12 w-12 text-brand mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-foreground">Prefer a face-to-face chat?</h3>
-              <p className="text-sm text-muted-foreground mt-2">
-                We are currently scheduling demo calls with forward-thinking schools. 
-                Book a 15-minute intro call with our team.
-              </p>
-              <button className="mt-4 inline-flex items-center gap-2 rounded-full bg-background px-5 py-2.5 text-sm font-medium text-foreground border border-border shadow-sm hover:bg-muted transition">
-                Book a Demo Call <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
+            
+            {/* ✅ REMOVED: The "Book a Demo Call" placeholder box is completely gone now */}
           </div>
 
           {/* RIGHT SIDE: Contact Form */}
@@ -106,7 +96,7 @@ export default function ContactPage() {
                   <CheckCircle2 className="w-8 h-8 text-green-500" />
                 </div>
                 <h3 className="text-2xl font-bold text-foreground">Message Sent!</h3>
-                <p className="text-muted-foreground max-w-sm">Thank you for reaching out. We will get back to you at {formData.email} shortly.</p>
+                <p className="text-muted-foreground max-w-sm">Thank you for reaching out. We will get back to you shortly.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-5">
