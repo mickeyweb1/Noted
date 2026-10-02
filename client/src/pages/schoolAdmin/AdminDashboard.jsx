@@ -168,7 +168,20 @@ export default function AdminDashboard() {
             <h2 className="mb-4 text-lg font-semibold text-foreground">Quick Actions</h2>
             <div className="space-y-3">
               
-              {/* ✅ UPDATED: Now points to the NEW Support Inbox */}
+              {/* ✅ RESTORED: Super Admin Feedback Link */}
+              {user?.role === "super_admin" && (
+                <NavLink to="/admin/feedback" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-brand/5 p-3 transition-all hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="shrink-0 rounded-lg bg-brand-soft p-2 text-brand">
+                      <MessageSquare className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium text-foreground">Super Admin Feedback</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-brand" />
+                </NavLink>
+              )}
+
+              {/* ✅ NEW: Support Inbox Link */}
               {user?.role === "super_admin" && (
                 <NavLink to="/admin/support-inbox" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-brand/5 p-3 transition-all hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <div className="flex min-w-0 items-center gap-3">
