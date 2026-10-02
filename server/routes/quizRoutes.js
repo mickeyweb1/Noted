@@ -426,7 +426,9 @@ router.get('/game-show/:code', protect, async (req, res, next) => {
           _id: q._id,
           question: q.question,
           options: q.options,
-          imageUrl: q.imageUrl
+          imageUrl: q.imageUrl,
+          correctAnswer: q.correctAnswer,  
+          explanation: q.explanation 
         }))
       }
     });
