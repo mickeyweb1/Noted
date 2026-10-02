@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, AlertTriangle, Check, ListChecks } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, AlertTriangle, Check, ListChecks, WifiOff } from "lucide-react";
 import api from "../utils/api";
 
 /* ---------- Presentational helpers ---------- */
@@ -61,12 +61,16 @@ export default function TakeQuiz() {
   const [maxTabSwitches, setMaxTabSwitches] = useState(null);
   const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
   
+  // ✅ NEW: Offline States
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
+  
   const timerRef = useRef(null);
   const answersRef = useRef({});
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
-  // ✅ NEW: Auto-save progress for cross-device resume (Debounced)
+  // ✅ Auto-save progress for cross-device resume (Debounced)
   useEffect(() => {
     if (step !== "quiz" || !code) return;
     
@@ -86,10 +90,55 @@ export default function TakeQuiz() {
       } catch (err) {
         console.error("Failed to save progress", err);
       }
-    }, 1000); // Saves 1 second after the last change
+    }, 1000);
 
     return () => clearTimeout(saveTimer);
   }, [answers, studentInfo, step, code, quizData]);
+
+  // ✅ NEW: Offline / Online Event Listeners
+  useEffect(() => {
+    const handleOffline = () => setIsOffline(true);
+    const handleOnline = async () => {
+      setIsOffline(false);
+      
+      // Check if there is a pending offline submission
+      const pending = localStorage.getItem(`offline_submission_${code}`);
+      if (pending && quizData && studentInfo.name) {
+        setIsSyncing(true);
+        try {
+          const data = JSON.parse(pending);
+          const formattedAnswers = quizData.questions.map(q => ({
+            questionId: q._id,
+            selectedAnswer: data.answers[q._id] || null
+          }));
+          
+          const res = await api.post("/quiz/submit", {
+            code,
+            studentName: data.studentInfo.name,
+            studentSurname: data.studentInfo.surname,
+            studentClass: data.studentInfo.className,
+            answers: formattedAnswers
+          });
+          
+          localStorage.removeItem(`offline_submission_${code}`);
+          setResult(res.data);
+          setStep("result");
+        } catch (err) {
+          setError("Failed to sync offline submission. Please try submitting manually.");
+          setStep("quiz"); 
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [code, quizData, studentInfo]);
 
   useEffect(() => {
     if (step !== "quiz") return;
@@ -176,7 +225,6 @@ export default function TakeQuiz() {
       const res = await api.post("/quiz/session/start", { code });
       const data = res.data.data;
       
-      // ✅ NEW: Restore saved progress if it exists!
       if (data.savedStudentInfo) {
         setStudentInfo(data.savedStudentInfo);
         const restoredAnswers = {};
@@ -207,7 +255,21 @@ export default function TakeQuiz() {
   };
 
   const handleSubmitQuiz = async (isAuto = false) => {
-    if (isSubmitting) return;
+    if (isSubmitting || isSyncing) return;
+    
+    // ✅ NEW: Offline Fallback Logic
+    if (!navigator.onLine) {
+      setError("");
+      localStorage.setItem(`offline_submission_${code}`, JSON.stringify({
+        studentInfo,
+        answers: answersRef.current,
+        submittedAt: Date.now()
+      }));
+      clearInterval(timerRef.current);
+      setStep("offline-waiting");
+      return;
+    }
+
     setIsSubmitting(true);
     clearInterval(timerRef.current);
     
@@ -339,6 +401,22 @@ export default function TakeQuiz() {
     );
   }
 
+  /* ---------- NEW: Offline Waiting Screen ---------- */
+  if (step === "offline-waiting") {
+    return (
+      <div className={shell}>
+        <div className={`${panel} text-center`}>
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10">
+            <WifiOff className="h-8 w-8 text-yellow-500" />
+          </div>
+          <h1 className="mb-2 text-2xl font-bold text-foreground">Waiting for Connection...</h1>
+          <p className="mb-6 text-muted-foreground">Your answers are safely stored on your device. We will automatically submit your quiz to the teacher as soon as your internet connection returns.</p>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand" />
+        </div>
+      </div>
+    );
+  }
+
   /* ---------- Step 3: Quiz ---------- */
   if (step === "quiz") {
     const lowTime = timeLeft < 60;
@@ -346,6 +424,14 @@ export default function TakeQuiz() {
 
     return (
       <div className="min-h-screen bg-muted p-4 md:p-8">
+        {/* ✅ NEW: Offline Warning Banner */}
+        {isOffline && (
+          <div className="max-w-3xl mx-auto mb-4 flex items-center gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 text-yellow-700 dark:text-yellow-400 text-sm font-medium animate-pulse">
+            <WifiOff className="h-4 w-4 shrink-0" />
+            <span>You are offline. Don't worry! Your answers are saving locally and will auto-submit when you reconnect.</span>
+          </div>
+        )}
+
         {showAutoSubmitModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="w-full max-w-sm bg-card p-6 rounded-2xl border border-border shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200">
@@ -425,8 +511,8 @@ export default function TakeQuiz() {
               {answeredCount === totalQuestions ? "You've answered every question. Ready when you are." : `${totalQuestions - answeredCount} ${totalQuestions - answeredCount === 1 ? "question" : "questions"} still unanswered.`}
             </p>
             <ErrorNote>{error}</ErrorNote>
-            <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting} className={`${primaryBtn} text-lg`}>
-              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit quiz"}
+            <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting || isSyncing} className={`${primaryBtn} text-lg`}>
+              {isSubmitting || isSyncing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit quiz"}
             </button>
           </div>
         </div>
