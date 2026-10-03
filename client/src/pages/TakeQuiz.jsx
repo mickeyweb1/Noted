@@ -65,8 +65,10 @@ export default function TakeQuiz() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  const timerRef = useRef(null);
-  const answersRef = useRef({});
+ const timerRef = useRef(null);
+const answersRef = useRef({});
+const endTimeRef = useRef(null); // ✅ NEW: For accurate timer
+const retryIntervalRef = useRef(null); // ✅ NEW: For offline sync retry
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
