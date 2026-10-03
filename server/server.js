@@ -165,6 +165,7 @@ io.on('connection', (socket) => {
           cardResults: [],
           activityLog: [],
           lastPicker: null,
+          disqualifiedPlayers: [],
           questions: quiz.questions
         });
       }
@@ -220,9 +221,29 @@ io.on('connection', (socket) => {
     }
   });
 
+    // ✅ NEW: Handle disqualification from admin
+  socket.on('disqualify_player', ({ quizId, playerName }) => {
+    const game = activeGames.get(quizId);
+    if (game && socket.id === game.adminSocketId) {
+      if (!game.disqualifiedPlayers.includes(playerName)) {
+        game.disqualifiedPlayers.push(playerName);
+        console.log(`🚫 Admin disqualified player: ${playerName}`);
+      } else {
+        game.disqualifiedPlayers = game.disqualifiedPlayers.filter(p => p !== playerName);
+        console.log(`✅ Admin restored player: ${playerName}`);
+      }
+    }
+  });
+
   socket.on('pick_card', ({ quizId, cardIndex }) => {
     const game = activeGames.get(quizId);
-    const playerName = socket.data.playerName; // ✅ TRUST SERVER STATE, NOT CLIENT PAYLOAD
+    const playerName = socket.data.playerName;
+    
+    // ✅ BLOCK disqualified players from picking cards
+    if (game.disqualifiedPlayers.includes(playerName)) {
+      console.log(`🚫 Disqualified player ${playerName} tried to pick a card. Blocked.`);
+      return;
+    }
     
     if (!game || game.status !== 'live' || game.activeCard || game.completedCards.includes(cardIndex)) return;
     
