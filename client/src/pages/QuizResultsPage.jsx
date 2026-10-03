@@ -195,7 +195,12 @@ export default function QuizResultsPage() {
   const exportToCSV = () => {
     const headers = ["Student Name", "Class", "Score", "Percentage", "Time Taken", "Tab Switches", "Date Submitted"];
     const rows = submissions.map(sub => {
-      const percentage = sub.totalQuestions > 0 ? Math.round((sub.score / sub.totalQuestions) * 100) : 0;
+      // ✅ NEW: Use maxScore for game show, totalQuestions for normal quiz
+const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore 
+  ? Math.round((sub.score / sub.maxScore) * 100) 
+  : sub.totalQuestions > 0 
+  ? Math.round((sub.score / sub.totalQuestions) * 100) 
+  : 0;
       const timeStr = `${Math.floor((sub.timeTaken || 0) / 60)}m ${(sub.timeTaken || 0) % 60}s`;
       
       return [
@@ -356,7 +361,7 @@ export default function QuizResultsPage() {
                 <thead className="border-b border-border bg-muted/50">
                   <tr>
                     <th scope="col" className={th}>Student</th>
-                    <th scope="col" className={th}>Score</th>
+                    <th scope="col" className={th}>{quizData?.gameMode === 'gameShow' ? 'Points' : 'Score'}</th>
                     <th scope="col" className={th}>Percentage</th>
                     <th scope="col" className={th}>Time</th>
                     <th scope="col" className={th}>Tab switches</th>
