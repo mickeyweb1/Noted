@@ -128,7 +128,7 @@ export default function SupportPage() {
                   type="tel"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="+1234567890"
+                  placeholder="+2340745678900"
                   className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-brand"
                 />
               </div>
