@@ -6,8 +6,8 @@ dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Updated models (llama3-8b-8192 was decommissioned)
-const MODELS = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"];
+// ✅ Use the most reliable, permanently free Groq model
+const MODELS = ["llama-3.1-8b-instant"];
 
 const cleanOutput = (raw = "") =>
   raw
@@ -21,12 +21,28 @@ const askHuggingFace = async (messages, maxTokens) => {
   const prompt = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n") + "\nASSISTANT:";
   const res = await axios.post(
     "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct",
-    { inputs: prompt, parameters: { max_new_tokens: maxTokens, return_full_text: false, temperature: 0.7 } },
-    { headers: { Authorization: `Bearer ${process.env.HF_API_KEY}`, "Content-Type": "application/json" } }
+    { 
+      inputs: prompt, 
+      parameters: { 
+        max_new_tokens: maxTokens, 
+        return_full_text: false, 
+        temperature: 0.7 
+      } 
+    },
+    { 
+      headers: { 
+        Authorization: `Bearer ${process.env.HF_API_KEY}`, 
+        "Content-Type": "application/json" 
+      } 
+    }
   );
   return cleanOutput(res.data?.[0]?.generated_text || "");
 };
 
+/**
+ * options.max_tokens  - output token cap (default 800)
+ * options.json        - true => ask Groq for strict JSON output
+ */
 export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
@@ -49,7 +65,7 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
       const text = cleanOutput(completion.choices[0]?.message?.content);
       if (text) return text;
 
-      console.warn(`⚠️ Groq (${model}) returned empty content, trying next model...`);
+      console.warn(`⚠️ Groq (${model}) returned empty content.`);
       lastError = new Error("Groq returned empty content");
     } catch (error) {
       lastError = error;
@@ -57,18 +73,21 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
     }
   }
 
-  // Last resort: Hugging Face
+  // ✅ LAST RESORT: Hugging Face Fallback (100% FREE)
   if (process.env.HF_API_KEY) {
     try {
-      console.log("🔄 Groq failed on all models. Trying Hugging Face fallback...");
+      console.log("🔄 Groq failed. Activating FREE Hugging Face fallback...");
       const text = await askHuggingFace(messages, max_tokens);
-      if (text) return text;
+      if (text) {
+        console.log("✅ Hugging Face fallback successful!");
+        return text;
+      }
     } catch (hfError) {
       console.error("❌ Hugging Face fallback also failed:", hfError.message);
     }
   }
 
-  console.error("❌ AI generation failed:", lastError?.message);
+  console.error("❌ AI generation failed completely:", lastError?.message);
   throw lastError;
 };
 
