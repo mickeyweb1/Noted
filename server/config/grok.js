@@ -6,8 +6,13 @@ dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// ✅ Use the most reliable, permanently free Groq model
-const MODELS = ["llama-3.1-8b-instant"];
+// ✅ Try multiple models in case one is restricted or deprecated for your API key
+const MODELS = [
+  "llama-3.1-8b-instant",
+  "llama3-8b-8192", 
+  "mixtral-8x7b-32768",
+  "gemma2-9b-it"
+];
 
 const cleanOutput = (raw = "") =>
   raw
@@ -39,10 +44,6 @@ const askHuggingFace = async (messages, maxTokens) => {
   return cleanOutput(res.data?.[0]?.generated_text || "");
 };
 
-/**
- * options.max_tokens  - output token cap (default 800)
- * options.json        - true => ask Groq for strict JSON output
- */
 export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
@@ -51,6 +52,7 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
   const { json = false, max_tokens = 800, ...rest } = options;
   let lastError;
 
+  // 1. Try all Groq models
   for (const model of MODELS) {
     try {
       const completion = await groq.chat.completions.create({
@@ -73,10 +75,10 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
     }
   }
 
-  // ✅ LAST RESORT: Hugging Face Fallback (100% FREE)
+  // 2. LAST RESORT: Hugging Face Fallback (100% FREE)
   if (process.env.HF_API_KEY) {
     try {
-      console.log("🔄 Groq failed. Activating FREE Hugging Face fallback...");
+      console.log("🔄 All Groq models failed. Activating FREE Hugging Face fallback...");
       const text = await askHuggingFace(messages, max_tokens);
       if (text) {
         console.log("✅ Hugging Face fallback successful!");
@@ -85,6 +87,8 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
     } catch (hfError) {
       console.error("❌ Hugging Face fallback also failed:", hfError.message);
     }
+  } else {
+    console.error("❌ Hugging Face fallback skipped: HF_API_KEY is missing from environment variables!");
   }
 
   console.error("❌ AI generation failed completely:", lastError?.message);
