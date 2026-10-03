@@ -85,21 +85,24 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     
     const strictPrompt = systemPrompt + " CRITICAL: Keep explanations to ONE short sentence maximum to fit token limits.";
     
+    // ✅ FIX: Dynamic token limit and strict JSON mode
     const response = await generateWithGroq(
       [
         { role: 'system', content: strictPrompt }, 
-        { role: 'user', content: `Notes:\n${notes.slice(0, 10000)}` }
+        { role: 'user', content: `Notes:\n${notes.slice(0, 8000)}` }
       ], 
-      { max_tokens: 800 } 
+      { max_tokens: Math.min(150 * count + 200, 3500), json: true } 
     );
-    
-    const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     
     let parsed;
     try {
-      parsed = JSON.parse(cleaned);
+      // ✅ FIX: Safely extract JSON even if the AI adds conversational text
+      const jsonStr = response.slice(response.indexOf('{'), response.lastIndexOf('}') + 1);
+      parsed = JSON.parse(jsonStr);
+      if (!Array.isArray(parsed.questions)) throw new Error('No questions array found');
     } catch (parseError) {
-      console.error("AI JSON Parse Error:", parseError);
+      console.error("❌ AI JSON Parse Error:", parseError);
+      console.error("❌ The AI returned this invalid text:", response);
       return res.status(400).json({ 
         success: false, 
         message: "AI generated an invalid response. Please try again with fewer notes or fewer questions." 
@@ -190,7 +193,6 @@ router.post('/session/start', async (req, res, next) => {
           question: q.question, 
           options: q.options, 
           imageUrl: q.imageUrl,
-          correctAnswer: q.correctAnswer
         })),
         savedAnswers: session.answers || [],
         savedStudentInfo: session.studentName ? {
