@@ -14,7 +14,8 @@ const submissionSchema = new mongoose.Schema({
   gameMode: { type: String, enum: ['test', 'gameShow'], default: 'test' },
   score: { type: Number, required: true },
   totalQuestions: { type: Number, required: true },
-  timeTaken: { type: Number, required: true }, // in seconds
+  maxScore: { type: Number }, // ✅ NEW: For game show percentage calculation
+  timeTaken: { type: Number, required: true },
   tabSwitchCount: { type: Number, default: 0 },
   submittedAt: { type: Date, default: Date.now }
 });
