@@ -244,10 +244,14 @@ const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore
     );
   }
 
-  const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => {
-    const p = sub.totalQuestions > 0 ? (sub.score / sub.totalQuestions) * 100 : 0;
-    return acc + p;
-  }, 0) / submissions.length) : 0;
+const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => {
+  const p = quizData?.gameMode === 'gameShow' && sub.maxScore
+    ? (sub.score / sub.maxScore) * 100
+    : sub.totalQuestions > 0 
+    ? (sub.score / sub.totalQuestions) * 100 
+    : 0;
+  return acc + p;
+}, 0) / submissions.length) : 0;
   
   const avgTimeSeconds = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => acc + (sub.timeTaken || 0), 0) / submissions.length) : 0;
 
@@ -370,7 +374,11 @@ const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore
                 </thead>
                 <tbody className="divide-y divide-border">
                   {submissions.map((sub, idx) => {
-                    const percentage = sub.totalQuestions > 0 ? Math.round((sub.score / sub.totalQuestions) * 100) : 0;
+                    const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore 
+  ? Math.round((sub.score / sub.maxScore) * 100) 
+  : sub.totalQuestions > 0 
+  ? Math.round((sub.score / sub.totalQuestions) * 100) 
+  : 0;
                     const isExpanded = expandedSubmission === sub._id;
                     const tone =
                       percentage >= 70
