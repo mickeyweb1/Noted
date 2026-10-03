@@ -73,10 +73,16 @@ export default function GameShowBoard() {
     return <div className="min-h-screen flex items-center justify-center bg-muted"><p className="text-destructive font-medium">{error}</p></div>;
   }
 
-  if (!quiz || !gameState || !gameState.scores) {
-    return <div className="min-h-screen flex items-center justify-center bg-muted"><p>Loading Game Control Panel...</p></div>;
+  if (!quiz) {
+    return <div className="min-h-screen flex items-center justify-center bg-muted"><p>Loading Quiz Data...</p></div>;
   }
-
+  if (!gameState) {
+    return <div className="min-h-screen flex items-center justify-center bg-muted flex-col gap-2">
+      <p>Connecting to Game Server...</p>
+      <p className="text-xs text-muted-foreground">(If this stays, refresh the page)</p>
+    </div>;
+  }
+  
   const isLive = gameState.status === "live";
   const isGameComplete = gameState.completedCards?.length === quiz.questions.length;
   const players = gameState.players.filter(p => p.name !== "Admin");
