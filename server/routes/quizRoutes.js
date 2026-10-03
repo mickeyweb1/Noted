@@ -11,7 +11,6 @@ import { protect } from '../middleware/protect.js';
 
 const router = express.Router();
 
-// ... (multer configuration unchanged) ...
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = './public/uploads/quizzes';
@@ -35,7 +34,6 @@ const upload = multer({
   }
 });
 
-// Generates codes with T- (test) or G- (game show) prefix
 const generateAccessCode = (mode = 'test') => {
   const prefix = mode === 'gameShow' ? 'G-' : 'T-';
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -46,11 +44,8 @@ const generateAccessCode = (mode = 'test') => {
   return code;
 };
 
-// Safe code normaliser — a missing/non-string code gives '' instead of throwing
 const normalizeCode = (code) => (typeof code === 'string' ? code.trim().toUpperCase() : '');
 
-// Loads a quiz and confirms the logged-in user created it.
-// Sends the error response itself and returns null when access is denied.
 const getOwnedQuiz = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     res.status(404).json({ success: false, message: 'Quiz not found' });
@@ -68,9 +63,7 @@ const getOwnedQuiz = async (req, res) => {
   return quiz;
 };
 
-
-// 🎯 1. AI Generate Questions PREVIEW (Does not save to DB yet, allows review)
-// 🎯 1. AI Generate Questions PREVIEW (Does not save to DB yet, allows review)
+// 🎯 1. AI Generate Questions PREVIEW
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, difficulty, numQuestions } = req.body;
@@ -79,7 +72,6 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     }
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 30);
     
-    // ✅ REPLACE THIS ENTIRE systemPrompt VARIABLE:
     const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. 
     Output VALID JSON ONLY in this exact format: 
     { 
@@ -99,7 +91,7 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     const response = await generateWithGroq(
       [
         { role: 'system', content: strictPrompt }, 
-        { role: 'user', content: `Notes:\n${notes.slice(0, 10000)}` } // Reduced notes slice to save tokens
+        { role: 'user', content: `Notes:\n${notes.slice(0, 10000)}` }
       ], 
       { max_tokens: 800 } 
     );
@@ -124,7 +116,7 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
   }
 });
 
-// 🎯 2. Finalize Quiz (Saves to DB with filtered questions)
+// 🎯 2. Finalize Quiz
 router.post('/create-manual', protect, async (req, res, next) => {
   try {
     const userId = req.user._id;
@@ -135,7 +127,6 @@ router.post('/create-manual', protect, async (req, res, next) => {
     }
 
     const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
-    // Cap the number of codes so one request can't hang the server
     const studentCount = Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
 
     const accessCodes = [];
@@ -159,12 +150,6 @@ router.post('/create-manual', protect, async (req, res, next) => {
   }
 });
 
-
-// 🎯 3. Start (or RESUME) a Quiz Session
-// QuizSession.code is unique, so the old "always create" version threw a
-// duplicate-key 500 whenever a student refreshed or the page called this twice.
-// Now a returning student gets their ORIGINAL startTime back, so the timer
-// keeps counting from the real start (refreshing can't reset the clock).
 // 🎯 3. Start (or RESUME) a Quiz Session
 router.post('/session/start', async (req, res, next) => {
   try {
@@ -185,7 +170,7 @@ router.post('/session/start', async (req, res, next) => {
           quizId: quiz._id, 
           startTime: Date.now(), 
           tabSwitchCount: 0,
-          answers: [] // ✅ Initialize empty answers array
+          answers: []
         });
       } catch (err) {
         if (err.code === 11000) session = await QuizSession.findOne({ code });
@@ -205,13 +190,12 @@ router.post('/session/start', async (req, res, next) => {
         title: quiz.title,
         difficulty: quiz.difficulty,
         questions: quiz.questions.map(q => ({ 
-  _id: q._id, 
-  question: q.question, 
-  options: q.options, 
-  imageUrl: q.imageUrl,
-  correctAnswer: q.correctAnswer  // ✅ NEW: Needed for offline scoring
-})),
-        // ✅ NEW: Return saved progress for cross-device resume
+          _id: q._id, 
+          question: q.question, 
+          options: q.options, 
+          imageUrl: q.imageUrl,
+          correctAnswer: q.correctAnswer
+        })),
         savedAnswers: session.answers || [],
         savedStudentInfo: session.studentName ? {
           name: session.studentName,
@@ -225,7 +209,7 @@ router.post('/session/start', async (req, res, next) => {
   }
 });
 
-// 🎯 3.5 Save Progress (For cross-device resume)
+// 🎯 3.5 Save Progress
 router.post('/session/save-progress', async (req, res, next) => {
   try {
     const { code, studentName, studentSurname, studentClass, answers } = req.body;
@@ -248,7 +232,7 @@ router.post('/session/save-progress', async (req, res, next) => {
   }
 });
 
-// 🎯 4. Update Tab Switch Count (Anti-cheat) — atomic increment
+// 🎯 4. Update Tab Switch Count
 router.post('/session/update-tab', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
@@ -264,7 +248,7 @@ router.post('/session/update-tab', async (req, res, next) => {
   }
 });
 
-// 🎯 5. Submit Quiz (Strict validation)
+// 🎯 5. Submit Quiz
 router.post('/submit', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
@@ -284,9 +268,6 @@ router.post('/submit', async (req, res, next) => {
 
     const timeTakenSeconds = Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000));
 
-    // Score by walking the QUIZ's questions (not the client's array) so:
-    //  - sending the same correct answer 10 times can't inflate the score
-    //  - skipped questions still appear in the teacher's breakdown as "Skipped"
     const provided = new Map();
     for (const ans of answers) {
       const qid = String(ans?.questionId ?? '');
@@ -320,7 +301,7 @@ router.post('/submit', async (req, res, next) => {
       throw err;
     }
 
-    await QuizSession.deleteOne({ _id: session._id }); // Destroy session so code can't be reused
+    await QuizSession.deleteOne({ _id: session._id });
 
     res.json({ success: true, message: 'Quiz submitted successfully!', score, totalQuestions: quiz.questions.length, tabSwitchCount: session.tabSwitchCount });
   } catch (error) {
@@ -328,7 +309,7 @@ router.post('/submit', async (req, res, next) => {
   }
 });
 
-// 🎯 6. Regenerate a single new code for an existing quiz (owner only)
+// 🎯 6. Regenerate a single new code
 router.post('/:id/regenerate-code', protect, async (req, res, next) => {
   try {
     const quiz = await getOwnedQuiz(req, res);
@@ -349,7 +330,7 @@ router.post('/:id/regenerate-code', protect, async (req, res, next) => {
   }
 });
 
-// 🎯 7. Get detailed results (owner only — includes correct answers + student data)
+// 🎯 7. Get detailed results
 router.get('/:id/results', protect, async (req, res, next) => {
   try {
     const quiz = await getOwnedQuiz(req, res);
@@ -378,7 +359,7 @@ router.get('/admin/quizzes', protect, async (req, res, next) => {
   }
 });
 
-// 🎯 Validate access code and get quiz info (NO AUTH REQUIRED for students)
+// 🎯 Validate access code
 router.post('/validate-code', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
@@ -424,14 +405,10 @@ router.post('/validate-code', async (req, res, next) => {
   }
 });
 
-
-// ... (keep all your existing code above this) ...
-
-// 🎯 8. Get Game Show details by code (Admin only — bypasses "already used" check)
+// 🎯 8. Get Game Show details by code (Admin only)
 router.get('/game-show/:code', protect, async (req, res, next) => {
   try {
     const code = normalizeCode(req.params.code);
-    // Only let the creator load their game show
     const quiz = await Quiz.findOne({ accessCodes: code, createdBy: req.user._id });
     
     if (!quiz) {
