@@ -73,7 +73,6 @@ const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
     game.savedToDb = true; 
     
-    // ✅ NEW: Calculate maxScore for game show
     const maxScore = game.questions.length * (game.baseMarks || 10);
     
     for (const player of game.players) {
@@ -105,7 +104,7 @@ const saveGameShowResults = async (game) => {
             answers: submissionAnswers,
             score: totalScore,
             totalQuestions: game.questions.length,
-            maxScore: maxScore, // ✅ NEW: Save maxScore
+            maxScore: maxScore,
             timeTaken: 0,
             tabSwitchCount: 0,
             gameMode: 'gameShow'
@@ -121,12 +120,18 @@ const saveGameShowResults = async (game) => {
   }
 };
 
-// ✅ NEW: Verify JWT token for admin role
-const verifyAdminToken = (token, quizId) => {
+// ✅ UPDATED: Verify JWT token with detailed logging
+const verifyAdminToken = (token) => {
   try {
+    if (!token) {
+      console.log("⚠️ Socket Auth: No token provided in handshake");
+      return null;
+    }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    return decoded; // Returns user object with _id, role, etc.
+    console.log("✅ Socket Auth: Token verified successfully. User role:", decoded.role);
+    return decoded;
   } catch (err) {
+    console.log("⚠️ Socket Auth: JWT verify failed:", err.message);
     return null;
   }
 };
@@ -159,29 +164,28 @@ io.on('connection', (socket) => {
           cardResults: [],
           activityLog: [],
           lastPicker: null,
-          cardTimeout: null, // ✅ NEW: For locked card timeout
+          cardTimeout: null,
           questions: quiz.questions
         });
       }
 
       const game = activeGames.get(actualQuizId);
 
-      // ✅ NEW: Verify admin with JWT token (Relaxed to allow any school/super admin)
+      // ✅ UPDATED: Verify admin with detailed logging
       if (role === 'admin') {
         const token = socket.handshake.auth.token;
-        const user = verifyAdminToken(token, actualQuizId);
+        console.log("🔍 Admin join attempt. Token present:", !!token);
+        const user = verifyAdminToken(token);
         
-        // Just check if they are a valid admin, not strictly the creator
         if (!user || (user.role !== 'super_admin' && user.role !== 'school_admin')) {
-          console.log(`⚠️ Unauthorized admin attempt from ${socket.id}. User data:`, user);
-          socket.emit('error', 'Unauthorized: Admin access required');
+          console.log(`⚠️ Unauthorized admin attempt from ${socket.id}. Decoded user data:`, user);
+          socket.emit('error', 'Unauthorized: Admin access required. Please log out and log back in.');
           return;
         }
         
         game.adminSocketId = socket.id;
         socket.data.role = 'admin';
       } else {
-        // Force students to student role
         socket.data.role = 'student';
         socket.data.playerName = playerName;
         
@@ -215,14 +219,12 @@ io.on('connection', (socket) => {
       game.status = 'live';
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: "🚀 Match Started!" });
       
-      // ✅ NEW: Send sanitized state to students (no answers)
       const studentSafeState = { ...game };
       studentSafeState.questions = game.questions.map(q => ({
         _id: q._id,
         question: q.question,
         options: q.options,
         imageUrl: q.imageUrl
-        // NO correctAnswer, NO explanation
       }));
       
       io.to(quizId).emit('game_started', studentSafeState);
@@ -243,7 +245,6 @@ io.on('connection', (socket) => {
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
       io.to(quizId).emit('card_locked', { cardIndex, playerName });
       
-      // ✅ NEW: Add 30-second timeout for locked card
       if (game.cardTimeout) clearTimeout(game.cardTimeout);
       game.cardTimeout = setTimeout(() => {
         if (game.activeCard && game.activeCard.index === cardIndex) {
@@ -272,7 +273,7 @@ io.on('connection', (socket) => {
             activityLog: game.activityLog
           });
         }
-      }, 30000); // 30 seconds
+      }, 30000);
     }
   });
 
@@ -280,7 +281,6 @@ io.on('connection', (socket) => {
     const game = activeGames.get(quizId);
     if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
 
-    // ✅ NEW: Clear the timeout when answer is submitted
     if (game.cardTimeout) {
       clearTimeout(game.cardTimeout);
       game.cardTimeout = null;
