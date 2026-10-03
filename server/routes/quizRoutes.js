@@ -93,7 +93,14 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
       ] 
     }`;
     
-    const response = await generateWithGroq([{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes.slice(0, 50000)}` }], { max_tokens: 4096 });
+    // ✅ FIX: Reduced max_tokens to 1500 and notes slice to 20000 to prevent Groq 429 Rate Limit errors
+const response = await generateWithGroq(
+  [
+    { role: 'system', content: systemPrompt }, 
+    { role: 'user', content: `Notes:\n${notes.slice(0, 20000)}` }
+  ], 
+  { max_tokens: 1500 } 
+);
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     res.json({ success: true, data: { questions: parsed.questions } });
