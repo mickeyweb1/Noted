@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, AlertTriangle, Check, ListChecks, WifiOff } from "lucide-react";
 import api from "../utils/api";
@@ -107,8 +107,8 @@ export default function TakeQuiz() {
     return () => clearTimeout(saveTimer);
   }, [answers, studentInfo, step, code, quizData]);
 
-  // ✅ 3. Top-level attemptSync function (Fixed from nested)
-  const attemptSync = async () => {
+  // ✅ 3. Define attemptSync BEFORE it is used in useEffects
+  const attemptSync = useCallback(async () => {
     const pending = localStorage.getItem(`offline_submission_${code}`);
     if (!pending || !quizData || !studentInfo.name) return;
     
@@ -116,7 +116,14 @@ export default function TakeQuiz() {
     try {
       const data = JSON.parse(pending);
       const formattedAnswers = quizData.questions.map(q => ({ questionId: q._id, selectedAnswer: data.answers[q._id] || null }));
-      const res = await api.post("/quiz/submit", { code, studentName: data.studentInfo.name, studentSurname: data.studentInfo.surname, studentClass: data.studentInfo.className, answers: formattedAnswers });
+      const res = await api.post("/quiz/submit", { 
+        code, 
+        studentName: data.studentInfo.name, 
+        studentSurname: data.studentInfo.surname, 
+        studentClass: data.studentInfo.className, 
+        answers: formattedAnswers 
+      });
+      
       localStorage.removeItem(`offline_submission_${code}`);
       if (retryIntervalRef.current) { clearInterval(retryIntervalRef.current); retryIntervalRef.current = null; }
       setResult(res.data);
@@ -126,9 +133,20 @@ export default function TakeQuiz() {
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [code, quizData, studentInfo]);
 
-  // ✅ 4. Offline / Online Listeners
+  // ✅ 4. Check for pending submissions IMMEDIATELY on mount (Bulletproof background sync)
+  useEffect(() => {
+    if (navigator.onLine && quizData && studentInfo.name) {
+      const pending = localStorage.getItem(`offline_submission_${code}`);
+      if (pending) {
+        console.log("🔄 Found pending offline submission on mount. Attempting to sync...");
+        attemptSync();
+      }
+    }
+  }, [attemptSync]);
+
+  // ✅ 5. Offline / Online Listeners
   useEffect(() => {
     const handleOffline = () => setIsOffline(true);
     const handleOnline = () => {
@@ -142,17 +160,9 @@ export default function TakeQuiz() {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, [code, quizData, studentInfo]);
+  }, [code, quizData, studentInfo, attemptSync]);
 
-  // ✅ 5. Check for pending on mount/step change
-  useEffect(() => {
-    if ((step === "quiz" || step === "result" || step === "offline-waiting") && navigator.onLine) {
-      const pending = localStorage.getItem(`offline_submission_${code}`);
-      if (pending && quizData && studentInfo.name) attemptSync();
-    }
-  }, [step, code, quizData, studentInfo]);
-
-  // ✅ 6. Offline waiting retry loop (Fixed from conditional hook)
+  // ✅ 6. Offline waiting retry loop
   useEffect(() => {
     if (step === "offline-waiting") {
       if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
@@ -165,7 +175,7 @@ export default function TakeQuiz() {
     return () => {
       if (retryIntervalRef.current) { clearInterval(retryIntervalRef.current); retryIntervalRef.current = null; }
     };
-  }, [step]);
+  }, [step, attemptSync]);
 
   // ✅ 7. Visibility change (Tab switch)
   useEffect(() => {
@@ -245,52 +255,25 @@ export default function TakeQuiz() {
   const handleSelectAnswer = (questionId, option) => { setAnswers(prev => ({ ...prev, [questionId]: option })); };
 
   const handleSubmitQuiz = async (isAuto = false) => {
-    if (isSubmitting || isSyncing) {
-      console.log("Submit blocked: already submitting or syncing");
-      return;
-    }
+    if (isSubmitting || isSyncing) return;
     
-    console.log("Attempting to submit quiz. Online status:", navigator.onLine);
-
-    // ✅ NEW: Offline Fallback Logic
     if (!navigator.onLine) {
-      console.log("User is offline. Saving to localStorage and showing waiting screen.");
       setError("");
-      localStorage.setItem(`offline_submission_${code}`, JSON.stringify({
-        studentInfo,
-        answers: answersRef.current,
-        submittedAt: Date.now()
-      }));
+      localStorage.setItem(`offline_submission_${code}`, JSON.stringify({ studentInfo, answers: answersRef.current, submittedAt: Date.now() }));
       clearInterval(timerRef.current);
       setStep("offline-waiting");
       return;
     }
-
     setIsSubmitting(true);
     clearInterval(timerRef.current);
-    
-    const formattedAnswers = quizData.questions.map(q => ({
-      questionId: q._id,
-      selectedAnswer: answersRef.current[q._id] || null
-    }));
-
+    const formattedAnswers = quizData.questions.map(q => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null }));
     try {
-      console.log("Sending submission to server...");
-      const res = await api.post("/quiz/submit", {
-        code,
-        studentName: studentInfo.name,
-        studentSurname: studentInfo.surname,
-        studentClass: studentInfo.className,
-        answers: formattedAnswers
-      });
-      
-      console.log("Server responded successfully!", res.data);
+      const res = await api.post("/quiz/submit", { code, studentName: studentInfo.name, studentSurname: studentInfo.surname, studentClass: studentInfo.className, answers: formattedAnswers });
       setResult(res.data);
-      setStep("result"); // Force transition to result screen
+      setStep("result");
     } catch (err) {
-      console.error("Submission failed:", err);
-      setError(err.response?.data?.message || "Failed to submit quiz. Please check your internet and try again.");
-      setIsSubmitting(false); // Re-enable the button so they can try again
+      setError(err.response?.data?.message || "Failed to submit quiz.");
+      setIsSubmitting(false); 
     }
   };
 
@@ -358,7 +341,7 @@ export default function TakeQuiz() {
         <div className={`${panel} text-center`}>
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10"><WifiOff className="h-8 w-8 text-yellow-500" /></div>
           <h1 className="mb-2 text-2xl font-bold text-foreground">Waiting for Connection...</h1>
-          <p className="mb-6 text-muted-foreground">Your answers are safely stored on your device. We will automatically submit your quiz to the teacher as soon as your internet connection returns.</p>
+          <p className="mb-6 text-muted-foreground">Your answers are safely stored. We will automatically submit your quiz as soon as your internet returns.</p>
           {isSyncing ? <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand" /> : <button onClick={attemptSync} className={primaryBtn}>Try Submitting Now</button>}
         </div>
       </div>
@@ -370,8 +353,8 @@ export default function TakeQuiz() {
     const nearTabLimit = maxTabSwitches && tabSwitchCount >= maxTabSwitches - 2;
     return (
       <div className="min-h-screen bg-muted p-4 md:p-8 select-none" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
-        {isOffline && (<div className="max-w-3xl mx-auto mb-4 flex items-center gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 text-yellow-700 dark:text-yellow-400 text-sm font-medium animate-pulse"><WifiOff className="h-4 w-4 shrink-0" /><span>You are offline. Don't worry! Your answers are saving locally and will auto-submit when you reconnect.</span></div>)}
-        {showAutoSubmitModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"><div className="w-full max-w-sm bg-card p-6 rounded-2xl border border-border shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200"><AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" /><h3 className="text-xl font-bold text-foreground mb-2">Auto-Submitting Quiz</h3><p className="text-muted-foreground mb-6">You have switched tabs too many times. Your quiz is being submitted now to preserve your current answers.</p><Loader2 className="h-6 w-6 animate-spin mx-auto text-brand" /></div></div>)}
+        {isOffline && (<div className="max-w-3xl mx-auto mb-4 flex items-center gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 text-yellow-700 dark:text-yellow-400 text-sm font-medium animate-pulse"><WifiOff className="h-4 w-4 shrink-0" /><span>You are offline. Your answers are saving locally and will auto-submit when you reconnect.</span></div>)}
+        {showAutoSubmitModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"><div className="w-full max-w-sm bg-card p-6 rounded-2xl border border-border shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200"><AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" /><h3 className="text-xl font-bold text-foreground mb-2">Auto-Submitting Quiz</h3><p className="text-muted-foreground mb-6">You have switched tabs too many times. Your quiz is being submitted now.</p><Loader2 className="h-6 w-6 animate-spin mx-auto text-brand" /></div></div>)}
         <div className="mx-auto max-w-3xl space-y-6">
           <div className="sticky top-4 z-10 rounded-2xl border border-border bg-card p-4 shadow-lg">
             <div className="flex items-center justify-between gap-3">
