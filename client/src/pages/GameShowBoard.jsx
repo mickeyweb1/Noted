@@ -7,7 +7,13 @@ import api from "../utils/api";
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const socketUrl = apiUrl.replace(/\/api$/, ""); 
 
-const socket = io(socketUrl, { withCredentials: true });
+// ✅ Get the admin token from localStorage (same key used in api.js)
+const token = localStorage.getItem('userToken');
+
+const socket = io(socketUrl, { 
+  withCredentials: true,
+  auth: { token } // ✅ Send token so backend can verify admin
+});
 
 export default function GameShowBoard() {
   const [searchParams] = useSearchParams();
