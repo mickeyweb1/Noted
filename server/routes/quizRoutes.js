@@ -93,7 +93,6 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
       ] 
     }`;
     
-    // ✅ FIX: Reduced max_tokens to 1500 and notes slice to 20000 to prevent Groq 429 Rate Limit errors
     // ✅ FIX 1: Stricter prompt to keep output small and fit within Groq's 1000 token limit
     const strictPrompt = systemPrompt + " CRITICAL: Keep explanations to ONE short sentence maximum to fit token limits.";
     
@@ -102,7 +101,7 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
         { role: 'system', content: strictPrompt }, 
         { role: 'user', content: `Notes:\n${notes.slice(0, 10000)}` } // Reduced notes slice to save tokens
       ], 
-      { max_tokens: 1000 } // Max allowed by your Groq tier
+      { max_tokens: 800 } 
     );
     
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
