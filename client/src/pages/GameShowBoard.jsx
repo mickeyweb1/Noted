@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award, Copy, Plus, MoreVertical, Ban, Eye, X } from "lucide-react";
+import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, CheckCircle2, XCircle, Zap, Award, Copy, Plus, MoreVertical, Ban, Eye, X, Loader2 } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
 
@@ -26,7 +26,7 @@ export default function GameShowBoard() {
   const [replacementCode, setReplacementCode] = useState(null);
   const [error, setError] = useState(""); 
   const [disqualifiedPlayers, setDisqualifiedPlayers] = useState([]);
-  const [showQuestionsModal, setShowQuestionsModal] = useState(false); // ✅ NEW: Questions modal state
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false);
 
   useEffect(() => {
     if (code) fetchQuizData();
@@ -91,18 +91,40 @@ export default function GameShowBoard() {
     }
   };
 
+  // ✅ IMPROVED: Better Error UI with a Refresh button
   if (error) {
-    return <div className="min-h-screen flex items-center justify-center bg-muted"><p className="text-destructive font-medium">{error}</p></div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-muted p-4 text-center">
+        <XCircle className="h-12 w-12 text-destructive mb-4" />
+        <p className="text-destructive font-semibold text-lg mb-2">{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-brand text-brand-foreground rounded-lg hover:bg-brand/90 transition font-medium flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" /> Refresh Page
+        </button>
+      </div>
+    );
   }
 
   if (!quiz) {
-    return <div className="min-h-screen flex items-center justify-center bg-muted"><p>Loading Quiz Data...</p></div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-muted gap-2">
+        <Loader2 className="h-8 w-8 animate-spin text-brand mb-2" />
+        <p className="text-foreground font-medium">Loading Quiz Data...</p>
+      </div>
+    );
   }
+
+  // ✅ IMPROVED: Better Loading UI with a spinner
   if (!gameState) {
-    return <div className="min-h-screen flex items-center justify-center bg-muted flex-col gap-2">
-      <p>Connecting to Game Server...</p>
-      <p className="text-xs text-muted-foreground">(If this stays, refresh the page)</p>
-    </div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-muted gap-2">
+        <Loader2 className="h-8 w-8 animate-spin text-brand mb-2" />
+        <p className="text-foreground font-medium">Connecting to Game Server...</p>
+        <p className="text-xs text-muted-foreground">(If this stays, refresh the page)</p>
+      </div>
+    );
   }
   
   const isLive = gameState.status === "live";
@@ -136,7 +158,6 @@ export default function GameShowBoard() {
               <Wifi className="h-3 w-3" /> Live
             </span>
           </p>
-          {/* ✅ NEW: View All Questions Button */}
           <button
             onClick={() => setShowQuestionsModal(true)}
             className="mt-3 inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent shadow-sm"
@@ -372,7 +393,7 @@ export default function GameShowBoard() {
         </div>
       )}
 
-      {/* ✅ NEW: View All Questions Modal */}
+      {/* View All Questions Modal */}
       {showQuestionsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border bg-card p-6 shadow-2xl overflow-hidden flex flex-col">
