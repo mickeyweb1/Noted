@@ -12,7 +12,7 @@ import jwt from 'jsonwebtoken';
 import { Quiz } from './models/Quiz.js';
 import { QuizSubmission } from './models/QuizSubmission.js'; 
 import supportRoutes from './routes/supportRoutes.js'; 
-import { User } from './models/User.js';
+import { User } from './models/User.js'; // ✅ Added User import
 
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -66,7 +66,7 @@ const io = new Server(server, {
 });
 
 const activeGames = new Map();
-const cardTimers = new Map();
+const cardTimers = new Map(); // ✅ FIX: Store timers separately to prevent circular JSON crashes
 
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
@@ -118,26 +118,11 @@ const saveGameShowResults = async (game) => {
   }
 };
 
-const verifyAdminToken = (token) => {
-  try {
-    if (!token) {
-      console.log("⚠️ Socket Auth: No token provided in handshake");
-      return null;
-    }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("✅ Socket Auth: Token verified successfully. User role:", decoded.role);
-    return decoded;
-  } catch (err) {
-    console.log("⚠️ Socket Auth: JWT verify failed:", err.message);
-    return null;
-  }
-};
-
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
 
-  
-  socket.on('join_game', async ({ code, role = 'student', quizId, token }) => {
+  // ✅ FIX: Added 'playerName' to destructuring
+  socket.on('join_game', async ({ code, playerName, role = 'student', quizId, token }) => {
     try {
       const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
       if (!quiz) {
@@ -180,7 +165,6 @@ io.on('connection', (socket) => {
           cardResults: [],
           activityLog: [],
           lastPicker: null,
-          // ✅ FIX: Removed cardTimeout from here
           questions: quiz.questions
         });
       }
@@ -236,8 +220,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  
-   socket.on('pick_card', ({ quizId, cardIndex }) => {
+  socket.on('pick_card', ({ quizId, cardIndex }) => {
     const game = activeGames.get(quizId);
     const playerName = socket.data.playerName; // ✅ TRUST SERVER STATE, NOT CLIENT PAYLOAD
     
@@ -270,13 +253,17 @@ io.on('connection', (socket) => {
     cardTimers.set(quizId, timeoutId);
   });
 
-  socket.on('submit_answer', async ({ quizId, cardIndex, selectedAnswerIndex, playerName }) => {
+  // ✅ FIX: Removed 'playerName' from payload, trusting socket.data.playerName instead
+  socket.on('submit_answer', async ({ quizId, cardIndex, selectedAnswerIndex }) => {
     const game = activeGames.get(quizId);
+    const playerName = socket.data.playerName; // ✅ TRUST SERVER STATE
+    
     if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
 
-    if (game.cardTimeout) {
-      clearTimeout(game.cardTimeout);
-      game.cardTimeout = null;
+    // ✅ FIX: Clear the timer immediately using the separate map
+    if (cardTimers.has(quizId)) {
+      clearTimeout(cardTimers.get(quizId));
+      cardTimers.delete(quizId);
     }
 
     const activePlayerLower = game.activeCard.player.toLowerCase();
