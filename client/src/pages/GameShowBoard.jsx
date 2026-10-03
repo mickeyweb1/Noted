@@ -222,14 +222,19 @@ export default function GameShowBoard() {
                           </button>
                           <div className="absolute right-0 top-full mt-1 w-40 bg-card border border-border rounded-lg shadow-lg hidden group-hover:block z-10">
                             <button 
-                              onClick={() => setDisqualifiedPlayers(prev => 
-                                prev.includes(player.name) ? prev.filter(n => n !== player.name) : [...prev, player.name]
-                              )}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2"
-                            >
-                              <Ban className="w-4 h-4" />
-                              {isDisqualified ? "Restore Player" : "Disqualify"}
-                            </button>
+  onClick={() => {
+    // Update local UI
+    setDisqualifiedPlayers(prev => 
+      prev.includes(player.name) ? prev.filter(n => n !== player.name) : [...prev, player.name]
+    );
+    // ✅ Tell the server to enforce it
+    socket.emit("disqualify_player", { quizId: quiz.quizId, playerName: player.name });
+  }}
+  className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2"
+>
+  <Ban className="w-4 h-4" />
+  {isDisqualified ? "Restore Player" : "Disqualify"}
+</button>
                             <button 
                               onClick={() => { navigator.clipboard.writeText(quiz.accessCodes[idx] || code); alert("Code Copied!"); }}
                               className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2"
@@ -393,31 +398,51 @@ export default function GameShowBoard() {
         </div>
       )}
 
-      {/* View All Questions Modal */}
+       {/* ✅ POLISHED: View All Questions Modal */}
       {showQuestionsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl max-h-[80vh] rounded-2xl border border-border bg-card p-6 shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center mb-4 shrink-0">
+          <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header (Sticky) */}
+            <div className="flex justify-between items-center p-6 border-b border-border bg-card rounded-t-2xl shrink-0">
               <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
                 <Eye className="w-5 h-5 text-brand" /> All Questions ({quiz.questions.length})
               </h3>
-              <button onClick={() => setShowQuestionsModal(false)} className="p-2 rounded-lg hover:bg-accent" aria-label="Close">
+              <button onClick={() => setShowQuestionsModal(false)} className="p-2 rounded-lg hover:bg-accent transition-colors" aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-4 overflow-y-auto pr-2">
+            
+            {/* Scrollable Content */}
+            <div className="overflow-y-auto p-6 space-y-4 custom-scrollbar">
               {quiz.questions.map((q, idx) => (
-                <div key={idx} className="p-4 rounded-xl border border-border bg-muted/30">
-                  <p className="font-bold text-foreground mb-2">Q{idx + 1}. {q.question}</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                <div key={idx} className="p-5 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <p className="font-semibold text-foreground mb-3 break-words">
+                    <span className="text-brand mr-2">Q{idx + 1}.</span> 
+                    {q.question}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {q.options.map((opt, i) => (
-                      <div key={i} className={`p-2 rounded border ${opt === q.correctAnswer ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400 font-bold' : 'bg-card border-border text-foreground'}`}>
-                        {String.fromCharCode(65 + i)}. {opt} {opt === q.correctAnswer && <CheckCircle2 className="inline w-4 h-4 ml-1" />}
+                      <div 
+                        key={i} 
+                        className={`p-3 rounded-lg border text-sm break-words flex items-start gap-2 ${
+                          opt === q.correctAnswer 
+                            ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400 font-semibold' 
+                            : 'bg-card border-border text-foreground'
+                        }`}
+                      >
+                        <span className="font-bold shrink-0">{String.fromCharCode(65 + i)}.</span>
+                        <span className="flex-1">{opt}</span>
+                        {opt === q.correctAnswer && <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
                       </div>
                     ))}
                   </div>
                   {q.explanation && (
-                    <p className="mt-2 text-xs text-muted-foreground"><span className="font-semibold text-foreground">Explanation:</span> {q.explanation}</p>
+                    <div className="mt-3 p-3 rounded-lg bg-brand-soft/50 border border-brand/10">
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-semibold text-foreground">💡 Explanation:</span> {q.explanation}
+                      </p>
+                    </div>
                   )}
                 </div>
               ))}
