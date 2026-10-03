@@ -332,7 +332,7 @@ export default function AiTeacher() {
                     {loadingAudioId === msg.id ? "Loading..." : activeAudioId === msg.id ? "Stop" : "Listen"}
                   </button>
                   <button onClick={() => handleCopyText(msg.id, msg.text)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border hover:bg-accent transition-all">
-                    {copiedId === msg.id ? <><Check className="w-3.5 h-3.5 text-green-500" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Notes</>}
+                    {copiedId === msg.id ? <><Check className="w-3.5 h-3.5 text-green-500" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> </>}
                   </button>
                   <button onClick={() => handleGenerateQuizFromChat(msg.text, msg.id)} disabled={generatingQuizId === msg.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-electric/10 text-electric border border-electric/20 hover:bg-electric/20 transition-all disabled:opacity-50">
                     {generatingQuizId === msg.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</> : <><Target className="w-3.5 h-3.5" /> Turn into Quiz</>}
