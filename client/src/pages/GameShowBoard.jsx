@@ -34,13 +34,29 @@ export default function GameShowBoard() {
 
   useEffect(() => {
     if (quiz?.quizId) {
+      console.log("📡 Emitting join_game for quizId:", quiz.quizId);
       socket.emit("join_game", { code, playerName: "Admin", role: "admin", quizId: quiz.quizId });
-      socket.on("game_state", (state) => setGameState(state));
+      
+      // ✅ CRITICAL: Listen for backend errors so we don't get stuck loading forever
+      socket.on("error", (errMsg) => {
+        console.error("❌ Socket Error:", errMsg);
+        setError(`Connection Failed: ${errMsg}`);
+      });
+
+      socket.on("game_state", (state) => {
+        console.log("✅ Received game_state");
+        setGameState(state);
+      });
       socket.on("player_joined", ({ players, status }) => setGameState((prev) => ({ ...prev, players, status })));
       socket.on("game_started", (state) => setGameState(state));
       socket.on("answer_result", (data) => setGameState((prev) => ({ ...prev, scores: data.scores, cardResults: data.cardResults, completedCards: data.completedCards, activityLog: data.activityLog })));
+      
       return () => {
-        socket.off("game_state"); socket.off("player_joined"); socket.off("game_started"); socket.off("answer_result");
+        socket.off("error");
+        socket.off("game_state"); 
+        socket.off("player_joined"); 
+        socket.off("game_started"); 
+        socket.off("answer_result");
       };
     }
   }, [quiz, code]);
