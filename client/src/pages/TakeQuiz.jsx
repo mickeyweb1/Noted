@@ -245,24 +245,52 @@ export default function TakeQuiz() {
   const handleSelectAnswer = (questionId, option) => { setAnswers(prev => ({ ...prev, [questionId]: option })); };
 
   const handleSubmitQuiz = async (isAuto = false) => {
-    if (isSubmitting || isSyncing) return;
+    if (isSubmitting || isSyncing) {
+      console.log("Submit blocked: already submitting or syncing");
+      return;
+    }
+    
+    console.log("Attempting to submit quiz. Online status:", navigator.onLine);
+
+    // ✅ NEW: Offline Fallback Logic
     if (!navigator.onLine) {
+      console.log("User is offline. Saving to localStorage and showing waiting screen.");
       setError("");
-      localStorage.setItem(`offline_submission_${code}`, JSON.stringify({ studentInfo, answers: answersRef.current, submittedAt: Date.now() }));
+      localStorage.setItem(`offline_submission_${code}`, JSON.stringify({
+        studentInfo,
+        answers: answersRef.current,
+        submittedAt: Date.now()
+      }));
       clearInterval(timerRef.current);
       setStep("offline-waiting");
       return;
     }
+
     setIsSubmitting(true);
     clearInterval(timerRef.current);
-    const formattedAnswers = quizData.questions.map(q => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null }));
+    
+    const formattedAnswers = quizData.questions.map(q => ({
+      questionId: q._id,
+      selectedAnswer: answersRef.current[q._id] || null
+    }));
+
     try {
-      const res = await api.post("/quiz/submit", { code, studentName: studentInfo.name, studentSurname: studentInfo.surname, studentClass: studentInfo.className, answers: formattedAnswers });
+      console.log("Sending submission to server...");
+      const res = await api.post("/quiz/submit", {
+        code,
+        studentName: studentInfo.name,
+        studentSurname: studentInfo.surname,
+        studentClass: studentInfo.className,
+        answers: formattedAnswers
+      });
+      
+      console.log("Server responded successfully!", res.data);
       setResult(res.data);
-      setStep("result");
+      setStep("result"); // Force transition to result screen
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to submit quiz.");
-      setIsSubmitting(false); 
+      console.error("Submission failed:", err);
+      setError(err.response?.data?.message || "Failed to submit quiz. Please check your internet and try again.");
+      setIsSubmitting(false); // Re-enable the button so they can try again
     }
   };
 
