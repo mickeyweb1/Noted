@@ -169,38 +169,58 @@ const retryIntervalRef = useRef(null); // ✅ NEW: For offline sync retry
   // ✅ NEW: Offline / Online Event Listeners
   useEffect(() => {
     const handleOffline = () => setIsOffline(true);
-    const handleOnline = async () => {
-      setIsOffline(false);
-      
-      // Check if there is a pending offline submission
-      const pending = localStorage.getItem(`offline_submission_${code}`);
-      if (pending && quizData && studentInfo.name) {
-        setIsSyncing(true);
-        try {
-          const data = JSON.parse(pending);
-          const formattedAnswers = quizData.questions.map(q => ({
-            questionId: q._id,
-            selectedAnswer: data.answers[q._id] || null
-          }));
-          
-          const res = await api.post("/quiz/submit", {
-            code,
-            studentName: data.studentInfo.name,
-            studentSurname: data.studentInfo.surname,
-            studentClass: data.studentInfo.className,
-            answers: formattedAnswers
-          });
-          
-          localStorage.removeItem(`offline_submission_${code}`);
-          setResult(res.data);
-          setStep("result");
-        } catch (err) {
-          setError("Failed to sync offline submission. Please try submitting manually.");
-          setStep("quiz"); 
-        } finally {
-          setIsSyncing(false);
-        }
-      }
+   const handleOnline = async () => {
+  setIsOffline(false);
+  
+  const pending = localStorage.getItem(`offline_submission_${code}`);
+  if (pending && quizData && studentInfo.name) {
+    attemptSync();
+  }
+};
+
+const attemptSync = async () => {
+  const pending = localStorage.getItem(`offline_submission_${code}`);
+  if (!pending || !quizData || !studentInfo.name) return;
+  
+  setIsSyncing(true);
+  try {
+    const data = JSON.parse(pending);
+    const formattedAnswers = quizData.questions.map(q => ({
+      questionId: q._id,
+      selectedAnswer: data.answers[q._id] || null
+    }));
+    
+    const res = await api.post("/quiz/submit", {
+      code,
+      studentName: data.studentInfo.name,
+      studentSurname: data.studentInfo.surname,
+      studentClass: data.studentInfo.className,
+      answers: formattedAnswers
+    });
+    
+    localStorage.removeItem(`offline_submission_${code}`);
+    if (retryIntervalRef.current) {
+      clearInterval(retryIntervalRef.current);
+      retryIntervalRef.current = null;
+    }
+    setResult(res.data);
+    setStep("result");
+  } catch (err) {
+    console.log("Sync failed, will retry in 5 seconds...");
+  } finally {
+    setIsSyncing(false);
+  }
+};
+
+// ✅ NEW: Check for pending submissions on mount
+useEffect(() => {
+  if (step === "quiz" || step === "result") {
+    const pending = localStorage.getItem(`offline_submission_${code}`);
+    if (pending && navigator.onLine && quizData && studentInfo.name) {
+      attemptSync();
+    }
+  }
+}, [step, code, quizData, studentInfo]);
     };
 
     window.addEventListener('offline', handleOffline);
@@ -236,26 +256,21 @@ const retryIntervalRef = useRef(null); // ✅ NEW: For offline sync retry
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [step, code]);
 
-  useEffect(() => {
-    if (step !== "quiz") return;
+ useEffect(() => {
+  if (step !== "quiz" || !endTimeRef.current) return;
+  
+  timerRef.current = setInterval(() => {
+    const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+    setTimeLeft(remaining);
     
-    if (timeLeft <= 0) {
+    if (remaining <= 0) {
+      clearInterval(timerRef.current);
       handleSubmitQuiz(true);
-      return;
     }
-    
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    return () => clearInterval(timerRef.current);
-  }, [step, timeLeft]);
+  }, 1000);
+  
+  return () => clearInterval(timerRef.current);
+}, [step]);
 
   const handleValidateCode = async (e) => {
     e.preventDefault();
@@ -313,6 +328,7 @@ const retryIntervalRef = useRef(null); // ✅ NEW: For offline sync retry
       const initialTimeLeft = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
       
       setTimeLeft(initialTimeLeft);
+      endTimeRef.current = endTime;
       setStep("quiz");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to start quiz session.");
@@ -473,20 +489,47 @@ const retryIntervalRef = useRef(null); // ✅ NEW: For offline sync retry
   }
 
   /* ---------- NEW: Offline Waiting Screen ---------- */
-  if (step === "offline-waiting") {
-    return (
-      <div className={shell}>
-        <div className={`${panel} text-center`}>
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10">
-            <WifiOff className="h-8 w-8 text-yellow-500" />
-          </div>
-          <h1 className="mb-2 text-2xl font-bold text-foreground">Waiting for Connection...</h1>
-          <p className="mb-6 text-muted-foreground">Your answers are safely stored on your device. We will automatically submit your quiz to the teacher as soon as your internet connection returns.</p>
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand" />
+if (step === "offline-waiting") {
+  // ✅ NEW: Start retry loop when entering offline-waiting
+  useEffect(() => {
+    if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
+    retryIntervalRef.current = setInterval(() => {
+      if (navigator.onLine) {
+        attemptSync();
+      }
+    }, 5000); // Retry every 5 seconds
+    
+    return () => {
+      if (retryIntervalRef.current) {
+        clearInterval(retryIntervalRef.current);
+        retryIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <div className={shell}>
+      <div className={`${panel} text-center`}>
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10">
+          <WifiOff className="h-8 w-8 text-yellow-500" />
         </div>
+        <h1 className="mb-2 text-2xl font-bold text-foreground">Waiting for Connection...</h1>
+        <p className="mb-6 text-muted-foreground">Your answers are safely stored on your device. We will automatically submit your quiz to the teacher as soon as your internet connection returns.</p>
+        
+        {isSyncing ? (
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand" />
+        ) : (
+          <button 
+            onClick={attemptSync}
+            className={primaryBtn}
+          >
+            Try Submitting Now
+          </button>
+        )}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   /* ---------- Step 3: Quiz ---------- */
   if (step === "quiz") {
