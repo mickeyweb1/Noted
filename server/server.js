@@ -139,7 +139,7 @@ const verifyAdminToken = (token) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
 
-  socket.on('join_game', async ({ code, playerName, role = 'student', quizId }) => {
+  socket.on('join_game', async ({ code, playerName, role = 'student', quizId, token }) => { // ✅ Added 'token' here
     try {
       const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
       if (!quiz) {
@@ -171,14 +171,13 @@ io.on('connection', (socket) => {
 
       const game = activeGames.get(actualQuizId);
 
-      // ✅ UPDATED: Verify admin with detailed logging
       if (role === 'admin') {
-        const token = socket.handshake.auth.token;
-        console.log("🔍 Admin join attempt. Token present:", !!token);
-        const user = verifyAdminToken(token);
+        // ✅ Check payload token first, fallback to handshake auth
+        const authToken = token || socket.handshake.auth.token;
+        const user = verifyAdminToken(authToken);
         
         if (!user || (user.role !== 'super_admin' && user.role !== 'school_admin')) {
-          console.log(`⚠️ Unauthorized admin attempt from ${socket.id}. Decoded user data:`, user);
+          console.log(`⚠️ Unauthorized admin attempt. Token present:`, !!authToken, "User data:", user);
           socket.emit('error', 'Unauthorized: Admin access required. Please log out and log back in.');
           return;
         }
