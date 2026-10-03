@@ -166,14 +166,15 @@ io.on('connection', (socket) => {
 
       const game = activeGames.get(actualQuizId);
 
-      // ✅ NEW: Verify admin with JWT token
+      // ✅ NEW: Verify admin with JWT token (Relaxed to allow any school/super admin)
       if (role === 'admin') {
         const token = socket.handshake.auth.token;
         const user = verifyAdminToken(token, actualQuizId);
         
-        if (!user || String(quiz.createdBy) !== String(user._id)) {
-          console.log(`⚠️ Unauthorized admin attempt from ${socket.id}`);
-          socket.emit('error', 'Unauthorized: You are not the creator of this game');
+        // Just check if they are a valid admin, not strictly the creator
+        if (!user || (user.role !== 'super_admin' && user.role !== 'school_admin')) {
+          console.log(`⚠️ Unauthorized admin attempt from ${socket.id}. User data:`, user);
+          socket.emit('error', 'Unauthorized: Admin access required');
           return;
         }
         
