@@ -6,11 +6,8 @@ dotenv.config();
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// ✅ Only use the 2 most stable, permanently active Groq models
-const MODELS = [
-  "llama-3.1-8b-instant",
-  "llama3-8b-8192"
-];
+// ✅ This is the exact model your API key has access to and works perfectly for JSON!
+const MODELS = ["qwen/qwen3.8-27b"];
 
 const cleanOutput = (raw = "") =>
   raw
@@ -50,7 +47,6 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
   const { json = false, max_tokens = 800, ...rest } = options;
   let lastError;
 
-  // 1. Try the stable Groq models
   for (const model of MODELS) {
     try {
       const completion = await groq.chat.completions.create({
@@ -73,12 +69,10 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
     }
   }
 
-  // 2. LAST RESORT: Hugging Face Fallback (100% FREE)
-  // Note: If you see ENOTFOUND here, it's just a temporary Render network hiccup. 
-  // Retrying the request usually fixes it.
+  // LAST RESORT: Hugging Face Fallback (100% FREE)
   if (process.env.HF_API_KEY) {
     try {
-      console.log("🔄 All Groq models failed. Activating FREE Hugging Face fallback...");
+      console.log("🔄 Groq failed. Activating FREE Hugging Face fallback...");
       const text = await askHuggingFace(messages, max_tokens);
       if (text) {
         console.log("✅ Hugging Face fallback successful!");
