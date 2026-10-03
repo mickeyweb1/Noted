@@ -93,6 +93,14 @@ export default function GameShowLobby() {
       }
     });
 
+    // ✅ NEW: Re-join room on reconnect
+socket.on("connect", () => {
+  if ((step === "waiting" || step === "playing") && quizId && studentName) {
+    console.log("Socket reconnected, re-joining room...");
+    socket.emit("join_game", { code, playerName: studentName, role: "student", quizId });
+  }
+});
+
     socket.on("answer_result", (data) => {
       setActiveCard(null);
       setSelectedAnswer(null);
@@ -137,6 +145,7 @@ export default function GameShowLobby() {
       socket.off("game_started");
       socket.off("card_locked");
       socket.off("answer_result");
+      socket.off("connect");
     };
   }, [code, studentName, quizData, step, activeCard]);
 
