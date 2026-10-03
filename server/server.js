@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
 import { Quiz } from './models/Quiz.js';
 import { QuizSubmission } from './models/QuizSubmission.js'; 
 import supportRoutes from './routes/supportRoutes.js'; 
@@ -72,6 +73,9 @@ const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
     game.savedToDb = true; 
     
+    // ✅ NEW: Calculate maxScore for game show
+    const maxScore = game.questions.length * (game.baseMarks || 10);
+    
     for (const player of game.players) {
       if (player.name === "Admin" || player.name.toLowerCase() === "admin") continue;
       
@@ -101,6 +105,7 @@ const saveGameShowResults = async (game) => {
             answers: submissionAnswers,
             score: totalScore,
             totalQuestions: game.questions.length,
+            maxScore: maxScore, // ✅ NEW: Save maxScore
             timeTaken: 0,
             tabSwitchCount: 0,
             gameMode: 'gameShow'
@@ -116,10 +121,20 @@ const saveGameShowResults = async (game) => {
   }
 };
 
+// ✅ NEW: Verify JWT token for admin role
+const verifyAdminToken = (token, quizId) => {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded; // Returns user object with _id, role, etc.
+  } catch (err) {
+    return null;
+  }
+};
+
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
 
-  socket.on('join_game', async ({ code, playerName, role = 'student' }) => {
+  socket.on('join_game', async ({ code, playerName, role = 'student', quizId }) => {
     try {
       const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
       if (!quiz) {
@@ -127,12 +142,12 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const quizId = quiz._id.toString();
-      socket.join(quizId);
+      const actualQuizId = quiz._id.toString();
+      socket.join(actualQuizId);
 
-      if (!activeGames.has(quizId)) {
-        activeGames.set(quizId, {
-          quizId,
+      if (!activeGames.has(actualQuizId)) {
+        activeGames.set(actualQuizId, {
+          quizId: actualQuizId,
           title: quiz.title,
           baseMarks: quiz.baseMarks || 10,
           bonusMarks: quiz.bonusMarks || 5,
@@ -143,16 +158,32 @@ io.on('connection', (socket) => {
           completedCards: [],
           cardResults: [],
           activityLog: [],
-          lastPicker: null, // ✅ NEW: Track who picked last for cooldown
+          lastPicker: null,
+          cardTimeout: null, // ✅ NEW: For locked card timeout
           questions: quiz.questions
         });
       }
 
-      const game = activeGames.get(quizId);
+      const game = activeGames.get(actualQuizId);
 
+      // ✅ NEW: Verify admin with JWT token
       if (role === 'admin') {
+        const token = socket.handshake.auth.token;
+        const user = verifyAdminToken(token, actualQuizId);
+        
+        if (!user || String(quiz.createdBy) !== String(user._id)) {
+          console.log(`⚠️ Unauthorized admin attempt from ${socket.id}`);
+          socket.emit('error', 'Unauthorized: You are not the creator of this game');
+          return;
+        }
+        
         game.adminSocketId = socket.id;
+        socket.data.role = 'admin';
       } else {
+        // Force students to student role
+        socket.data.role = 'student';
+        socket.data.playerName = playerName;
+        
         const existingPlayer = game.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
         if (!existingPlayer) {
           game.players.push({ id: socket.id, name: playerName, score: 0 });
@@ -162,7 +193,7 @@ io.on('connection', (socket) => {
         }
       }
 
-      io.to(quizId).emit('player_joined', { players: game.players, status: game.status });
+      io.to(actualQuizId).emit('player_joined', { players: game.players, status: game.status });
 
       const safeState = { ...game };
       if (role !== 'admin') {
@@ -182,7 +213,18 @@ io.on('connection', (socket) => {
     if (game && socket.id === game.adminSocketId) {
       game.status = 'live';
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: "🚀 Match Started!" });
-      io.to(quizId).emit('game_started', game);
+      
+      // ✅ NEW: Send sanitized state to students (no answers)
+      const studentSafeState = { ...game };
+      studentSafeState.questions = game.questions.map(q => ({
+        _id: q._id,
+        question: q.question,
+        options: q.options,
+        imageUrl: q.imageUrl
+        // NO correctAnswer, NO explanation
+      }));
+      
+      io.to(quizId).emit('game_started', studentSafeState);
     }
   });
 
@@ -190,22 +232,58 @@ io.on('connection', (socket) => {
     const game = activeGames.get(quizId);
     if (game && game.status === 'live' && !game.activeCard && !game.completedCards.includes(cardIndex)) {
       
-      // ✅ NEW: Turn-Taking Cooldown Rule
       if (game.lastPicker === playerName && game.completedCards.length > 0) {
         console.log(`⚠️ ${playerName} tried to pick twice in a row. Blocked.`);
         return; 
       }
 
-      game.activeCard = { index: cardIndex, player: playerName, attempt: 1 };
-      game.lastPicker = playerName; // ✅ Track who picked
+      game.activeCard = { index: cardIndex, player: playerName, attempt: 1, pickedAt: Date.now() };
+      game.lastPicker = playerName;
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
       io.to(quizId).emit('card_locked', { cardIndex, playerName });
+      
+      // ✅ NEW: Add 30-second timeout for locked card
+      if (game.cardTimeout) clearTimeout(game.cardTimeout);
+      game.cardTimeout = setTimeout(() => {
+        if (game.activeCard && game.activeCard.index === cardIndex) {
+          console.log(`⏰ Card ${cardIndex + 1} timeout - auto-releasing`);
+          game.cardResults.push({
+            cardIndex,
+            player: playerName,
+            result: 'timeout',
+            points: 0,
+            selectedAnswer: 'Skipped'
+          });
+          game.completedCards.push(cardIndex);
+          game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `⏰ ${playerName} ran out of time on Card ${cardIndex + 1}` });
+          game.activeCard = null;
+          
+          if (game.completedCards.length === game.questions.length) {
+            saveGameShowResults(game);
+          }
+          
+          io.to(quizId).emit('answer_result', {
+            isCorrect: false,
+            isTimeout: true,
+            scores: game.scores,
+            completedCards: game.completedCards,
+            cardResults: game.cardResults,
+            activityLog: game.activityLog
+          });
+        }
+      }, 30000); // 30 seconds
     }
   });
 
   socket.on('submit_answer', async ({ quizId, cardIndex, selectedAnswerIndex, playerName }) => {
     const game = activeGames.get(quizId);
     if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
+
+    // ✅ NEW: Clear the timeout when answer is submitted
+    if (game.cardTimeout) {
+      clearTimeout(game.cardTimeout);
+      game.cardTimeout = null;
+    }
 
     const activePlayerLower = game.activeCard.player.toLowerCase();
     const stealPlayerLower = game.activeCard.stealPlayer ? game.activeCard.stealPlayer.toLowerCase() : null;
@@ -288,7 +366,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ✅ RESTORED: Disconnect Auto-Save to prevent data loss on server restarts
   socket.on('disconnect', async () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
     
@@ -310,6 +387,7 @@ io.on('connection', (socket) => {
         });
 
         const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
+        const maxScore = game.questions.length * (game.baseMarks || 10);
 
         try {
           await QuizSubmission.findOneAndUpdate(
@@ -323,6 +401,7 @@ io.on('connection', (socket) => {
               answers: submissionAnswers,
               score: totalScore,
               totalQuestions: game.questions.length,
+              maxScore: maxScore,
               timeTaken: 0,
               tabSwitchCount: 0,
               gameMode: 'gameShow'
