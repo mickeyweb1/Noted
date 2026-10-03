@@ -12,6 +12,7 @@ import jwt from 'jsonwebtoken';
 import { Quiz } from './models/Quiz.js';
 import { QuizSubmission } from './models/QuizSubmission.js'; 
 import supportRoutes from './routes/supportRoutes.js'; 
+import { User } from './models/User.js';
 
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -65,6 +66,7 @@ const io = new Server(server, {
 });
 
 const activeGames = new Map();
+const cardTimers = new Map();
 
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
@@ -134,12 +136,31 @@ const verifyAdminToken = (token) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
 
-  socket.on('join_game', async ({ code, playerName, role = 'student', quizId, token }) => {
+  
+  socket.on('join_game', async ({ code, role = 'student', quizId, token }) => {
     try {
       const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
       if (!quiz) {
         socket.emit('error', 'Invalid game code');
         return;
+      }
+
+      // ✅ FIX: Check ownership BEFORE joining the room
+      if (role === 'admin') {
+        const authToken = token || socket.handshake.auth?.token;
+        try {
+          const decoded = jwt.verify(authToken, process.env.JWT_SECRET);
+          const user = await User.findById(decoded.id || decoded._id || decoded.userId).select('_id');
+          if (!user || String(quiz.createdBy) !== String(user._id)) {
+            console.log(`⚠️ Unauthorized admin attempt. User ID: ${user?._id}, Quiz Creator: ${quiz.createdBy}`);
+            socket.emit('error', 'Unauthorized: You are not the creator of this game');
+            return;
+          }
+        } catch (err) {
+          console.log(`⚠️ JWT verify failed for admin:`, err.message);
+          socket.emit('error', 'Unauthorized: Invalid token');
+          return;
+        }
       }
 
       const actualQuizId = quiz._id.toString();
@@ -159,7 +180,7 @@ io.on('connection', (socket) => {
           cardResults: [],
           activityLog: [],
           lastPicker: null,
-          cardTimeout: null,
+          // ✅ FIX: Removed cardTimeout from here
           questions: quiz.questions
         });
       }
@@ -167,20 +188,11 @@ io.on('connection', (socket) => {
       const game = activeGames.get(actualQuizId);
 
       if (role === 'admin') {
-        const authToken = token || socket.handshake.auth.token;
-        const user = verifyAdminToken(authToken);
-        
-        if (!user || (user.role !== 'super_admin' && user.role !== 'school_admin')) {
-          console.log(`⚠️ Unauthorized admin attempt. Token present:`, !!authToken, "User data:", user);
-          socket.emit('error', 'Unauthorized: Admin access required. Please log out and log back in.');
-          return;
-        }
-        
         game.adminSocketId = socket.id;
         socket.data.role = 'admin';
       } else {
         socket.data.role = 'student';
-        socket.data.playerName = playerName;
+        socket.data.playerName = playerName; // ✅ Securely store the name on the server
         
         const existingPlayer = game.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
         if (!existingPlayer) {
@@ -224,32 +236,38 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('pick_card', ({ quizId, cardIndex, playerName }) => {
+  
+   socket.on('pick_card', ({ quizId, cardIndex }) => {
     const game = activeGames.get(quizId);
-    if (game && game.status === 'live' && !game.activeCard && !game.completedCards.includes(cardIndex)) {
-      if (game.lastPicker === playerName && game.completedCards.length > 0) {
-        return; 
-      }
+    const playerName = socket.data.playerName; // ✅ TRUST SERVER STATE, NOT CLIENT PAYLOAD
+    
+    if (!game || game.status !== 'live' || game.activeCard || game.completedCards.includes(cardIndex)) return;
+    
+    if (game.lastPicker === playerName && game.completedCards.length > 0) return; 
 
-      game.activeCard = { index: cardIndex, player: playerName, attempt: 1, pickedAt: Date.now() };
-      game.lastPicker = playerName;
-      game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
-      io.to(quizId).emit('card_locked', { cardIndex, playerName });
-      
-      if (game.cardTimeout) clearTimeout(game.cardTimeout);
-      game.cardTimeout = setTimeout(() => {
-        if (game.activeCard && game.activeCard.index === cardIndex) {
-          game.cardResults.push({ cardIndex, player: playerName, result: 'timeout', points: 0, selectedAnswer: 'Skipped' });
-          game.completedCards.push(cardIndex);
-          game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `⏰ ${playerName} ran out of time on Card ${cardIndex + 1}` });
-          game.activeCard = null;
-          
-          if (game.completedCards.length === game.questions.length) saveGameShowResults(game);
-          
-          io.to(quizId).emit('answer_result', { isCorrect: false, isTimeout: true, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
-        }
-      }, 30000);
-    }
+    game.activeCard = { index: cardIndex, player: playerName, attempt: 1, pickedAt: Date.now() };
+    game.lastPicker = playerName;
+    game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
+    io.to(quizId).emit('card_locked', { cardIndex, playerName });
+    
+    // ✅ FIX: Use the separate cardTimers Map
+    if (cardTimers.has(quizId)) clearTimeout(cardTimers.get(quizId));
+    
+    const timeoutId = setTimeout(() => {
+      if (game.activeCard && game.activeCard.index === cardIndex) {
+        game.cardResults.push({ cardIndex, player: playerName, result: 'timeout', points: 0, selectedAnswer: 'Skipped' });
+        game.completedCards.push(cardIndex);
+        game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `⏰ ${playerName} ran out of time on Card ${cardIndex + 1}` });
+        game.activeCard = null;
+        cardTimers.delete(quizId);
+        
+        if (game.completedCards.length === game.questions.length) saveGameShowResults(game);
+        
+        io.to(quizId).emit('answer_result', { isCorrect: false, isTimeout: true, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
+      }
+    }, 30000);
+    
+    cardTimers.set(quizId, timeoutId);
   });
 
   socket.on('submit_answer', async ({ quizId, cardIndex, selectedAnswerIndex, playerName }) => {
