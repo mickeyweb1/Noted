@@ -94,16 +94,31 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     }`;
     
     // ✅ FIX: Reduced max_tokens to 1500 and notes slice to 20000 to prevent Groq 429 Rate Limit errors
-// ✅ FIX: Strictly under 1000 to avoid Groq rate limit
-const response = await generateWithGroq(
-  [
-    { role: 'system', content: systemPrompt }, 
-    { role: 'user', content: `Notes:\n${notes.slice(0, 15000)}` }
-  ], 
-  { max_tokens: 800 } 
-);
+    // ✅ FIX 1: Stricter prompt to keep output small and fit within Groq's 1000 token limit
+    const strictPrompt = systemPrompt + " CRITICAL: Keep explanations to ONE short sentence maximum to fit token limits.";
+    
+    const response = await generateWithGroq(
+      [
+        { role: 'system', content: strictPrompt }, 
+        { role: 'user', content: `Notes:\n${notes.slice(0, 10000)}` } // Reduced notes slice to save tokens
+      ], 
+      { max_tokens: 1000 } // Max allowed by your Groq tier
+    );
+    
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    
+    // ✅ FIX 2: Safe JSON parsing to prevent 500 Server Crashes
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (parseError) {
+      console.error("AI JSON Parse Error:", parseError);
+      return res.status(400).json({ 
+        success: false, 
+        message: "AI generated an invalid response. Please try again with fewer notes or fewer questions." 
+      });
+    }
+    
     res.json({ success: true, data: { questions: parsed.questions } });
   } catch (error) {
     next(error);
