@@ -11,14 +11,12 @@ import { protect } from '../middleware/protect.js';
 
 const router = express.Router();
 
-// ✅ NEW: Configure Cloudinary for permanent image storage
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// ✅ NEW: Multer storage that uploads directly to Cloudinary
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -29,7 +27,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 const generateAccessCode = (mode = 'test') => {
@@ -188,11 +186,12 @@ router.post('/session/start', async (req, res, next) => {
         timeType: quiz.timeType,
         title: quiz.title,
         difficulty: quiz.difficulty,
+        // ✅ FIX: Removed correctAnswer so students can't cheat
         questions: quiz.questions.map(q => ({ 
           _id: q._id, 
           question: q.question, 
           options: q.options, 
-          imageUrl: q.imageUrl,
+          imageUrl: q.imageUrl
         })),
         savedAnswers: session.answers || [],
         savedStudentInfo: session.studentName ? {
@@ -340,10 +339,9 @@ router.get('/:id/results', protect, async (req, res, next) => {
   }
 });
 
-// 🎯 8. Upload quiz image to Cloudinary (PERMANENT STORAGE)
+// 🎯 8. Upload quiz image to Cloudinary
 router.post('/upload/quiz-image', protect, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-  // req.file.path contains the permanent Cloudinary URL
   res.json({ success: true, imageUrl: req.file.path });
 });
 
