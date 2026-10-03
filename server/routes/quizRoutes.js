@@ -5,33 +5,31 @@ import { QuizSubmission } from '../models/QuizSubmission.js';
 import { QuizSession } from '../models/QuizSession.js';
 import { generateWithGroq } from '../config/grok.js';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { protect } from '../middleware/protect.js';
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = './public/uploads/quizzes';
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, 'question-' + Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname));
-  }
+// ✅ NEW: Configure Cloudinary for permanent image storage
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+// ✅ NEW: Multer storage that uploads directly to Cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'noted_quizzes',
+    allowed_formats: ['jpeg', 'jpg', 'png', 'gif', 'webp'],
+  },
+});
+
 const upload = multer({ 
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    if (allowedTypes.test(path.extname(file.originalname).toLowerCase()) && allowedTypes.test(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'));
-    }
-  }
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
 const generateAccessCode = (mode = 'test') => {
@@ -85,7 +83,6 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
       ] 
     }`;
     
-    // ✅ FIX 1: Stricter prompt to keep output small and fit within Groq's 1000 token limit
     const strictPrompt = systemPrompt + " CRITICAL: Keep explanations to ONE short sentence maximum to fit token limits.";
     
     const response = await generateWithGroq(
@@ -98,7 +95,6 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     
     const cleaned = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     
-    // ✅ FIX 2: Safe JSON parsing to prevent 500 Server Crashes
     let parsed;
     try {
       parsed = JSON.parse(cleaned);
@@ -342,9 +338,11 @@ router.get('/:id/results', protect, async (req, res, next) => {
   }
 });
 
+// 🎯 8. Upload quiz image to Cloudinary (PERMANENT STORAGE)
 router.post('/upload/quiz-image', protect, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-  res.json({ success: true, imageUrl: `/uploads/quizzes/${req.file.filename}` });
+  // req.file.path contains the permanent Cloudinary URL
+  res.json({ success: true, imageUrl: req.file.path });
 });
 
 router.get('/admin/quizzes', protect, async (req, res, next) => {
@@ -405,7 +403,7 @@ router.post('/validate-code', async (req, res, next) => {
   }
 });
 
-// 🎯 8. Get Game Show details by code (Admin only)
+// 🎯 9. Get Game Show details by code (Admin only)
 router.get('/game-show/:code', protect, async (req, res, next) => {
   try {
     const code = normalizeCode(req.params.code);

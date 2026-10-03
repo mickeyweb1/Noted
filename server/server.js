@@ -57,9 +57,6 @@ app.get('/', (req, res) => res.json({ success: true, message: '✅ Noted Backend
 app.use((req, res) => res.status(404).json({ success: false, message: `Route not found: ${req.originalUrl}` }));
 app.use(errorHandler);
 
-// ==========================================
-// ✅ PREMIUM & SECURED SOCKET.IO SETUP
-// ==========================================
 const PORT = process.env.PORT || 5000;
 const server = createServer(app);
 
@@ -72,7 +69,6 @@ const activeGames = new Map();
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
     game.savedToDb = true; 
-    
     const maxScore = game.questions.length * (game.baseMarks || 10);
     
     for (const player of game.players) {
@@ -120,7 +116,6 @@ const saveGameShowResults = async (game) => {
   }
 };
 
-// ✅ UPDATED: Verify JWT token with detailed logging
 const verifyAdminToken = (token) => {
   try {
     if (!token) {
@@ -139,7 +134,7 @@ const verifyAdminToken = (token) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
 
-  socket.on('join_game', async ({ code, playerName, role = 'student', quizId, token }) => { // ✅ Added 'token' here
+  socket.on('join_game', async ({ code, playerName, role = 'student', quizId, token }) => {
     try {
       const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
       if (!quiz) {
@@ -172,7 +167,6 @@ io.on('connection', (socket) => {
       const game = activeGames.get(actualQuizId);
 
       if (role === 'admin') {
-        // ✅ Check payload token first, fallback to handshake auth
         const authToken = token || socket.handshake.auth.token;
         const user = verifyAdminToken(authToken);
         
@@ -233,9 +227,7 @@ io.on('connection', (socket) => {
   socket.on('pick_card', ({ quizId, cardIndex, playerName }) => {
     const game = activeGames.get(quizId);
     if (game && game.status === 'live' && !game.activeCard && !game.completedCards.includes(cardIndex)) {
-      
       if (game.lastPicker === playerName && game.completedCards.length > 0) {
-        console.log(`⚠️ ${playerName} tried to pick twice in a row. Blocked.`);
         return; 
       }
 
@@ -247,30 +239,14 @@ io.on('connection', (socket) => {
       if (game.cardTimeout) clearTimeout(game.cardTimeout);
       game.cardTimeout = setTimeout(() => {
         if (game.activeCard && game.activeCard.index === cardIndex) {
-          console.log(`⏰ Card ${cardIndex + 1} timeout - auto-releasing`);
-          game.cardResults.push({
-            cardIndex,
-            player: playerName,
-            result: 'timeout',
-            points: 0,
-            selectedAnswer: 'Skipped'
-          });
+          game.cardResults.push({ cardIndex, player: playerName, result: 'timeout', points: 0, selectedAnswer: 'Skipped' });
           game.completedCards.push(cardIndex);
           game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `⏰ ${playerName} ran out of time on Card ${cardIndex + 1}` });
           game.activeCard = null;
           
-          if (game.completedCards.length === game.questions.length) {
-            saveGameShowResults(game);
-          }
+          if (game.completedCards.length === game.questions.length) saveGameShowResults(game);
           
-          io.to(quizId).emit('answer_result', {
-            isCorrect: false,
-            isTimeout: true,
-            scores: game.scores,
-            completedCards: game.completedCards,
-            cardResults: game.cardResults,
-            activityLog: game.activityLog
-          });
+          io.to(quizId).emit('answer_result', { isCorrect: false, isTimeout: true, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
         }
       }, 30000);
     }
@@ -289,9 +265,7 @@ io.on('connection', (socket) => {
     const stealPlayerLower = game.activeCard.stealPlayer ? game.activeCard.stealPlayer.toLowerCase() : null;
     const submitterLower = playerName.toLowerCase();
 
-    if (activePlayerLower !== submitterLower && stealPlayerLower !== submitterLower) {
-      return; 
-    }
+    if (activePlayerLower !== submitterLower && stealPlayerLower !== submitterLower) return; 
 
     const question = game.questions[cardIndex];
     const isCorrect = selectedAnswerIndex !== -1 && question.options[selectedAnswerIndex] === question.correctAnswer;
@@ -302,88 +276,47 @@ io.on('connection', (socket) => {
       const resultType = game.activeCard.attempt === 2 ? 'steal' : 'correct';
       
       game.scores[exactPlayerName] = (game.scores[exactPlayerName] || 0) + points;
-      game.cardResults.push({ 
-        cardIndex, 
-        player: exactPlayerName, 
-        result: resultType, 
-        points,
-        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' 
-      });
+      game.cardResults.push({ cardIndex, player: exactPlayerName, result: resultType, points, selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' });
       game.completedCards.push(cardIndex);
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${exactPlayerName} got it right! (+${points} pts)` });
       
       game.activeCard = null;
-      
-      if (game.completedCards.length === game.questions.length) {
-        await saveGameShowResults(game);
-      }
+      if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
 
-      io.to(quizId).emit('answer_result', { 
-        isCorrect: true, points, scores: game.scores, 
-        completedCards: game.completedCards, cardResults: game.cardResults,
-        activityLog: game.activityLog 
-      });
+      io.to(quizId).emit('answer_result', { isCorrect: true, points, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
     } else {
       if (game.activeCard.attempt === 1 && !game.activeCard.stealPlayer) {
-        const otherPlayer = game.players.find(p => 
-          p.name.toLowerCase() !== activePlayerLower && p.name.toLowerCase() !== "admin"
-        );
-        
+        const otherPlayer = game.players.find(p => p.name.toLowerCase() !== activePlayerLower && p.name.toLowerCase() !== "admin");
         if (otherPlayer) {
           game.activeCard.attempt = 2;
           game.activeCard.stealPlayer = otherPlayer.name;
           game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed! ${otherPlayer.name} can STEAL for +${game.bonusMarks || 5} pts!` });
-          
-          io.to(quizId).emit('answer_result', { 
-            isCorrect: false, isStealOpportunity: true, stealPlayer: otherPlayer.name,
-            scores: game.scores, activityLog: game.activityLog 
-          });
+          io.to(quizId).emit('answer_result', { isCorrect: false, isStealOpportunity: true, stealPlayer: otherPlayer.name, scores: game.scores, activityLog: game.activityLog });
           return; 
         }
       }
       
-      game.cardResults.push({ 
-        cardIndex, 
-        player: exactPlayerName, 
-        result: 'wrong', 
-        points: 0,
-        selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' 
-      });
+      game.cardResults.push({ cardIndex, player: exactPlayerName, result: 'wrong', points: 0, selectedAnswer: selectedAnswerIndex !== -1 ? question.options[selectedAnswerIndex] : 'Skipped' });
       game.completedCards.push(cardIndex);
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed it. Card closed.` });
       
       game.activeCard = null;
-      
-      if (game.completedCards.length === game.questions.length) {
-        await saveGameShowResults(game);
-      }
+      if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
 
-      io.to(quizId).emit('answer_result', { 
-        isCorrect: false, scores: game.scores, 
-        completedCards: game.completedCards, cardResults: game.cardResults,
-        activityLog: game.activityLog 
-      });
+      io.to(quizId).emit('answer_result', { isCorrect: false, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
     }
   });
 
   socket.on('disconnect', async () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
-    
     for (const [quizId, game] of activeGames.entries()) {
       const player = game.players.find(p => p.id === socket.id);
       if (player && game.status === 'live') {
-        console.log(`💾 Auto-saving progress for disconnected player: ${player.name}`);
-        
         const playerResults = game.cardResults.filter(r => r.player === player.name);
         const totalScore = playerResults.reduce((sum, r) => sum + r.points, 0);
-        
         const submissionAnswers = game.questions.map((q, idx) => {
           const result = playerResults.find(r => r.cardIndex === idx);
-          return {
-            questionId: q._id,
-            selectedAnswer: result ? result.selectedAnswer : 'Skipped',
-            isCorrect: result ? (result.result === 'correct' || result.result === 'steal') : false
-          };
+          return { questionId: q._id, selectedAnswer: result ? result.selectedAnswer : 'Skipped', isCorrect: result ? (result.result === 'correct' || result.result === 'steal') : false };
         });
 
         const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -392,20 +325,7 @@ io.on('connection', (socket) => {
         try {
           await QuizSubmission.findOneAndUpdate(
             { quiz: game.quizId, accessCode: safeAccessCode },
-            {
-              quiz: game.quizId,
-              studentName: player.name,
-              studentSurname: "GameShow", 
-              studentClass: "Live Match",
-              accessCode: safeAccessCode,
-              answers: submissionAnswers,
-              score: totalScore,
-              totalQuestions: game.questions.length,
-              maxScore: maxScore,
-              timeTaken: 0,
-              tabSwitchCount: 0,
-              gameMode: 'gameShow'
-            },
+            { quiz: game.quizId, studentName: player.name, studentSurname: "GameShow", studentClass: "Live Match", accessCode: safeAccessCode, answers: submissionAnswers, score: totalScore, totalQuestions: game.questions.length, maxScore: maxScore, timeTaken: 0, tabSwitchCount: 0, gameMode: 'gameShow' },
             { upsert: true, new: true }
           );
         } catch (err) {
@@ -416,9 +336,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// ==========================================
-// Database Connection
-// ==========================================
 const MONGO_URI = process.env.MONGO_URI;
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 })
   .then(() => {

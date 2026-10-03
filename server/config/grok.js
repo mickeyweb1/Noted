@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -7,9 +8,7 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// ✅ CONFIRMED: This model is in your available list!
-const BEST_MODEL = "qwen/qwen3.8-27b"; 
-
+const BEST_MODEL = "llama3-8b-8192"; // Changed to a reliable, fast Groq model
 const MAX_RETRIES = 2;
 
 export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
@@ -25,7 +24,7 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
         messages: messages,
         model: BEST_MODEL,
         temperature: 0.7,
-        max_tokens: options.max_tokens || 4096, 
+        max_tokens: options.max_tokens || 800, 
         ...options,
       });
 
@@ -39,7 +38,7 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
         .trim();
 
       if (!cleanText) {
-        console.warn("⚠️ Groq returned empty content after cleaning. Raw text was:", rawText);
+        console.warn("⚠️ Groq returned empty content after cleaning.");
       }
 
       return cleanText;
@@ -48,18 +47,47 @@ export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
       lastError = error;
       console.warn(`⚠️ Groq attempt ${attempt + 1} failed:`, error.status || error.message);
 
+      // ✅ NEW: If Groq rate limits (429) or has a server error, fallback to Hugging Face
       if (error.status === 429 || (error.status >= 500 && error.status < 600)) {
+        console.log("🔄 Groq rate limited. Attempting Hugging Face fallback...");
+        try {
+          const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n') + '\nASSISTANT:';
+          
+          const hfResponse = await axios.post(
+            "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct",
+            {
+              inputs: prompt,
+              parameters: {
+                max_new_tokens: options.max_tokens || 800,
+                return_full_text: false,
+                temperature: 0.7
+              }
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${process.env.HF_API_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          
+          let hfText = hfResponse.data[0]?.generated_text || "";
+          return hfText.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+        } catch (hfError) {
+          console.error("❌ Hugging Face fallback also failed:", hfError.message);
+        }
+        
         const waitTime = 1000 * (attempt + 1);
-        console.log(`🔄 Retrying in ${waitTime / 1000} seconds...`);
+        console.log(`🔄 Retrying Groq in ${waitTime / 1000} seconds...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       } else {
-        // If it's a 400 or 404, don't retry, it's a permanent model/config issue
-        break;
+        break; // Don't retry on permanent errors like 400/404
       }
     }
   }
 
-  console.error("❌ Groq failed after all retries:", lastError.message);
+  console.error("❌ AI generation failed after all retries:", lastError.message);
   throw lastError;
 };
 
