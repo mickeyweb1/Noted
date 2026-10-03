@@ -35,7 +35,7 @@ export default function GameShowBoard() {
   useEffect(() => {
     if (quiz?.quizId) {
       console.log("📡 Emitting join_game for quizId:", quiz.quizId);
-      socket.emit("join_game", { code, playerName: "Admin", role: "admin", quizId: quiz.quizId });
+      socket.emit("join_game", { code, playerName: "Admin", role: "admin", quizId: quiz.quizId,  token: localStorage.getItem('userToken') });
       
       // ✅ CRITICAL: Listen for backend errors so we don't get stuck loading forever
       socket.on("error", (errMsg) => {
