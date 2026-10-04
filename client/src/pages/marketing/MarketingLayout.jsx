@@ -34,7 +34,7 @@ export default function MarketingLayout({ children }) {
           </Link>
 
           {/* 2. DESKTOP NAVIGATION (Hidden at 800px and below) */}
-          <nav className="hidden [@media(min-width:871px)]:flex items-center gap-6">
+          <nav className="hidden [@media(min-width:1200px)]:flex items-center gap-6">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -54,7 +54,7 @@ export default function MarketingLayout({ children }) {
           </nav>
 
           {/* 3. DESKTOP ACTIONS (Hidden at 800px and below) */}
-          <div className="hidden [@media(min-width:871px)]:flex items-center gap-3">
+          <div className="hidden [@media(min-width:1200px)]:flex items-center gap-3">
             <ThemeToggle />
             <Link
               to="/login"
@@ -72,7 +72,7 @@ export default function MarketingLayout({ children }) {
           </div>
 
           {/* 4. MOBILE MENU BUTTON (Shows ONLY at 800px and below) */}
-          <div className="flex items-center gap-2 [@media(min-width:871px)]:hidden">
+          <div className="flex items-center gap-2 [@media(min-width:1200px)]:hidden">
             <ThemeToggle />
             <button
               type="button"
@@ -85,9 +85,9 @@ export default function MarketingLayout({ children }) {
           </div>
         </div>
 
-        {/* 5. MOBILE DROPDOWN MENU (Slides down when open, only visible <= 800px) */}
+        {/* 5. MOBILE DROPDOWN MENU (Slides down when open, only visible below 1200px) */}
         {isMenuOpen && (
-          <div className="[@media(min-width:871px)]:hidden border-t border-border bg-background px-4 py-6 shadow-lg">
+          <div className="[@media(min-width:1200px)]:hidden border-t border-border bg-background px-4 py-6 shadow-lg">
             <nav className="flex flex-col gap-4">
               {navItems.map((item) => (
                 <NavLink
