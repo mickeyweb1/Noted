@@ -170,8 +170,8 @@ function Modal({ title, icon, onClose, children, size = "max-w-sm", headerExtra 
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        // ✅ FIX: Added min-h-0 to allow proper scrolling inside flex container
-        className={`flex max-h-[85dvh] w-full ${size} flex-col rounded-2xl border border-border bg-card shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200 min-h-0`}
+        // ✅ FIX: h-full + max-h-[85dvh] + min-h-0 is the gold standard for Tailwind modal scrolling
+        className={`flex h-full max-h-[85dvh] w-full ${size} flex-col rounded-2xl border border-border bg-card shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200`}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 rounded-t-2xl border-b border-border bg-card p-4 sm:p-6">
           <h3 id={titleId} className="flex min-w-0 items-center gap-2 text-lg font-bold text-foreground sm:text-xl">
@@ -189,7 +189,8 @@ function Modal({ title, icon, onClose, children, size = "max-w-sm", headerExtra 
             </button>
           </div>
         </div>
-        <div className="overflow-y-auto p-4 sm:p-6 min-h-0">{children}</div>
+        {/* ✅ FIX: flex-1 + overflow-y-auto + min-h-0 ensures it scrolls instead of overflowing */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0">{children}</div>
       </div>
     </div>
   );
@@ -832,32 +833,31 @@ export default function GameShowBoard() {
         </div>
       </div>
 
-      {/* ✅ FIXED: Replacement code modal (Added max-w-md and min-w-0 break-all) */}
       {replacementCode && (
-        <Modal title="New replacement code" onClose={() => setReplacementCode(null)} size="max-w-md">
-          <p className="mb-4 text-sm text-muted-foreground">
-            Give this code to the student who disconnected. It connects them to this same live game.
-          </p>
-          <div className="mb-6 flex items-center gap-2 rounded-xl border border-border bg-muted p-4">
-            <span className="flex-1 min-w-0 break-all text-center font-mono text-xl sm:text-2xl font-bold tracking-wider text-foreground">
-              {replacementCode}
-            </span>
-            <button
-              onClick={() => handleCopy(replacementCode, "replacement")}
-              aria-label="Copy replacement code"
-              className="shrink-0 rounded-lg bg-brand p-2.5 text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-            >
-              {copiedKey === "replacement" ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-            </button>
-          </div>
-          <button
-            onClick={() => setReplacementCode(null)}
-            className="w-full rounded-xl bg-brand py-3 font-bold text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-          >
-            Done
-          </button>
-        </Modal>
-      )}
+  <Modal title="New replacement code" onClose={() => setReplacementCode(null)} size="max-w-md">
+    <p className="mb-4 text-sm text-muted-foreground">
+      Give this code to the student who disconnected. It connects them to this same live game.
+    </p>
+    <div className="mb-6 flex flex-col sm:flex-row items-center gap-3 rounded-xl border border-border bg-muted p-4">
+      <span className="flex-1 w-full break-words text-center font-mono text-xl sm:text-2xl font-bold tracking-wider text-foreground">
+        {replacementCode}
+      </span>
+      <button
+        onClick={() => handleCopy(replacementCode, "replacement")}
+        aria-label="Copy replacement code"
+        className="shrink-0 w-full sm:w-auto rounded-lg bg-brand p-2.5 text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+      >
+        {copiedKey === "replacement" ? <Check className="h-5 w-5 mx-auto" /> : <Copy className="h-5 w-5 mx-auto" />}
+      </button>
+    </div>
+    <button
+      onClick={() => setReplacementCode(null)}
+      className="w-full rounded-xl bg-brand py-3 font-bold text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+    >
+      Done
+    </button>
+  </Modal>
+)}
 
       {/* ✅ FIXED: Questions modal (Added min-w-0 and break-words to prevent overflow) */}
       {showQuestions && (
