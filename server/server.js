@@ -12,7 +12,7 @@ import jwt from 'jsonwebtoken';
 import { Quiz } from './models/Quiz.js';
 import { QuizSubmission } from './models/QuizSubmission.js'; 
 import supportRoutes from './routes/supportRoutes.js'; 
-import { User } from './models/User.js'; // ✅ Added User import
+import { User } from './models/User.js';
 
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -66,7 +66,7 @@ const io = new Server(server, {
 });
 
 const activeGames = new Map();
-const cardTimers = new Map(); // ✅ FIX: Store timers separately to prevent circular JSON crashes
+const cardTimers = new Map();
 
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length === game.questions.length && !game.savedToDb) {
@@ -121,7 +121,6 @@ const saveGameShowResults = async (game) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
 
-  // ✅ FIX: Added 'playerName' to destructuring
   socket.on('join_game', async ({ code, playerName, role = 'student', quizId, token }) => {
     try {
       const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
@@ -130,7 +129,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // ✅ FIX: Check ownership BEFORE joining the room
       if (role === 'admin') {
         const authToken = token || socket.handshake.auth?.token;
         try {
@@ -165,7 +163,7 @@ io.on('connection', (socket) => {
           cardResults: [],
           activityLog: [],
           lastPicker: null,
-          disqualifiedPlayers: [],
+          disqualified: [], // ✅ RENAMED for frontend compatibility
           questions: quiz.questions
         });
       }
@@ -177,7 +175,7 @@ io.on('connection', (socket) => {
         socket.data.role = 'admin';
       } else {
         socket.data.role = 'student';
-        socket.data.playerName = playerName; // ✅ Securely store the name on the server
+        socket.data.playerName = playerName;
         
         const existingPlayer = game.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
         if (!existingPlayer) {
@@ -221,17 +219,18 @@ io.on('connection', (socket) => {
     }
   });
 
-    // ✅ NEW: Handle disqualification from admin
-  socket.on('disqualify_player', ({ quizId, playerName }) => {
+  // ✅ UPDATED: Accepts boolean and broadcasts to all clients
+  socket.on('disqualify_player', ({ quizId, playerName, disqualified }) => {
     const game = activeGames.get(quizId);
     if (game && socket.id === game.adminSocketId) {
-      if (!game.disqualifiedPlayers.includes(playerName)) {
-        game.disqualifiedPlayers.push(playerName);
-        console.log(`🚫 Admin disqualified player: ${playerName}`);
+      if (disqualified) {
+        if (!game.disqualified.includes(playerName)) {
+          game.disqualified.push(playerName);
+        }
       } else {
-        game.disqualifiedPlayers = game.disqualifiedPlayers.filter(p => p !== playerName);
-        console.log(`✅ Admin restored player: ${playerName}`);
+        game.disqualified = game.disqualified.filter(p => p !== playerName);
       }
+      io.to(quizId).emit('player_disqualified', { disqualified: game.disqualified });
     }
   });
 
@@ -239,22 +238,23 @@ io.on('connection', (socket) => {
     const game = activeGames.get(quizId);
     const playerName = socket.data.playerName;
     
-    // ✅ BLOCK disqualified players from picking cards
-    if (game.disqualifiedPlayers.includes(playerName)) {
+    // ✅ BLOCK disqualified players
+    if (game.disqualified.includes(playerName)) {
       console.log(`🚫 Disqualified player ${playerName} tried to pick a card. Blocked.`);
       return;
     }
     
     if (!game || game.status !== 'live' || game.activeCard || game.completedCards.includes(cardIndex)) return;
-    
     if (game.lastPicker === playerName && game.completedCards.length > 0) return; 
 
     game.activeCard = { index: cardIndex, player: playerName, attempt: 1, pickedAt: Date.now() };
     game.lastPicker = playerName;
     game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
-    io.to(quizId).emit('card_locked', { cardIndex, playerName });
     
-    // ✅ FIX: Use the separate cardTimers Map
+    const timeLimitMs = 30000;
+    // ✅ SEND remainingMs for accurate frontend timers
+    io.to(quizId).emit('card_locked', { cardIndex, playerName, remainingMs: timeLimitMs });
+    
     if (cardTimers.has(quizId)) clearTimeout(cardTimers.get(quizId));
     
     const timeoutId = setTimeout(() => {
@@ -267,21 +267,29 @@ io.on('connection', (socket) => {
         
         if (game.completedCards.length === game.questions.length) saveGameShowResults(game);
         
-        io.to(quizId).emit('answer_result', { isCorrect: false, isTimeout: true, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
+        // ✅ ENRICHED payload
+        io.to(quizId).emit('answer_result', { 
+          isCorrect: false, 
+          isTimeout: true, 
+          cardIndex,
+          answeredBy: playerName,
+          scores: game.scores, 
+          completedCards: game.completedCards, 
+          cardResults: game.cardResults, 
+          activityLog: game.activityLog 
+        });
       }
-    }, 30000);
+    }, timeLimitMs);
     
     cardTimers.set(quizId, timeoutId);
   });
 
-  // ✅ FIX: Removed 'playerName' from payload, trusting socket.data.playerName instead
   socket.on('submit_answer', async ({ quizId, cardIndex, selectedAnswerIndex }) => {
     const game = activeGames.get(quizId);
-    const playerName = socket.data.playerName; // ✅ TRUST SERVER STATE
+    const playerName = socket.data.playerName;
     
     if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
 
-    // ✅ FIX: Clear the timer immediately using the separate map
     if (cardTimers.has(quizId)) {
       clearTimeout(cardTimers.get(quizId));
       cardTimers.delete(quizId);
@@ -309,7 +317,17 @@ io.on('connection', (socket) => {
       game.activeCard = null;
       if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
 
-      io.to(quizId).emit('answer_result', { isCorrect: true, points, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
+      // ✅ ENRICHED payload
+      io.to(quizId).emit('answer_result', { 
+        isCorrect: true, 
+        points, 
+        cardIndex,
+        answeredBy: exactPlayerName,
+        scores: game.scores, 
+        completedCards: game.completedCards, 
+        cardResults: game.cardResults, 
+        activityLog: game.activityLog 
+      });
     } else {
       if (game.activeCard.attempt === 1 && !game.activeCard.stealPlayer) {
         const otherPlayer = game.players.find(p => p.name.toLowerCase() !== activePlayerLower && p.name.toLowerCase() !== "admin");
@@ -317,7 +335,19 @@ io.on('connection', (socket) => {
           game.activeCard.attempt = 2;
           game.activeCard.stealPlayer = otherPlayer.name;
           game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed! ${otherPlayer.name} can STEAL for +${game.bonusMarks || 5} pts!` });
-          io.to(quizId).emit('answer_result', { isCorrect: false, isStealOpportunity: true, stealPlayer: otherPlayer.name, scores: game.scores, activityLog: game.activityLog });
+          
+          // ✅ ENRICHED payload for steal
+          io.to(quizId).emit('answer_result', { 
+            isCorrect: false, 
+            isStealOpportunity: true, 
+            stealPlayer: otherPlayer.name,
+            cardIndex,
+            answeredBy: exactPlayerName,
+            stealPoints: game.bonusMarks || 5,
+            remainingMs: 15000, // 15 seconds for steal
+            scores: game.scores, 
+            activityLog: game.activityLog 
+          });
           return; 
         }
       }
@@ -329,7 +359,16 @@ io.on('connection', (socket) => {
       game.activeCard = null;
       if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
 
-      io.to(quizId).emit('answer_result', { isCorrect: false, scores: game.scores, completedCards: game.completedCards, cardResults: game.cardResults, activityLog: game.activityLog });
+      // ✅ ENRICHED payload
+      io.to(quizId).emit('answer_result', { 
+        isCorrect: false, 
+        cardIndex,
+        answeredBy: exactPlayerName,
+        scores: game.scores, 
+        completedCards: game.completedCards, 
+        cardResults: game.cardResults, 
+        activityLog: game.activityLog 
+      });
     }
   });
 
