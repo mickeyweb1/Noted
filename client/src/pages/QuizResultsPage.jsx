@@ -528,7 +528,7 @@ export default function QuizResultsPage() {
         </div>
       )}
 
-      {/* ✅ FIXED: View All Questions Modal (Changed 'quiz' to 'quizData' and made correct answer blue) */}
+      {/* ✅ FIXED: View All Questions Modal */}
       {showQuestionsModal && quizData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200">
@@ -545,37 +545,48 @@ export default function QuizResultsPage() {
             
             {/* Scrollable Content */}
             <div className="overflow-y-auto p-6 space-y-4 custom-scrollbar">
-              {quizData.questions?.map((q, idx) => (
-                <div key={idx} className="p-5 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
-                  <p className="font-semibold text-foreground mb-3 break-words">
-                    <span className="text-brand mr-2">Q{idx + 1}.</span> 
-                    {q.question}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {q.options?.map((opt, i) => (
-                      <div 
-                        key={i} 
-                        className={`p-3 rounded-lg border text-sm break-words flex items-start gap-2 ${
-                          opt === q.correctAnswer 
-                            ? 'bg-brand/10 border-brand/30 text-brand font-semibold' // ✅ Changed to blue (brand color) as requested
-                            : 'bg-card border-border text-foreground'
-                        }`}
-                      >
-                        <span className="font-bold shrink-0">{String.fromCharCode(65 + i)}.</span>
-                        <span className="flex-1">{opt}</span>
-                        {opt === q.correctAnswer && <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
-                      </div>
-                    ))}
-                  </div>
-                  {q.explanation && (
-                    <div className="mt-3 p-3 rounded-lg bg-brand-soft/50 border border-brand/10">
-                      <p className="text-xs text-muted-foreground">
-                        <span className="font-semibold text-foreground">💡 Explanation:</span> {q.explanation}
-                      </p>
+              {quizData.questions?.map((q, idx) => {
+                // Normalize the correct answer for comparison
+                const correctAnswer = q.correctAnswer?.trim();
+                
+                return (
+                  <div key={idx} className="p-5 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <p className="font-semibold text-foreground mb-3 break-words">
+                      <span className="text-brand mr-2">Q{idx + 1}.</span> 
+                      {q.question}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {q.options?.map((opt, i) => {
+                        // Trim and compare for accurate matching
+                        const optionText = opt?.trim() || '';
+                        const isCorrect = correctAnswer && optionText === correctAnswer;
+                        
+                        return (
+                          <div 
+                            key={i} 
+                            className={`p-3 rounded-lg border text-sm break-words flex items-start gap-2 ${
+                              isCorrect
+                                ? 'bg-brand/10 border-brand/30 text-brand font-semibold'
+                                : 'bg-card border-border text-foreground'
+                            }`}
+                          >
+                            <span className="font-bold shrink-0">{String.fromCharCode(65 + i)}.</span>
+                            <span className="flex-1 truncate" title={optionText}>{optionText}</span>
+                            {isCorrect && <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {q.explanation && (
+                      <div className="mt-3 p-3 rounded-lg bg-brand-soft/50 border border-brand/10">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-semibold text-foreground"> Explanation:</span> {q.explanation}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
