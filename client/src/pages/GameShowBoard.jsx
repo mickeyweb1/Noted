@@ -13,10 +13,9 @@ const socketUrl = apiUrl.replace(/\/api$/, "");
 /* ------------------------------------------------------------------ */
 /* Settings you may want to tweak                                      */
 /* ------------------------------------------------------------------ */
-const MIN_PLAYERS_TO_START = 2; // set to 1 if you want to test with a single student
+const MIN_PLAYERS_TO_START = 2;
 const START_RETRY_MS = 5000;
 
-// One colour per team, used everywhere (access codes, panels, player list).
 const TEAMS = {
   1: {
     name: "Team 1",
@@ -40,7 +39,6 @@ const TEAMS = {
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 const isAdminPlayer = (p) => p.role === "admin" || p.name === "Admin";
-// The server should send `team` (1 or 2) on each player. Falls back to join order.
 const getTeam = (player, idx) => player.team ?? idx + 1;
 
 const totalSeconds = (quiz) =>
@@ -172,7 +170,8 @@ function Modal({ title, icon, onClose, children, size = "max-w-sm", headerExtra 
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`flex max-h-[85dvh] w-full ${size} flex-col rounded-2xl border border-border bg-card shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200`}
+        // ✅ FIX: Added min-h-0 to allow proper scrolling inside flex container
+        className={`flex max-h-[85dvh] w-full ${size} flex-col rounded-2xl border border-border bg-card shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200 min-h-0`}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 rounded-t-2xl border-b border-border bg-card p-4 sm:p-6">
           <h3 id={titleId} className="flex min-w-0 items-center gap-2 text-lg font-bold text-foreground sm:text-xl">
@@ -190,7 +189,7 @@ function Modal({ title, icon, onClose, children, size = "max-w-sm", headerExtra 
             </button>
           </div>
         </div>
-        <div className="overflow-y-auto p-4 sm:p-6">{children}</div>
+        <div className="overflow-y-auto p-4 sm:p-6 min-h-0">{children}</div>
       </div>
     </div>
   );
@@ -304,7 +303,7 @@ export default function GameShowBoard() {
 
   const [quiz, setQuiz] = useState(null);
   const [gameState, setGameState] = useState(null);
-  const [activeCard, setActiveCard] = useState(null); // { index, player, isSteal? }
+  const [activeCard, setActiveCard] = useState(null);
   const [endsAt, setEndsAt] = useState(null);
   const [connection, setConnection] = useState("connecting");
   const [fatalError, setFatalError] = useState("");
@@ -313,8 +312,8 @@ export default function GameShowBoard() {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [startRequested, setStartRequested] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
-  const [hideAnswers, setHideAnswers] = useState(true); // safe default when the screen is projected
-  const [menuFor, setMenuFor] = useState(null); // player name whose menu is open
+  const [hideAnswers, setHideAnswers] = useState(true);
+  const [menuFor, setMenuFor] = useState(null);
   const [copiedKey, setCopiedKey] = useState(null);
 
   const { toasts, push: toast } = useToasts();
@@ -337,7 +336,6 @@ export default function GameShowBoard() {
     []
   );
 
-  /* ---------------- load quiz ---------------- */
   useEffect(() => {
     if (!code) { setFatalError("No game code in the URL."); return; }
     let cancelled = false;
@@ -355,20 +353,16 @@ export default function GameShowBoard() {
     return () => { cancelled = true; };
   }, [code]);
 
-  /* ---------------- socket lifecycle ---------------- */
   useEffect(() => {
     const quizId = quiz?.quizId;
     if (!quizId) return;
 
-    // Created here (not at module level) so the token is read at the time the admin
-    // actually opens the board, and the connection closes when they leave.
     const token = localStorage.getItem("userToken");
     const socket = io(socketUrl, { withCredentials: true, auth: { token } });
     socketRef.current = socket;
     hasStateRef.current = false;
     setConnection("connecting");
 
-    // "connect" fires on first connection AND after every reconnect.
     socket.on("connect", () => {
       setConnection("connected");
       socket.emit("join_game", { code, playerName: "Admin", role: "admin", quizId, token });
@@ -381,8 +375,8 @@ export default function GameShowBoard() {
 
     socket.on("error", (err) => {
       const message = errorText(err);
-      if (!hasStateRef.current) setFatalError(`Connection failed: ${message}`); // join failed
-      else toast(message, "error"); // later errors shouldn't wipe the board
+      if (!hasStateRef.current) setFatalError(`Connection failed: ${message}`);
+      else toast(message, "error");
     });
 
     socket.on("game_state", (state) => {
@@ -436,7 +430,6 @@ export default function GameShowBoard() {
     };
   }, [quiz?.quizId, code, toast]);
 
-  /* ---------------- activity feed: only auto-scroll when already at the bottom ---------------- */
   const onFeedScroll = () => {
     const el = feedRef.current;
     if (!el) return;
@@ -447,7 +440,6 @@ export default function GameShowBoard() {
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
   }, [gameState?.activityLog]);
 
-  /* ---------------- close the player menu on outside click / Escape ---------------- */
   useEffect(() => {
     if (menuFor === null) return;
     const onPointerDown = (e) => {
@@ -462,7 +454,6 @@ export default function GameShowBoard() {
     };
   }, [menuFor]);
 
-  /* ---------------- actions ---------------- */
   const handleCopy = async (text, key) => {
     const ok = await copyToClipboard(text);
     if (!ok) return toast("Couldn't copy. Select the text and copy it manually.", "error");
@@ -476,7 +467,6 @@ export default function GameShowBoard() {
     setStartRequested(true);
     socketRef.current?.emit("admin_start_game", { quizId: quiz.quizId });
     clearTimeout(startTimer.current);
-    // If the server never confirms, let the admin try again.
     startTimer.current = setTimeout(() => setStartRequested(false), START_RETRY_MS);
   };
 
@@ -497,7 +487,6 @@ export default function GameShowBoard() {
   const toggleDisqualify = (name) => {
     const current = gameState?.disqualified ?? [];
     const disqualify = !current.includes(name);
-    // Optimistic update; the server's next game_state / player_disqualified is the source of truth.
     setGameState((prev) => {
       const list = prev?.disqualified ?? [];
       return { ...prev, disqualified: disqualify ? [...list, name] : list.filter((n) => n !== name) };
@@ -507,9 +496,6 @@ export default function GameShowBoard() {
     toast(disqualify ? `${name} disqualified` : `${name} restored`);
   };
 
-  /* ================================================================ */
-  /* Early states (all hooks are above this line)                       */
-  /* ================================================================ */
   if (fatalError) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-muted p-4 text-center">
@@ -537,9 +523,6 @@ export default function GameShowBoard() {
     );
   }
 
-  /* ================================================================ */
-  /* Derived data                                                       */
-  /* ================================================================ */
   const questions = quiz.questions ?? [];
   const players = (gameState.players ?? []).filter((p) => !isAdminPlayer(p));
   const scores = gameState.scores ?? {};
@@ -579,14 +562,10 @@ export default function GameShowBoard() {
 
   const hasTeamCodes = quiz.accessCodes && quiz.accessCodes.length >= 2;
 
-  /* ================================================================ */
-  /* Render                                                             */
-  /* ================================================================ */
   return (
     <div className="min-h-dvh bg-background p-3 sm:p-4 md:p-8">
       <ToastStack toasts={toasts} />
 
-      {/* Header */}
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <button
@@ -627,7 +606,6 @@ export default function GameShowBoard() {
         </div>
       </div>
 
-      {/* Team access codes */}
       {hasTeamCodes && (
         <div className="mx-auto mb-8 grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-2">
           {[1, 2].map((n) => (
@@ -643,7 +621,6 @@ export default function GameShowBoard() {
       )}
 
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left column: players, start, scores */}
         <div className="space-y-6">
           <div className="space-y-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <div>
@@ -794,7 +771,6 @@ export default function GameShowBoard() {
           </div>
         </div>
 
-        {/* Right column: live results and feed. Moves to the top on small screens once the match is live. */}
         <div className={`space-y-6 lg:col-span-2 ${isLive ? "order-first lg:order-none" : ""}`}>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
@@ -856,14 +832,14 @@ export default function GameShowBoard() {
         </div>
       </div>
 
-      {/* Replacement code modal */}
+      {/* ✅ FIXED: Replacement code modal (Added max-w-md and min-w-0 break-all) */}
       {replacementCode && (
-        <Modal title="New replacement code" onClose={() => setReplacementCode(null)}>
+        <Modal title="New replacement code" onClose={() => setReplacementCode(null)} size="max-w-md">
           <p className="mb-4 text-sm text-muted-foreground">
             Give this code to the student who disconnected. It connects them to this same live game.
           </p>
           <div className="mb-6 flex items-center gap-2 rounded-xl border border-border bg-muted p-4">
-            <span className="flex-1 break-all text-center font-mono text-2xl font-bold tracking-wider text-foreground">
+            <span className="flex-1 min-w-0 break-all text-center font-mono text-xl sm:text-2xl font-bold tracking-wider text-foreground">
               {replacementCode}
             </span>
             <button
@@ -883,7 +859,7 @@ export default function GameShowBoard() {
         </Modal>
       )}
 
-      {/* Questions modal */}
+      {/* ✅ FIXED: Questions modal (Added min-w-0 and break-words to prevent overflow) */}
       {showQuestions && (
         <Modal
           title={`All questions (${questions.length})`}
@@ -894,15 +870,15 @@ export default function GameShowBoard() {
             <button
               onClick={() => setHideAnswers((v) => !v)}
               aria-pressed={!hideAnswers}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand shrink-0"
             >
-              {hideAnswers ? <><Eye className="h-4 w-4" /> Show answers</> : <><EyeOff className="h-4 w-4" /> Hide answers</>}
+              {hideAnswers ? <><Eye className="h-4 w-4 shrink-0" /> Show answers</> : <><EyeOff className="h-4 w-4 shrink-0" /> Hide answers</>}
             </button>
           }
         >
-          <div className="space-y-4">
+          <div className="space-y-4 min-h-0">
             {questions.map((q, idx) => (
-              <div key={idx} className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
+              <div key={idx} className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5 min-w-0">
                 <p className="mb-3 break-words font-semibold text-foreground">
                   <span className="mr-2 text-brand">Q{idx + 1}.</span>
                   {q.question}
@@ -913,14 +889,14 @@ export default function GameShowBoard() {
                     return (
                       <div
                         key={i}
-                        className={`flex items-start gap-2 break-words rounded-lg border p-3 text-sm ${
+                        className={`flex items-start gap-2 rounded-lg border p-3 text-sm min-w-0 break-words ${
                           isCorrect
                             ? "border-green-500/30 bg-green-500/10 font-semibold text-green-700 dark:text-green-400"
                             : "border-border bg-card text-foreground"
                         }`}
                       >
                         <span className="shrink-0 font-bold">{String.fromCharCode(65 + i)}.</span>
-                        <span className="flex-1">{opt}</span>
+                        <span className="flex-1 min-w-0 break-words">{opt}</span>
                         {isCorrect && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-label="Correct answer" />}
                       </div>
                     );
@@ -928,7 +904,7 @@ export default function GameShowBoard() {
                 </div>
                 {!hideAnswers && q.explanation && (
                   <div className="mt-3 rounded-lg border border-brand/10 bg-brand-soft/50 p-3">
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground break-words">
                       <span className="font-semibold text-foreground">Explanation:</span> {q.explanation}
                     </p>
                   </div>
