@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useId } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, WifiOff, CheckCircle2, XCircle,
-  Zap, Award, Copy, Check, Plus, MoreVertical, Ban, Eye, EyeOff, X, Loader2, Lock, Clock,
+  Zap, Award, Copy, Check, Plus, MoreVertical, Ban, Eye, EyeOff, Loader2, Lock, Clock,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
+import Modal from "../components/Modal";
 
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const socketUrl = apiUrl.replace(/\/api$/, "");
@@ -13,9 +14,10 @@ const socketUrl = apiUrl.replace(/\/api$/, "");
 /* ------------------------------------------------------------------ */
 /* Settings you may want to tweak                                      */
 /* ------------------------------------------------------------------ */
-const MIN_PLAYERS_TO_START = 2;
+const MIN_PLAYERS_TO_START = 2; // set to 1 if you want to test with a single student
 const START_RETRY_MS = 5000;
 
+// One colour per team, used everywhere (access codes, panels, player list).
 const TEAMS = {
   1: {
     name: "Team 1",
@@ -39,6 +41,7 @@ const TEAMS = {
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 const isAdminPlayer = (p) => p.role === "admin" || p.name === "Admin";
+// The server should send `team` (1 or 2) on each player. Falls back to join order.
 const getTeam = (player, idx) => player.team ?? idx + 1;
 
 const totalSeconds = (quiz) =>
@@ -139,63 +142,6 @@ function ToastStack({ toasts }) {
   );
 }
 
-function Modal({ title, icon, onClose, children, size = "max-w-sm", headerExtra }) {
-  const titleId = useId();
-  const panelRef = useRef(null);
-  const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; });
-
-  useEffect(() => {
-    const opener = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e) => { if (e.key === "Escape") onCloseRef.current(); };
-    document.addEventListener("keydown", onKey);
-    panelRef.current?.focus();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", onKey);
-      opener?.focus?.();
-    };
-  }, []);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        // ✅ FIX: h-full + max-h-[85dvh] + min-h-0 is the gold standard for Tailwind modal scrolling
-        className={`flex h-full max-h-[85dvh] w-full ${size} flex-col rounded-2xl border border-border bg-card shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200`}
-      >
-        <div className="flex shrink-0 items-center justify-between gap-3 rounded-t-2xl border-b border-border bg-card p-4 sm:p-6">
-          <h3 id={titleId} className="flex min-w-0 items-center gap-2 text-lg font-bold text-foreground sm:text-xl">
-            {icon}
-            <span className="truncate">{title}</span>
-          </h3>
-          <div className="flex shrink-0 items-center gap-2">
-            {headerExtra}
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded-lg p-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-        {/* ✅ FIX: flex-1 + overflow-y-auto + min-h-0 ensures it scrolls instead of overflowing */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-h-0">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 const RESULT_BADGES = {
   correct: { cls: "bg-green-500/10 text-green-700 dark:text-green-400", Icon: CheckCircle2, label: "Correct" },
   wrong: { cls: "bg-destructive/10 text-destructive", Icon: XCircle, label: "Wrong" },
@@ -212,8 +158,28 @@ function ResultBadge({ result }) {
   );
 }
 
-function TeamCodeCard({ team, code, copied, onCopy }) {
+function TeamCodeCard({ team, code, copied, onCopy, compact = false }) {
   const t = TEAMS[team];
+
+  if (compact) {
+    return (
+      <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${t.border} ${t.soft}`}>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${t.dot}`} aria-hidden="true" />
+          <span className={`shrink-0 text-xs font-semibold ${t.text}`}>{t.name}</span>
+          <span className="min-w-0 break-all font-mono text-sm font-bold tracking-wider text-foreground">{code}</span>
+        </div>
+        <button
+          onClick={onCopy}
+          aria-label={`Copy ${t.name} code`}
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={`rounded-2xl border-2 p-4 text-center shadow-sm sm:p-5 ${t.border} ${t.soft}`}>
       <h4 className={`mb-3 flex items-center justify-center gap-2 text-lg font-bold ${t.text}`}>
@@ -221,7 +187,7 @@ function TeamCodeCard({ team, code, copied, onCopy }) {
         {t.name} access code
       </h4>
       <div className="flex items-center justify-center gap-3 rounded-xl border border-border bg-background p-3">
-        <span className="break-all font-mono text-xl font-bold tracking-wider text-foreground sm:text-3xl">{code}</span>
+        <span className="min-w-0 break-all font-mono text-xl font-bold tracking-wider text-foreground sm:text-3xl">{code}</span>
         <button
           onClick={onCopy}
           aria-label={`Copy ${t.name} code`}
@@ -304,7 +270,7 @@ export default function GameShowBoard() {
 
   const [quiz, setQuiz] = useState(null);
   const [gameState, setGameState] = useState(null);
-  const [activeCard, setActiveCard] = useState(null);
+  const [activeCard, setActiveCard] = useState(null); // { index, player, isSteal? }
   const [endsAt, setEndsAt] = useState(null);
   const [connection, setConnection] = useState("connecting");
   const [fatalError, setFatalError] = useState("");
@@ -313,9 +279,10 @@ export default function GameShowBoard() {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [startRequested, setStartRequested] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
-  const [hideAnswers, setHideAnswers] = useState(true);
-  const [menuFor, setMenuFor] = useState(null);
+  const [hideAnswers, setHideAnswers] = useState(true); // safe default when the screen is projected
+  const [menuFor, setMenuFor] = useState(null); // player name whose menu is open
   const [copiedKey, setCopiedKey] = useState(null);
+  const [confirmExit, setConfirmExit] = useState(false);
 
   const { toasts, push: toast } = useToasts();
   const secondsLeft = useCountdown(endsAt);
@@ -337,6 +304,7 @@ export default function GameShowBoard() {
     []
   );
 
+  /* ---------------- load quiz ---------------- */
   useEffect(() => {
     if (!code) { setFatalError("No game code in the URL."); return; }
     let cancelled = false;
@@ -354,16 +322,20 @@ export default function GameShowBoard() {
     return () => { cancelled = true; };
   }, [code]);
 
+  /* ---------------- socket lifecycle ---------------- */
   useEffect(() => {
     const quizId = quiz?.quizId;
     if (!quizId) return;
 
+    // Created here (not at module level) so the token is read at the time the admin
+    // actually opens the board, and the connection closes when they leave.
     const token = localStorage.getItem("userToken");
     const socket = io(socketUrl, { withCredentials: true, auth: { token } });
     socketRef.current = socket;
     hasStateRef.current = false;
     setConnection("connecting");
 
+    // "connect" fires on first connection AND after every reconnect.
     socket.on("connect", () => {
       setConnection("connected");
       socket.emit("join_game", { code, playerName: "Admin", role: "admin", quizId, token });
@@ -376,8 +348,8 @@ export default function GameShowBoard() {
 
     socket.on("error", (err) => {
       const message = errorText(err);
-      if (!hasStateRef.current) setFatalError(`Connection failed: ${message}`);
-      else toast(message, "error");
+      if (!hasStateRef.current) setFatalError(`Connection failed: ${message}`); // join failed
+      else toast(message, "error"); // later errors shouldn't wipe the board
     });
 
     socket.on("game_state", (state) => {
@@ -431,6 +403,7 @@ export default function GameShowBoard() {
     };
   }, [quiz?.quizId, code, toast]);
 
+  /* ---------------- activity feed: only auto-scroll when already at the bottom ---------------- */
   const onFeedScroll = () => {
     const el = feedRef.current;
     if (!el) return;
@@ -441,6 +414,7 @@ export default function GameShowBoard() {
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
   }, [gameState?.activityLog]);
 
+  /* ---------------- close the player menu on outside click / Escape ---------------- */
   useEffect(() => {
     if (menuFor === null) return;
     const onPointerDown = (e) => {
@@ -455,6 +429,7 @@ export default function GameShowBoard() {
     };
   }, [menuFor]);
 
+  /* ---------------- actions ---------------- */
   const handleCopy = async (text, key) => {
     const ok = await copyToClipboard(text);
     if (!ok) return toast("Couldn't copy. Select the text and copy it manually.", "error");
@@ -468,6 +443,7 @@ export default function GameShowBoard() {
     setStartRequested(true);
     socketRef.current?.emit("admin_start_game", { quizId: quiz.quizId });
     clearTimeout(startTimer.current);
+    // If the server never confirms, let the admin try again.
     startTimer.current = setTimeout(() => setStartRequested(false), START_RETRY_MS);
   };
 
@@ -488,6 +464,7 @@ export default function GameShowBoard() {
   const toggleDisqualify = (name) => {
     const current = gameState?.disqualified ?? [];
     const disqualify = !current.includes(name);
+    // Optimistic update; the server's next game_state / player_disqualified is the source of truth.
     setGameState((prev) => {
       const list = prev?.disqualified ?? [];
       return { ...prev, disqualified: disqualify ? [...list, name] : list.filter((n) => n !== name) };
@@ -497,6 +474,9 @@ export default function GameShowBoard() {
     toast(disqualify ? `${name} disqualified` : `${name} restored`);
   };
 
+  /* ================================================================ */
+  /* Early states (all hooks are above this line)                       */
+  /* ================================================================ */
   if (fatalError) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-muted p-4 text-center">
@@ -524,6 +504,9 @@ export default function GameShowBoard() {
     );
   }
 
+  /* ================================================================ */
+  /* Derived data                                                       */
+  /* ================================================================ */
   const questions = quiz.questions ?? [];
   const players = (gameState.players ?? []).filter((p) => !isAdminPlayer(p));
   const scores = gameState.scores ?? {};
@@ -563,14 +546,18 @@ export default function GameShowBoard() {
 
   const hasTeamCodes = quiz.accessCodes && quiz.accessCodes.length >= 2;
 
+  /* ================================================================ */
+  /* Render                                                             */
+  /* ================================================================ */
   return (
     <div className="min-h-dvh bg-background p-3 sm:p-4 md:p-8">
       <ToastStack toasts={toasts} />
 
+      {/* Header */}
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <button
-            onClick={() => navigate("/admin/quizzes")}
+            onClick={() => (isLive && !isGameComplete ? setConfirmExit(true) : navigate("/admin/quizzes"))}
             className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <ArrowLeft className="h-5 w-5 shrink-0" />
@@ -607,12 +594,14 @@ export default function GameShowBoard() {
         </div>
       </div>
 
+      {/* Team access codes. Compact once the match is live so the results stay above the fold. */}
       {hasTeamCodes && (
-        <div className="mx-auto mb-8 grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-2">
+        <div className={`mx-auto grid max-w-4xl grid-cols-1 md:grid-cols-2 ${isLive ? "mb-4 gap-2" : "mb-8 gap-4"}`}>
           {[1, 2].map((n) => (
             <TeamCodeCard
               key={n}
               team={n}
+              compact={isLive}
               code={quiz.accessCodes[n - 1]}
               copied={copiedKey === `code-${n}`}
               onCopy={() => handleCopy(quiz.accessCodes[n - 1], `code-${n}`)}
@@ -622,6 +611,7 @@ export default function GameShowBoard() {
       )}
 
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Left column: players, start, scores */}
         <div className="space-y-6">
           <div className="space-y-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <div>
@@ -772,6 +762,7 @@ export default function GameShowBoard() {
           </div>
         </div>
 
+        {/* Right column: live results and feed. Moves to the top on small screens once the match is live. */}
         <div className={`space-y-6 lg:col-span-2 ${isLive ? "order-first lg:order-none" : ""}`}>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
@@ -833,33 +824,55 @@ export default function GameShowBoard() {
         </div>
       </div>
 
+      {/* Replacement code modal */}
       {replacementCode && (
-  <Modal title="New replacement code" onClose={() => setReplacementCode(null)} size="max-w-md">
-    <p className="mb-4 text-sm text-muted-foreground">
-      Give this code to the student who disconnected. It connects them to this same live game.
-    </p>
-    <div className="mb-6 flex flex-col sm:flex-row items-center gap-3 rounded-xl border border-border bg-muted p-4">
-      <span className="flex-1 w-full break-words text-center font-mono text-xl sm:text-2xl font-bold tracking-wider text-foreground">
-        {replacementCode}
-      </span>
-      <button
-        onClick={() => handleCopy(replacementCode, "replacement")}
-        aria-label="Copy replacement code"
-        className="shrink-0 w-full sm:w-auto rounded-lg bg-brand p-2.5 text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-      >
-        {copiedKey === "replacement" ? <Check className="h-5 w-5 mx-auto" /> : <Copy className="h-5 w-5 mx-auto" />}
-      </button>
-    </div>
-    <button
-      onClick={() => setReplacementCode(null)}
-      className="w-full rounded-xl bg-brand py-3 font-bold text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-    >
-      Done
-    </button>
-  </Modal>
-)}
+        <Modal title="New replacement code" onClose={() => setReplacementCode(null)} size="max-w-md">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Give this code to the student who disconnected. It connects them to this same live game.
+          </p>
+          <div className="mb-4 rounded-xl border border-border bg-muted p-4 text-center">
+            <p className="break-all font-mono text-2xl font-bold tracking-wider text-foreground">{replacementCode}</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={() => handleCopy(replacementCode, "replacement")}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+            >
+              {copiedKey === "replacement" ? <><Check className="h-4 w-4" /> Copied</> : <><Copy className="h-4 w-4" /> Copy code</>}
+            </button>
+            <button
+              onClick={() => setReplacementCode(null)}
+              className="flex-1 rounded-xl bg-brand py-3 font-bold text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+            >
+              Done
+            </button>
+          </div>
+        </Modal>
+      )}
 
-      {/* ✅ FIXED: Questions modal (Added min-w-0 and break-words to prevent overflow) */}
+      {confirmExit && (
+        <Modal title="Leave the live match?" onClose={() => setConfirmExit(false)} size="max-w-md">
+          <p className="mb-6 text-sm text-muted-foreground">
+            The match is still running. It keeps its progress, and you can reopen it later from the Quiz results page.
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <button
+              onClick={() => navigate("/admin/quizzes")}
+              className="flex-1 rounded-xl border border-border bg-background py-3 font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+            >
+              Leave
+            </button>
+            <button
+              onClick={() => setConfirmExit(false)}
+              className="flex-1 rounded-xl bg-brand py-3 font-bold text-brand-foreground transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+            >
+              Stay on the board
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Questions modal */}
       {showQuestions && (
         <Modal
           title={`All questions (${questions.length})`}
@@ -870,15 +883,15 @@ export default function GameShowBoard() {
             <button
               onClick={() => setHideAnswers((v) => !v)}
               aria-pressed={!hideAnswers}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand shrink-0"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
-              {hideAnswers ? <><Eye className="h-4 w-4 shrink-0" /> Show answers</> : <><EyeOff className="h-4 w-4 shrink-0" /> Hide answers</>}
+              {hideAnswers ? <><Eye className="h-4 w-4" /> Show answers</> : <><EyeOff className="h-4 w-4" /> Hide answers</>}
             </button>
           }
         >
-          <div className="space-y-4 min-h-0">
+          <div className="space-y-4">
             {questions.map((q, idx) => (
-              <div key={idx} className="rounded-xl border border-border bg-muted/30 p-4 sm:p-5 min-w-0">
+              <div key={idx} className="min-w-0 rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
                 <p className="mb-3 break-words font-semibold text-foreground">
                   <span className="mr-2 text-brand">Q{idx + 1}.</span>
                   {q.question}
@@ -889,14 +902,14 @@ export default function GameShowBoard() {
                     return (
                       <div
                         key={i}
-                        className={`flex items-start gap-2 rounded-lg border p-3 text-sm min-w-0 break-words ${
+                        className={`flex min-w-0 items-start gap-2 break-words rounded-lg border p-3 text-sm ${
                           isCorrect
                             ? "border-green-500/30 bg-green-500/10 font-semibold text-green-700 dark:text-green-400"
                             : "border-border bg-card text-foreground"
                         }`}
                       >
                         <span className="shrink-0 font-bold">{String.fromCharCode(65 + i)}.</span>
-                        <span className="flex-1 min-w-0 break-words">{opt}</span>
+                        <span className="min-w-0 flex-1 break-words">{opt}</span>
                         {isCorrect && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-label="Correct answer" />}
                       </div>
                     );
@@ -904,7 +917,7 @@ export default function GameShowBoard() {
                 </div>
                 {!hideAnswers && q.explanation && (
                   <div className="mt-3 rounded-lg border border-brand/10 bg-brand-soft/50 p-3">
-                    <p className="text-xs text-muted-foreground break-words">
+                    <p className="text-xs text-muted-foreground">
                       <span className="font-semibold text-foreground">Explanation:</span> {q.explanation}
                     </p>
                   </div>
