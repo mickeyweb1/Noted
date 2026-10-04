@@ -4,8 +4,7 @@ import { AlertTriangle, Check, ChevronDown, Copy, Pencil, Trash2 } from "lucide-
 /* ------------------------------------------------------------------ */
 /* Shared styles                                                       */
 /* ------------------------------------------------------------------ */
-export const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+export const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 export const inputCls = `w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-foreground placeholder:text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
 export const card = "rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6";
 export const primaryBtn = `inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
@@ -17,10 +16,8 @@ export const iconBtnDanger = `rounded-lg p-2 text-destructive transition hover:b
 /* Ids and number parsing                                              */
 /* ------------------------------------------------------------------ */
 let idCounter = 0;
-// Stable client-side id, so list items keep their identity when others are removed.
 export const newId = () => `c${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
-// Parses a raw input string and checks the range. Returns { value } or { error }.
 export function readInt(raw, label, min, max) {
   const n = parseInt(raw, 10);
   if (!Number.isFinite(n)) return { error: `${label} is required.` };
@@ -31,7 +28,6 @@ export function readInt(raw, label, min, max) {
 /* ------------------------------------------------------------------ */
 /* Question helpers                                                    */
 /* ------------------------------------------------------------------ */
-// Drops malformed AI output and gives every question a stable client id.
 export function normalizeQuestions(raw) {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -46,7 +42,6 @@ export function normalizeQuestions(raw) {
     }));
 }
 
-// Returns an error message for the first problem found, or null.
 export function validateQuestions(list) {
   for (let i = 0; i < list.length; i++) {
     const q = list[i];
@@ -64,9 +59,7 @@ export function validateQuestions(list) {
   return null;
 }
 
-// Removes client-only fields and trims text before sending to the API.
 export function toPayloadQuestion(q) {
-  // eslint-disable-next-line no-unused-vars
   const { cid, ...rest } = q;
   return {
     ...rest,
@@ -96,7 +89,6 @@ function fallbackCopy(text) {
   }
 }
 
-// copy(text, key) -> Promise<boolean>. `copiedKey` is set for 1.5s after a successful copy.
 export function useClipboard() {
   const [copiedKey, setCopiedKey] = useState(null);
   const timer = useRef(null);
@@ -151,8 +143,6 @@ export function SelectField({ id, value, onChange, label, children }) {
   );
 }
 
-// Digits only, so typing "0" or "-" is never silently swallowed: the value is kept
-// and the page's validation explains what's wrong.
 export function NumberInput({ value, onChange, className = "", ...props }) {
   return (
     <input
@@ -168,8 +158,6 @@ export function NumberInput({ value, onChange, className = "", ...props }) {
   );
 }
 
-// Sticks to the top of the viewport so an error is visible even when the button
-// that caused it is far down the page.
 export function ErrorNote({ children }) {
   if (!children) return null;
   return (
@@ -217,7 +205,6 @@ export function QuestionReviewList({ questions, onChange }) {
     setEditingId((id) => (id === cid ? null : id));
   };
 
-  // Editing the text of the correct option keeps it marked as correct.
   const setOption = (cid, optIdx, value) =>
     update(cid, (q) => ({
       options: q.options.map((o, i) => (i === optIdx ? value : o)),
