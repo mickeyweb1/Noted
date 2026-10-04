@@ -35,7 +35,7 @@ const teamMembers = [
     name: "Oyelusi Daniel",
     role: "Product & Strategy",
     bio: "Dedicated to shaping the product roadmap and ensuring every feature directly solves real student challenges.",
-    avatar: "https://ui-avatars.com/api/?name=Oyelusi+Daniel&background=random&color=fff&size=128",
+    avatar: "/images/oyelusi-daniel.jpg",
   },
   {
     name: "Fakorede Oluwafeyishikemi",
@@ -65,7 +65,7 @@ const teamMembers = [
     name: "Sulaimon Oluwaseun",
     role: "Operations & Logistics",
     bio: "Keeping the project on track, managing resources, and ensuring the team has everything needed to build and scale.",
-    avatar: "https://ui-avatars.com/api/?name=Sulaimon+Oluwaseun&background=random&color=fff&size=128",
+    avatar: "/images/seun.jpg",
   },
   {
     name: "Olabode Joshua",
