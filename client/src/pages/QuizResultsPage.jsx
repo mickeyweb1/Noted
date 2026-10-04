@@ -528,50 +528,49 @@ export default function QuizResultsPage() {
         </div>
       )}
 
-      {/* ✅ FIXED: View All Questions Modal */}
+      {/* ✅ FIXED: View All Questions Modal (Added min-h-0 and min-w-0 break-words to fix overflow and show answers properly) */}
       {showQuestionsModal && quizData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col min-h-0 animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header (Sticky) */}
-            <div className="flex justify-between items-center p-6 border-b border-border bg-card rounded-t-2xl shrink-0">
-              <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <Eye className="w-5 h-5 text-brand" /> All Questions ({quizData.questions?.length || 0})
+            <div className="flex justify-between items-center p-4 sm:p-6 border-b border-border bg-card rounded-t-2xl shrink-0">
+              <h3 className="text-lg sm:text-xl font-bold text-foreground flex items-center gap-2 min-w-0">
+                <Eye className="w-5 h-5 text-brand shrink-0" /> 
+                <span className="truncate">All Questions ({quizData.questions?.length || 0})</span>
               </h3>
-              <button onClick={() => setShowQuestionsModal(false)} className="p-2 rounded-lg hover:bg-accent transition-colors" aria-label="Close">
+              <button onClick={() => setShowQuestionsModal(false)} className="p-2 rounded-lg hover:bg-accent transition-colors shrink-0" aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
             {/* Scrollable Content */}
-            <div className="overflow-y-auto p-6 space-y-4 custom-scrollbar">
+            <div className="overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar min-h-0">
               {quizData.questions?.map((q, idx) => {
-                // Normalize the correct answer for comparison
                 const correctAnswer = q.correctAnswer?.trim();
                 
                 return (
-                  <div key={idx} className="p-5 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <div key={idx} className="p-4 sm:p-5 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors min-w-0">
                     <p className="font-semibold text-foreground mb-3 break-words">
                       <span className="text-brand mr-2">Q{idx + 1}.</span> 
                       {q.question}
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {q.options?.map((opt, i) => {
-                        // Trim and compare for accurate matching
                         const optionText = opt?.trim() || '';
                         const isCorrect = correctAnswer && optionText === correctAnswer;
                         
                         return (
                           <div 
                             key={i} 
-                            className={`p-3 rounded-lg border text-sm break-words flex items-start gap-2 ${
+                            className={`p-3 rounded-lg border text-sm flex items-start gap-2 min-w-0 break-words ${
                               isCorrect
                                 ? 'bg-brand/10 border-brand/30 text-brand font-semibold'
                                 : 'bg-card border-border text-foreground'
                             }`}
                           >
                             <span className="font-bold shrink-0">{String.fromCharCode(65 + i)}.</span>
-                            <span className="flex-1 truncate" title={optionText}>{optionText}</span>
+                            <span className="flex-1 min-w-0 break-words" title={optionText}>{optionText}</span>
                             {isCorrect && <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
                           </div>
                         );
@@ -579,8 +578,8 @@ export default function QuizResultsPage() {
                     </div>
                     {q.explanation && (
                       <div className="mt-3 p-3 rounded-lg bg-brand-soft/50 border border-brand/10">
-                        <p className="text-xs text-muted-foreground">
-                          <span className="font-semibold text-foreground"> Explanation:</span> {q.explanation}
+                        <p className="text-xs text-muted-foreground break-words">
+                          <span className="font-semibold text-foreground">Explanation:</span> {q.explanation}
                         </p>
                       </div>
                     )}
