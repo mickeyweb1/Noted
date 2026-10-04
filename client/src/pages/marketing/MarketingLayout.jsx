@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AudioLines, ArrowRight, Menu, X } from "lucide-react";
+import { ArrowRight, Menu, X } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ThemeToggle } from "../../components/themeToggle"; // Adjust path if needed
 
@@ -22,9 +22,12 @@ export default function MarketingLayout({ children }) {
           
           {/* 1. LOGO */}
           <Link to="/" className="flex items-center gap-3" onClick={() => setIsMenuOpen(false)}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-soft">
-              <AudioLines className="h-4 w-4" />
-            </div>
+            <img
+              src="/favicon.svg"
+              alt=""
+              aria-hidden="true"
+              className="h-9 w-9 rounded-xl shadow-soft"
+            />
             <span className="font-display text-lg font-bold tracking-tight">
               Noted
             </span>
@@ -134,9 +137,12 @@ export default function MarketingLayout({ children }) {
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-xl">
               <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-brand-foreground">
-                  <AudioLines className="h-5 w-5" />
-                </div>
+                <img
+                  src="/favicon.svg"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-10 w-10 rounded-xl"
+                />
                 <span className="font-display text-2xl font-bold">Noted</span>
               </div>
               <p className="text-muted-foreground">
