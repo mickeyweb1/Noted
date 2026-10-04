@@ -122,7 +122,7 @@ export function QuizResultsDashboard() {
                     <span className="flex items-center gap-2"><Users className="h-4 w-4" />{quiz.numberOfStudents} access codes</span>
                   </span>
 
-                                    <div className="mt-2 flex flex-col gap-2">
+                  <div className="mt-2 flex flex-col gap-2">
                     {isGameShow && resumeCode && (
                       <button
                         onClick={() => navigate(`/game-show?code=${resumeCode}`)}
@@ -159,7 +159,7 @@ export default function QuizResultsPage() {
   const [error, setError] = useState(""); 
   const [expandedSubmission, setExpandedSubmission] = useState(null);
   const [regenModal, setRegenModal] = useState({ open: false, step: 'confirm', code: '', loading: false });
-  const [showQuestionsModal, setShowQuestionsModal] = useState(false); // ✅ NEW: State for Questions Modal
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false);
 
   useEffect(() => { fetchResults(); }, [quizId]);
 
@@ -195,12 +195,11 @@ export default function QuizResultsPage() {
   const exportToCSV = () => {
     const headers = ["Student Name", "Class", "Score", "Percentage", "Time Taken", "Tab Switches", "Date Submitted"];
     const rows = submissions.map(sub => {
-      // ✅ NEW: Use maxScore for game show, totalQuestions for normal quiz
-const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore 
-  ? Math.round((sub.score / sub.maxScore) * 100) 
-  : sub.totalQuestions > 0 
-  ? Math.round((sub.score / sub.totalQuestions) * 100) 
-  : 0;
+      const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore 
+        ? Math.round((sub.score / sub.maxScore) * 100) 
+        : sub.totalQuestions > 0 
+        ? Math.round((sub.score / sub.totalQuestions) * 100) 
+        : 0;
       const timeStr = `${Math.floor((sub.timeTaken || 0) / 60)}m ${(sub.timeTaken || 0) % 60}s`;
       
       return [
@@ -244,14 +243,14 @@ const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore
     );
   }
 
-const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => {
-  const p = quizData?.gameMode === 'gameShow' && sub.maxScore
-    ? (sub.score / sub.maxScore) * 100
-    : sub.totalQuestions > 0 
-    ? (sub.score / sub.totalQuestions) * 100 
-    : 0;
-  return acc + p;
-}, 0) / submissions.length) : 0;
+  const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => {
+    const p = quizData?.gameMode === 'gameShow' && sub.maxScore
+      ? (sub.score / sub.maxScore) * 100
+      : sub.totalQuestions > 0 
+      ? (sub.score / sub.totalQuestions) * 100 
+      : 0;
+    return acc + p;
+  }, 0) / submissions.length) : 0;
   
   const avgTimeSeconds = submissions.length > 0 ? Math.round(submissions.reduce((acc, sub) => acc + (sub.timeTaken || 0), 0) / submissions.length) : 0;
 
@@ -269,7 +268,6 @@ const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, su
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {/* ✅ NEW: View Questions Button */}
             <button onClick={() => setShowQuestionsModal(true)} className={secondaryBtn}>
               <Eye className="h-4 w-4" /> View Questions
             </button>
@@ -375,10 +373,10 @@ const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, su
                 <tbody className="divide-y divide-border">
                   {submissions.map((sub, idx) => {
                     const percentage = quizData?.gameMode === 'gameShow' && sub.maxScore 
-  ? Math.round((sub.score / sub.maxScore) * 100) 
-  : sub.totalQuestions > 0 
-  ? Math.round((sub.score / sub.totalQuestions) * 100) 
-  : 0;
+                      ? Math.round((sub.score / sub.maxScore) * 100) 
+                      : sub.totalQuestions > 0 
+                      ? Math.round((sub.score / sub.totalQuestions) * 100) 
+                      : 0;
                     const isExpanded = expandedSubmission === sub._id;
                     const tone =
                       percentage >= 70
@@ -530,15 +528,15 @@ const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, su
         </div>
       )}
 
-      {/* ✅ POLISHED: View All Questions Modal */}
-      {showQuestionsModal && (
+      {/* ✅ FIXED: View All Questions Modal (Changed 'quiz' to 'quizData' and made correct answer blue) */}
+      {showQuestionsModal && quizData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-3xl max-h-[85vh] rounded-2xl border border-border bg-card shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header (Sticky) */}
             <div className="flex justify-between items-center p-6 border-b border-border bg-card rounded-t-2xl shrink-0">
               <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <Eye className="w-5 h-5 text-brand" /> All Questions ({quiz.questions.length})
+                <Eye className="w-5 h-5 text-brand" /> All Questions ({quizData.questions?.length || 0})
               </h3>
               <button onClick={() => setShowQuestionsModal(false)} className="p-2 rounded-lg hover:bg-accent transition-colors" aria-label="Close">
                 <X className="w-5 h-5" />
@@ -547,19 +545,19 @@ const avgScore = submissions.length > 0 ? Math.round(submissions.reduce((acc, su
             
             {/* Scrollable Content */}
             <div className="overflow-y-auto p-6 space-y-4 custom-scrollbar">
-              {quiz.questions.map((q, idx) => (
+              {quizData.questions?.map((q, idx) => (
                 <div key={idx} className="p-5 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
                   <p className="font-semibold text-foreground mb-3 break-words">
                     <span className="text-brand mr-2">Q{idx + 1}.</span> 
                     {q.question}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {q.options.map((opt, i) => (
+                    {q.options?.map((opt, i) => (
                       <div 
                         key={i} 
                         className={`p-3 rounded-lg border text-sm break-words flex items-start gap-2 ${
                           opt === q.correctAnswer 
-                            ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400 font-semibold' 
+                            ? 'bg-brand/10 border-brand/30 text-brand font-semibold' // ✅ Changed to blue (brand color) as requested
                             : 'bg-card border-border text-foreground'
                         }`}
                       >
