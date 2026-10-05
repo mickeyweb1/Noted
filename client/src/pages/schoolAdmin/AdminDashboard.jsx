@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock, Copy, Check, MessageSquare, User } from "lucide-react";
+// ✅ 1. Added 'Shield' to the imports
+import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock, Copy, Check, MessageSquare, User, Shield } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useUserContext } from "../../context/userContext"; 
 import api from "../../utils/api";
@@ -53,6 +54,17 @@ export default function AdminDashboard() {
   ];
 
   if (user?.role === "super_admin") {
+    // ✅ 2. Added the Total Admins card for Super Admins
+    baseStats.push({ 
+      title: "Total Admins", 
+      value: data?.stats?.totalAdmins || 0, 
+      change: "Platform admins", 
+      trend: "up", 
+      icon: Shield, 
+      color: "text-purple-600 dark:text-purple-400", 
+      bg: "bg-purple-500/10" 
+    });
+    
     baseStats.push({ 
       title: "Personal Users", 
       value: data?.stats?.totalPersonalUsers || 0, 
@@ -168,7 +180,6 @@ export default function AdminDashboard() {
             <h2 className="mb-4 text-lg font-semibold text-foreground">Quick Actions</h2>
             <div className="space-y-3">
               
-              {/* ✅ RESTORED: Super Admin Feedback Link */}
               {user?.role === "super_admin" && (
                 <NavLink to="/admin/feedback" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-brand/5 p-3 transition-all hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <div className="flex min-w-0 items-center gap-3">
@@ -181,7 +192,6 @@ export default function AdminDashboard() {
                 </NavLink>
               )}
 
-              {/* ✅ NEW: Support Inbox Link */}
               {user?.role === "super_admin" && (
                 <NavLink to="/admin/support-inbox" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-brand/5 p-3 transition-all hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <div className="flex min-w-0 items-center gap-3">
