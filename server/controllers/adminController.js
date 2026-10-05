@@ -44,14 +44,19 @@ export const getAdminStats = async (req, res, next) => {
     // ✅ Check if the logged-in user is the Super Admin
     const isSuperAdmin = req.user.role === 'super_admin';
     
-    let totalStudents, activeStudents, inactiveStudents, recentStudents, schoolName, inviteCode, totalPersonalUsers = 0;
+    let totalStudents, activeStudents, inactiveStudents, recentStudents, schoolName, inviteCode, totalPersonalUsers = 0, totalAdmins = 0;
 
     if (isSuperAdmin) {
       // 🌍 GLOBAL STATS: Count EVERYONE in the database
       totalStudents = await User.countDocuments({ role: 'student' });
       activeStudents = await User.countDocuments({ role: 'student', isActive: true });
       inactiveStudents = totalStudents - activeStudents;
-      totalPersonalUsers = await User.countDocuments({ role: 'personal_user' }); // ✅ Total independent users
+      totalPersonalUsers = await User.countDocuments({ role: 'personal_user' }); 
+      
+      // ✅ NEW: Count total admins (school_admin + super_admin)
+      totalAdmins = await User.countDocuments({ 
+        role: { $in: ['school_admin', 'super_admin'] } 
+      });
       
       // Get recent students from ANY school
       recentStudents = await User.find({ role: 'student' })
@@ -92,13 +97,14 @@ export const getAdminStats = async (req, res, next) => {
           totalStudents, 
           activeStudents, 
           inactiveStudents,
-          totalPersonalUsers // ✅ Send this to the frontend for the Super Admin
+          totalPersonalUsers, 
+          totalAdmins // ✅ ADDED HERE: Sends the admin count to the frontend
         },
         recentStudents: recentStudents.map(s => ({ 
           id: s._id, 
           name: s.fullName, 
           class: s.className || 'N/A', 
-          school: s.schoolName || 'Personal', // ✅ Show which school they belong to
+          school: s.schoolName || 'Personal', 
           status: s.isActive ? 'Active' : 'Inactive', 
           date: new Date(s.createdAt).toLocaleDateString() 
         }))
