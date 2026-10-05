@@ -71,7 +71,7 @@ const teamMembers = [
     name: "Olabode Joshua",
     role: "Quality Assurance",
     bio: "Rigorously testing every feature to guarantee a bug-free, reliable, and smooth experience for all users.",
-    avatar: "https://ui-avatars.com/api/?name=Olabode+Joshua&background=random&color=fff&size=128",
+    avatar: "/images/olabode-joshua.png",
   },
   {
     name: "Okafor Adaobi",
