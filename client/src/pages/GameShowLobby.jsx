@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
+import MathRenderer from "../components/MathRenderer";
 
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const socketUrl = apiUrl.replace(/\/api$/, "");
@@ -692,9 +693,9 @@ export default function GameShowLobby() {
                     : "bg-destructive/10 text-destructive";
                 return (
                   <div key={idx} className="rounded-xl border border-border bg-muted/30 p-4">
-                    <p className="mb-2 break-words text-sm font-medium text-foreground">
-                      Q{idx + 1}. {q.question}
-                    </p>
+                   <p className="mb-2 break-words text-sm font-medium text-foreground">
+  Q{idx + 1}. <MathRenderer>{q.question}</MathRenderer>
+</p>
                     {result ? (
                       <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${tone}`}>
                         {result.result === "correct" && <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -751,27 +752,27 @@ export default function GameShowLobby() {
 
           <div>
             <p className="mb-2 text-sm text-muted-foreground">Card {activeCard.index + 1}</p>
-            <h2 className="break-words text-xl font-bold leading-tight text-foreground sm:text-2xl md:text-3xl">
-              {question.question}
-            </h2>
+<h2 className="break-words text-xl font-bold leading-tight text-foreground sm:text-2xl md:text-3xl">
+  <MathRenderer>{question.question}</MathRenderer>
+</h2>
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
             {question.options.map((opt, i) => (
               <button
-                key={i}
-                onClick={() => setSelectedAnswer(i)}
-                disabled={isSubmitting}
-                aria-pressed={selectedAnswer === i}
-                className={`break-words rounded-xl border-2 p-4 text-left text-base font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-70 sm:text-lg ${
-                  selectedAnswer === i
-                    ? "border-brand bg-brand/10 text-brand"
-                    : "border-border bg-muted text-foreground hover:border-brand/50"
-                }`}
-              >
-                <span className="mr-2 font-bold">{String.fromCharCode(65 + i)}.</span>
-                {opt}
-              </button>
+  key={i}
+  onClick={() => setSelectedAnswer(i)}
+  disabled={isSubmitting}
+  aria-pressed={selectedAnswer === i}
+  className={`break-words rounded-xl border-2 p-4 text-left text-base font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-70 sm:text-lg ${
+    selectedAnswer === i
+      ? "border-brand bg-brand/10 text-brand"
+      : "border-border bg-muted text-foreground hover:border-brand/50"
+  }`}
+>
+  <span className="mr-2 font-bold">{String.fromCharCode(65 + i)}.</span>
+  <MathRenderer>{opt}</MathRenderer>
+</button>
             ))}
           </div>
 

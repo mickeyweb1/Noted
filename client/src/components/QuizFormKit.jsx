@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, Copy, Pencil, Trash2 } from "lucide-react";
+import MathRenderer from "../components/MathRenderer"; // ✅ ADD THIS IMPORT
 
 /* ------------------------------------------------------------------ */
 /* Shared styles                                                       */
@@ -232,7 +233,9 @@ export function QuestionReviewList({ questions, onChange }) {
                   className={`${inputCls} min-w-0 flex-1 text-sm`}
                 />
               ) : (
-                <p className="min-w-0 flex-1 break-words pt-0.5 font-medium text-foreground">{q.question}</p>
+                <p className="min-w-0 flex-1 break-words pt-0.5 font-medium text-foreground">
+                  <MathRenderer>{q.question}</MathRenderer>
+                </p>
               )}
               <div className="flex shrink-0 gap-1">
                 <button
@@ -294,7 +297,9 @@ export function QuestionReviewList({ questions, onChange }) {
                         }`}
                       >
                         <span className="font-bold">{String.fromCharCode(65 + optIdx)}.</span>
-                        <span className="min-w-0 flex-1 break-words">{opt}</span>
+                        <span className="min-w-0 flex-1 break-words">
+                          <MathRenderer>{opt}</MathRenderer>
+                        </span>
                         {isCorrect && <Check className="h-4 w-4 shrink-0" aria-label="Correct answer" />}
                       </div>
                     );
@@ -305,7 +310,11 @@ export function QuestionReviewList({ questions, onChange }) {
                     No option matches the correct answer. Edit this question to choose one.
                   </p>
                 )}
-                {q.explanation && <p className="mt-2 text-xs text-muted-foreground">{q.explanation}</p>}
+                {q.explanation && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    <MathRenderer>{q.explanation}</MathRenderer>
+                  </p>
+                )}
               </>
             )}
           </div>

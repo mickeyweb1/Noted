@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, AlertTriangle, Check, ListChecks, WifiOff } from "lucide-react";
 import api from "../utils/api";
+import MathRenderer from "../components/MathRenderer";
 
 /* ---------- Presentational helpers ---------- */
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -375,7 +376,9 @@ export default function TakeQuiz() {
                   {q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" draggable="false" />}
                   <div className="mb-4 flex items-start gap-3">
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${isAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"}`}>{idx + 1}</span>
-                    <h3 id={`q-${q._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground">{q.question}</h3>
+                    <h3 id={`q-${q._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground">
+  <MathRenderer>{q.question}</MathRenderer>
+</h3>
                   </div>
                   <div className="space-y-3" role="group" aria-labelledby={`q-${q._id}`}>
                     {q.options.map((opt, optIdx) => {
@@ -383,7 +386,9 @@ export default function TakeQuiz() {
                       return (
                         <button key={optIdx} type="button" aria-pressed={isSelected} onClick={() => handleSelectAnswer(q._id, opt)} className={`flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${focusRing} ${isSelected ? "border-brand bg-brand-soft text-foreground" : "border-border bg-background text-foreground hover:border-brand/40 hover:bg-muted"}`}>
                           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors ${isSelected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>{String.fromCharCode(65 + optIdx)}</span>
-                          <span className="min-w-0 flex-1 break-words">{opt}</span>
+                          <span className="min-w-0 flex-1 break-words">
+  <MathRenderer>{opt}</MathRenderer>
+</span>
                           {isSelected && <Check className="h-5 w-5 shrink-0 text-brand" />}
                         </button>
                       );

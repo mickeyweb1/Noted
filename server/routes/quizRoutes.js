@@ -68,18 +68,24 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     }
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 30);
     
-    const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. 
-    Output VALID JSON ONLY in this exact format: 
+const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}. 
+
+IMPORTANT FORMATTING RULES:
+- For mathematical expressions, use LaTeX format with double backslashes: \\frac{numerator}{denominator}, \\sqrt{x}, x^{2}, \\sum, \\int, etc.
+- Example: "What is \\frac{2x-1}{x^2+x}?" NOT "What is (2x-1)/(x^2+x)?"
+- Example: "Solve for x: x^{2} + 5x + 6 = 0" NOT "Solve for x: x^2 + 5x + 6 = 0"
+
+Output VALID JSON ONLY in this exact format: 
+{ 
+  "questions": [
     { 
-      "questions": [
-        { 
-          "question": "The question text?", 
-          "options": ["Exact text of option A", "Exact text of option B", "Exact text of option C", "Exact text of option D"], 
-          "correctAnswer": "Exact text of the correct option (MUST exactly match one of the strings in the options array. DO NOT output 'A', 'B', 'C', or 'D')", 
-          "explanation": "Brief explanation why" 
-        }
-      ] 
-    }`;
+      "question": "The question text with LaTeX?", 
+      "options": ["Option A with LaTeX", "Option B", "Option C", "Option D"], 
+      "correctAnswer": "Exact text of the correct option", 
+      "explanation": "Brief explanation why" 
+    }
+  ] 
+}`;
     
     const strictPrompt = systemPrompt + " CRITICAL: Keep explanations to ONE short sentence maximum to fit token limits.";
     
