@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useId } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, WifiOff, CheckCircle2, XCircle, Zap, Award, Copy, Check, Plus, MoreVertical, Ban, Eye, EyeOff, Loader2, Lock, Clock } from "lucide-react";
+import { 
+  Trophy, ArrowLeft, RefreshCw, Play, Users, Activity, Wifi, WifiOff, 
+  CheckCircle2, XCircle, Zap, Award, Copy, Check, Plus, MoreVertical, 
+  Ban, Eye, EyeOff, Loader2, Lock, Clock, X 
+} from "lucide-react";
 import { io } from "socket.io-client";
 import api from "../utils/api";
-import MathRenderer from "../components/MathRenderer";
 import MathRenderer from "../components/MathRenderer";
 
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -79,7 +82,7 @@ function Modal({ title, icon, onClose, children, size = "max-w-sm", headerExtra 
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`flex max-h-[85dvh] w-full ${size} flex-col rounded-2xl border border-border bg-card shadow-2xl outline-none animate-in fade-in zoom-in-95 duration-200 min-h-0`}>
         <div className="flex shrink-0 items-center justify-between gap-3 rounded-t-2xl border-b border-border bg-card p-4 sm:p-6">
           <h3 id={titleId} className="flex min-w-0 items-center gap-2 text-lg font-bold text-foreground sm:text-xl">{icon}<span className="truncate">{title}</span></h3>
-          <div className="flex shrink-0 items-center gap-2">{headerExtra}<button onClick={onClose} aria-label="Close" className="rounded-lg p-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"><XCircle className="h-5 w-5" /></button></div>
+          <div className="flex shrink-0 items-center gap-2">{headerExtra}<button onClick={onClose} aria-label="Close" className="rounded-lg p-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"><X className="h-5 w-5" /></button></div>
         </div>
         <div className="overflow-y-auto p-4 sm:p-6 min-h-0">{children}</div>
       </div>
@@ -91,8 +94,12 @@ const RESULT_BADGES = {
   correct: { cls: "bg-green-500/10 text-green-700 dark:text-green-400", Icon: CheckCircle2, label: "Correct" },
   wrong: { cls: "bg-destructive/10 text-destructive", Icon: XCircle, label: "Wrong" },
   steal: { cls: "bg-purple-500/10 text-purple-700 dark:text-purple-400", Icon: Zap, label: "Steal" },
+  timeout: { cls: "bg-amber-500/10 text-amber-700 dark:text-amber-400", Icon: Clock, label: "Timeout" },
 };
-function ResultBadge({ result }) { const cfg = RESULT_BADGES[result]; if (!cfg) return null; return (<span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${cfg.cls}`}><cfg.Icon className="h-3 w-3" /> {cfg.label}</span>); }
+function ResultBadge({ result }) { 
+  const cfg = RESULT_BADGES[result] || RESULT_BADGES.wrong; 
+  return (<span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${cfg.cls}`}><cfg.Icon className="h-3 w-3" /> {cfg.label}</span>); 
+}
 
 function TeamCodeCard({ team, code, copied, onCopy, compact = false }) {
   const t = TEAMS[team];
@@ -269,7 +276,7 @@ export default function GameShowBoard() {
         <div className={`space-y-6 lg:col-span-2 ${isLive ? "order-first lg:order-none" : ""}`}>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-foreground"><Activity className="h-5 w-5 text-blue-500" /> Live battle results</h3>
-            {activeCard && (<div className="mb-4 flex items-center justify-center gap-3 rounded-xl border border-border bg-muted p-3"><Lock className="h-4 w-4 shrink-0 text-muted-foreground" /><p className="min-w-0 truncate text-sm font-medium text-foreground">{activeCard.player} is {activeCard.isSteal ? "stealing" : "answering"}{typeof activeCard.index === "number" ? ` card ${activeCard.index + 1}` : " a card"}</p>{endsAt && <span className="font-mono text-sm font-bold text-brand" role="timer">{formatTime(secondsLeft)}</span>}</div>)}
+            {activeCard && (<div className="mb-4 flex items-center justify-center gap-3 rounded-xl border border-border bg-muted p-3 animate-pulse"><Lock className="h-4 w-4 shrink-0 text-muted-foreground" /><p className="min-w-0 truncate text-sm font-medium text-foreground">{activeCard.player} is {activeCard.isSteal ? "stealing" : "answering"}{typeof activeCard.index === "number" ? ` card ${activeCard.index + 1}` : " a card"}</p>{endsAt && <span className="font-mono text-sm font-bold text-brand" role="timer">{formatTime(secondsLeft)}</span>}</div>)}
             <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4"><TeamPanel team={1} info={team1} /><TeamPanel team={2} info={team2} /></div>
             {isGameComplete && (<div className="mt-6 rounded-2xl border-2 border-brand/30 bg-gradient-to-r from-yellow-500/10 via-brand/10 to-purple-500/10 p-6 text-center animate-in fade-in zoom-in duration-500"><Award className="mx-auto mb-3 h-12 w-12 text-brand" /><h3 className="mb-2 text-2xl font-bold text-foreground">Game complete</h3><p className="mb-4 text-muted-foreground">{winnerText}</p><div className="grid grid-cols-2 gap-3 sm:gap-8">{teamInfo.map((info) => (<div key={info.n} className="min-w-0 text-center"><p className="truncate font-bold text-foreground">{info.current?.name ?? TEAMS[info.n].name}</p><p className="text-2xl font-bold text-brand sm:text-3xl">{info.total} pts</p></div>))}</div></div>)}
           </div>
