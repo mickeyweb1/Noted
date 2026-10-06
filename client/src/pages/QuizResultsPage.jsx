@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "rea
 import { useParams, useNavigate } from "react-router-dom";
 import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Check, Award, Eye, Search } from "lucide-react";
 import api from "../utils/api";
-import Modal from "../components/Modal"; // Assuming you have this shared modal, if not use the one from GameShowBoard
+import Modal from "../components/Modal";
 import { useClipboard } from "../components/QuizFormKit";
 import MathRenderer from "../components/MathRenderer";
 
