@@ -41,16 +41,16 @@ const getOwnedQuiz = async (req, res) => {
   if (String(quiz.createdBy) !== String(req.user._id)) { res.status(403).json({ success: false, message: 'You do not have access to this quiz' }); return null; }
   return quiz;
 };
-
-// 🎯 1. AI Generate Questions PREVIEW
+// 🎯 1. AI Generate Questions PREVIEW (UPDATED)
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, difficulty, numQuestions } = req.body;
     if (typeof notes !== 'string' || !notes.trim()) return res.status(400).json({ success: false, message: 'Please provide some notes.' });
-    const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 30);
     
-    // ✅ UPDATED PROMPT FOR LATEX
-    const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}.
+    // ✅ INCREASED CAP TO 50
+    const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
+    
+    const systemPrompt = `You are an expert examiner. Generate EXACTLY ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}.
     
 IMPORTANT FORMATTING RULES:
 - For mathematical expressions, use LaTeX format wrapped in single dollar signs: $\\frac{numerator}{denominator}$, $\\sqrt{x}$, $x^{2}$, $\\sum$, $\\int$.
@@ -68,16 +68,22 @@ Output VALID JSON ONLY in this exact format:
       "explanation": "Brief explanation why"
     }
   ]
-}`;
+}
+
+CRITICAL RULES:
+1. You MUST generate exactly ${count} questions. Do not stop early.
+2. Every explanation MUST be a complete, finished sentence. DO NOT cut off mid-sentence.
+3. If you reach the token limit, prioritize finishing the current question's explanation over starting a new one.`;
     
-    const strictPrompt = systemPrompt + " CRITICAL: Keep explanations to ONE short sentence maximum to fit token limits.";
+    const strictPrompt = systemPrompt;
     
+    // ✅ INCREASED TOKEN LIMIT TO PREVENT CUT-OFFS (up to 8000 tokens for 50 questions)
     const response = await generateWithGroq(
       [
         { role: 'system', content: strictPrompt },
         { role: 'user', content: `Notes:\n${notes.slice(0, 8000)}` }
       ],
-      { max_tokens: Math.min(150 * count + 200, 3500), json: true }
+      { max_tokens: Math.min(250 * count + 500, 8000), json: true }
     );
     
     let parsed;
@@ -86,7 +92,7 @@ Output VALID JSON ONLY in this exact format:
       parsed = JSON.parse(jsonStr);
       if (!Array.isArray(parsed.questions)) throw new Error('No questions array found');
     } catch (parseError) {
-      console.error(" AI JSON Parse Error:", parseError);
+      console.error("AI JSON Parse Error:", parseError);
       return res.status(400).json({ success: false, message: "AI generated an invalid response. Please try again with fewer notes or fewer questions." });
     }
     
@@ -149,6 +155,9 @@ router.post('/session/update-tab', async (req, res, next) => {
 });
 
 // 🎯 5. Submit Quiz
+
+
+// 🎯 5. Submit Quiz (UPDATED FOR SERVER-SIDE TIME ENFORCEMENT)
 router.post('/submit', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
@@ -156,16 +165,57 @@ router.post('/submit', async (req, res, next) => {
     if (!code) return res.status(400).json({ success: false, message: 'Access code is required.' });
     if (typeof studentName !== 'string' || !studentName.trim() || typeof studentSurname !== 'string' || !studentSurname.trim()) return res.status(400).json({ success: false, message: 'Please enter your first name and surname.' });
     if (!Array.isArray(answers)) return res.status(400).json({ success: false, message: 'Answers are missing.' });
+    
     const session = await QuizSession.findOne({ code });
     if (!session) return res.status(404).json({ success: false, message: 'Invalid or expired session.' });
+    
     const quiz = await Quiz.findById(session.quizId);
     if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found.' });
-    const timeTakenSeconds = Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000));
+    
+    // ✅ SERVER-SIDE TIME ENFORCEMENT
+    const maxTimeSeconds = quiz.timeType === "perQuestion" ? quiz.timeLimit * quiz.questions.length : quiz.timeLimit;
+    const multiplier = quiz.timeUnit === "minutes" ? 60 : 1;
+    const maxAllowedMs = maxTimeSeconds * multiplier * 1000;
+    const absoluteEndTime = new Date(session.startTime).getTime() + maxAllowedMs;
+    const now = Date.now();
+    
+    // Cap the time taken at the maximum allowed time. Prevents frontend manipulation.
+    const rawTimeTaken = Math.floor((now - new Date(session.startTime).getTime()) / 1000);
+    const timeTakenSeconds = Math.min(maxTimeSeconds * multiplier, Math.max(0, rawTimeTaken));
+    
     const provided = new Map();
     for (const ans of answers) { const qid = String(ans?.questionId ?? ''); if (qid && !provided.has(qid)) provided.set(qid, ans); }
+    
     let score = 0;
-    const submissionAnswers = quiz.questions.map((question) => { const ans = provided.get(String(question._id)); const selectedAnswer = typeof ans?.selectedAnswer === 'string' ? ans.selectedAnswer : ''; const isCorrect = selectedAnswer !== '' && selectedAnswer === question.correctAnswer; if (isCorrect) score++; return { questionId: question._id, selectedAnswer, isCorrect }; });
-    try { await QuizSubmission.create({ quiz: quiz._id, studentName: studentName.trim().slice(0, 100), studentSurname: studentSurname.trim().slice(0, 100), studentClass: typeof studentClass === 'string' ? studentClass.trim().slice(0, 100) : undefined, accessCode: code, answers: submissionAnswers, score, totalQuestions: quiz.questions.length, timeTaken: timeTakenSeconds, tabSwitchCount: session.tabSwitchCount }); } catch (err) { if (err.code === 11000) { await QuizSession.deleteOne({ _id: session._id }); return res.status(409).json({ success: false, message: 'This code has already been used.' }); } throw err; }
+    const submissionAnswers = quiz.questions.map((question) => { 
+      const ans = provided.get(String(question._id)); 
+      const selectedAnswer = typeof ans?.selectedAnswer === 'string' ? ans.selectedAnswer : ''; 
+      const isCorrect = selectedAnswer !== '' && selectedAnswer === question.correctAnswer; 
+      if (isCorrect) score++; 
+      return { questionId: question._id, selectedAnswer, isCorrect }; 
+    });
+    
+    try { 
+      await QuizSubmission.create({ 
+        quiz: quiz._id, 
+        studentName: studentName.trim().slice(0, 100), 
+        studentSurname: studentSurname.trim().slice(0, 100), 
+        studentClass: typeof studentClass === 'string' ? studentClass.trim().slice(0, 100) : undefined, 
+        accessCode: code, 
+        answers: submissionAnswers, 
+        score, 
+        totalQuestions: quiz.questions.length, 
+        timeTaken: timeTakenSeconds, // ✅ Uses the server-capped time
+        tabSwitchCount: session.tabSwitchCount 
+      }); 
+    } catch (err) { 
+      if (err.code === 11000) { 
+        await QuizSession.deleteOne({ _id: session._id }); 
+        return res.status(409).json({ success: false, message: 'This code has already been used.' }); 
+      } 
+      throw err; 
+    }
+    
     await QuizSession.deleteOne({ _id: session._id });
     res.json({ success: true, message: 'Quiz submitted successfully!', score, totalQuestions: quiz.questions.length, tabSwitchCount: session.tabSwitchCount });
   } catch (error) { next(error); }
