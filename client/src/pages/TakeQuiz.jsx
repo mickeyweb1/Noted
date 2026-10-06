@@ -36,6 +36,17 @@ export default function TakeQuiz() {
     return () => { document.removeEventListener("contextmenu", block); document.removeEventListener("selectstart", block); document.removeEventListener("dragstart", block); };
   }, [step]);
 
+    // ✅ Warn student if they try to close the tab during the quiz
+  useEffect(() => {
+    if (step !== "quiz") return;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "The timer is still running! Are you sure you want to leave?";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [step]);
+
   useEffect(() => {
     if (step !== "quiz" || !code) return;
     const saveTimer = setTimeout(async () => {
