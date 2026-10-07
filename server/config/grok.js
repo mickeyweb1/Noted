@@ -4,65 +4,92 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+/* ------------------------------------------------------------------ */
+/* Settings                                                            */
+/* ------------------------------------------------------------------ */
+const REQUEST_TIMEOUT_MS = 30_000; 
+const TEMPERATURE = 0.4; 
+
+// ✅ UPDATED: Correct, active model names for each provider
+const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.1-8b-instruct:free"; // ":free" ensures it uses the free tier
+const COHERE_MODEL = process.env.COHERE_MODEL || "command-r-plus"; // Updated from deprecated 'command-r'
+const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct"; // Updated to the active 3.1 model
+const HF_MODEL = process.env.HF_MODEL || "meta-llama/Meta-Llama-3.1-8B-Instruct";
 
 /* ------------------------------------------------------------------ */
-/* Helper: Clean AI output (removes thinking tags and markdown)        */
+/* Helpers                                                             */
 /* ------------------------------------------------------------------ */
-const cleanOutput = (raw = "") => {
-  if (!raw) return "";
-  return raw
+const cleanOutput = (raw = "") =>
+  String(raw ?? "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/<think>[\s\S]*/gi, "")
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
+    .replace(/```(?:json)?/gi, "")
     .trim();
+
+const describeError = (error) => {
+  const data = error.response?.data;
+  const detail = data?.error?.message || (typeof data === "string" ? data : data ? JSON.stringify(data) : "");
+  return String(detail || error.message || error).slice(0, 300);
 };
 
-/* ------------------------------------------------------------------ */
-/* 1. Primary: Groq                                                    */
-/* ------------------------------------------------------------------ */
-const tryGroq = async (messages, maxTokens, json) => {
-  const completion = await groq.chat.completions.create({
-    messages,
-    model: "qwen/qwen3.8-27b", // Your verified working model
-    temperature: 0.7,
-    max_tokens: maxTokens,
-    ...(json ? { response_format: { type: "json_object" } } : {}),
-  });
-  return cleanOutput(completion.choices[0]?.message?.content);
-};
-
-/* ------------------------------------------------------------------ */
-/* 2. Fallback 1: OpenRouter                                           */
-/* ------------------------------------------------------------------ */
-const tryOpenRouter = async (messages, maxTokens, json) => {
+const openAICompatible = async ({ url, apiKey, model, messages, maxTokens, json = false, headers = {} }) => {
   const res = await axios.post(
-    "https://openrouter.ai/api/v1/chat/completions",
+    url,
     {
-      model: "meta-llama/llama-3.1-8b-instruct",
+      model,
       messages,
       max_tokens: maxTokens,
-      temperature: 0.7,
+      temperature: TEMPERATURE,
       ...(json ? { response_format: { type: "json_object" } } : {}),
     },
     {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "http://localhost:5173", // Required by OpenRouter
-        "X-Title": "Noted Quiz App",
-      },
+      timeout: REQUEST_TIMEOUT_MS,
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...headers },
     }
   );
-  return cleanOutput(res.data.choices[0].message.content);
+  const choice = res.data?.choices?.[0];
+  return { text: cleanOutput(choice?.message?.content), truncated: choice?.finish_reason === "length" };
 };
 
 /* ------------------------------------------------------------------ */
-/* 3. Fallback 2: Cohere                                               */
+/* Providers                                                           */
 /* ------------------------------------------------------------------ */
+let groqClient = null;
+const getGroq = () =>
+  (groqClient ??= new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 }));
+
+const tryGroq = async (messages, maxTokens, json) => {
+  const completion = await getGroq().chat.completions.create({
+    messages,
+    model: GROQ_MODEL,
+    temperature: TEMPERATURE,
+    max_tokens: maxTokens,
+    ...(json ? { response_format: { type: "json_object" } } : {}),
+  });
+  const choice = completion.choices[0];
+  return { text: cleanOutput(choice?.message?.content), truncated: choice?.finish_reason === "length" };
+};
+
+const tryOpenRouter = (messages, maxTokens, json) =>
+  openAICompatible({
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    apiKey: process.env.OPENROUTER_API_KEY,
+    model: OPENROUTER_MODEL,
+    messages,
+    maxTokens,
+    json,
+    headers: {
+      "HTTP-Referer": process.env.CLIENT_URL || "http://localhost:5173",
+      "X-Title": "Noted Quiz App",
+    },
+  });
+
 const tryCohere = async (messages, maxTokens) => {
-  const lastMessage = messages[messages.length - 1];
-  const history = messages.slice(0, -1).map((m) => ({
+  const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
+  const turns = messages.filter((m) => m.role !== "system");
+  const last = turns[turns.length - 1];
+  const history = turns.slice(0, -1).map((m) => ({
     role: m.role === "assistant" ? "CHATBOT" : "USER",
     message: m.content,
   }));
@@ -70,138 +97,93 @@ const tryCohere = async (messages, maxTokens) => {
   const res = await axios.post(
     "https://api.cohere.ai/v1/chat",
     {
-      model: "command-r",
-      message: lastMessage.content,
+      model: COHERE_MODEL,
+      message: last.content,
       chat_history: history,
-      temperature: 0.7,
+      ...(system ? { preamble: system } : {}),
+      temperature: TEMPERATURE,
       max_tokens: maxTokens,
     },
     {
-      headers: {
-        Authorization: `Bearer ${process.env.COHERE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      timeout: REQUEST_TIMEOUT_MS,
+      headers: { Authorization: `Bearer ${process.env.COHERE_API_KEY}`, "Content-Type": "application/json" },
     }
   );
-  return cleanOutput(res.data.text);
+  return { text: cleanOutput(res.data?.text), truncated: res.data?.finish_reason === "MAX_TOKENS" };
 };
 
-/* ------------------------------------------------------------------ */
-/* 4. Fallback 3: NVIDIA                                               */
-/* ------------------------------------------------------------------ */
-const tryNVIDIA = async (messages, maxTokens) => {
-  const res = await axios.post(
-    "https://integrate.api.nvidia.com/v1/chat/completions",
-    {
-      model: "meta/llama3-70b-instruct",
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-  return cleanOutput(res.data.choices[0].message.content);
-};
+const tryNVIDIA = (messages, maxTokens) =>
+  openAICompatible({
+    url: "https://integrate.api.nvidia.com/v1/chat/completions",
+    apiKey: process.env.NVIDIA_API_KEY,
+    model: NVIDIA_MODEL,
+    messages,
+    maxTokens,
+  });
+
+// ✅ UPDATED: Hugging Face now uses the OpenAI-compatible router
+const tryHuggingFace = (messages, maxTokens) =>
+  openAICompatible({
+    url: "https://router.huggingface.co/v1/chat/completions",
+    apiKey: process.env.HF_API_KEY,
+    model: HF_MODEL,
+    messages,
+    maxTokens,
+  });
+
+const PROVIDERS = [
+  { name: "Groq", key: "GROQ_API_KEY", run: tryGroq },
+  { name: "OpenRouter", key: "OPENROUTER_API_KEY", run: tryOpenRouter },
+  { name: "Cohere", key: "COHERE_API_KEY", run: tryCohere },
+  { name: "NVIDIA", key: "NVIDIA_API_KEY", run: tryNVIDIA },
+  { name: "Hugging Face", key: "HF_API_KEY", run: tryHuggingFace },
+];
 
 /* ------------------------------------------------------------------ */
-/* 5. Final Resort: Hugging Face                                       */
-/* ------------------------------------------------------------------ */
-const tryHuggingFace = async (messages, maxTokens) => {
-  const prompt = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n") + "\nASSISTANT:";
-  const res = await axios.post(
-    "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct",
-    {
-      inputs: prompt,
-      parameters: { max_new_tokens: maxTokens, return_full_text: false, temperature: 0.7 },
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.HF_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-  return cleanOutput(res.data?.[0]?.generated_text || "");
-};
-
-/* ------------------------------------------------------------------ */
-/* Main Export: Cascading Fallback Generator                           */
+/* Main export                                                         */
 /* ------------------------------------------------------------------ */
 export const generateWithGroq = async (messagesOrPrompt, options = {}) => {
   const messages = Array.isArray(messagesOrPrompt)
     ? messagesOrPrompt
     : [{ role: "user", content: messagesOrPrompt }];
 
-  const { json = false, max_tokens = 800, ...rest } = options;
+  const { json = false, max_tokens = 800 } = options;
+  const configured = PROVIDERS.filter((p) => process.env[p.key]);
+
+  if (configured.length === 0) {
+    const err = new Error("No AI provider is configured. Set at least one API key in the environment.");
+    err.status = 503;
+    throw err;
+  }
+
   let lastError;
-
-  // 1. Try Groq
-  if (process.env.GROQ_API_KEY) {
+  for (const provider of configured) {
     try {
-      console.log("🤖 Attempting AI generation with Groq...");
-      const text = await tryGroq(messages, max_tokens, json);
-      if (text) return text;
+      const { text, truncated } = await provider.run(messages, max_tokens, json);
+      if (!text) throw new Error("empty response");
+      if (truncated) throw new Error("response was cut off (max_tokens reached)");
+      
+      // ✅ CRITICAL: If we asked for JSON, validate it before accepting!
+      if (json) {
+        try {
+          const jsonStr = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+          JSON.parse(jsonStr); 
+        } catch (e) {
+          throw new Error("invalid JSON response");
+        }
+      }
+      
+      return text;
     } catch (error) {
-      console.warn("⚠️ Groq failed:", error.response?.data || error.message);
+      console.warn(`[ai] ${provider.name} failed: ${describeError(error)}`);
       lastError = error;
     }
   }
 
-  // 2. Try OpenRouter
-  if (process.env.OPENROUTER_API_KEY) {
-    try {
-      console.log("🔄 Groq failed. Attempting fallback with OpenRouter...");
-      const text = await tryOpenRouter(messages, max_tokens, json);
-      if (text) return text;
-    } catch (error) {
-      console.warn("⚠️ OpenRouter failed:", error.response?.data || error.message);
-      lastError = error;
-    }
-  }
-
-  // 3. Try Cohere
-  if (process.env.COHERE_API_KEY) {
-    try {
-      console.log("🔄 OpenRouter failed. Attempting fallback with Cohere...");
-      const text = await tryCohere(messages, max_tokens);
-      if (text) return text;
-    } catch (error) {
-      console.warn("⚠️ Cohere failed:", error.response?.data || error.message);
-      lastError = error;
-    }
-  }
-
-  // 4. Try NVIDIA
-  if (process.env.NVIDIA_API_KEY) {
-    try {
-      console.log("🔄 Cohere failed. Attempting fallback with NVIDIA...");
-      const text = await tryNVIDIA(messages, max_tokens);
-      if (text) return text;
-    } catch (error) {
-      console.warn("⚠️ NVIDIA failed:", error.response?.data || error.message);
-      lastError = error;
-    }
-  }
-
-  // 5. Try Hugging Face (Final Resort)
-  if (process.env.HF_API_KEY) {
-    try {
-      console.log("🔄 All primary APIs failed. Attempting final fallback with Hugging Face...");
-      const text = await tryHuggingFace(messages, max_tokens);
-      if (text) return text;
-    } catch (error) {
-      console.warn("⚠️ Hugging Face failed:", error.response?.data || error.message);
-      lastError = error;
-    }
-  }
-
-  console.error("❌ AI generation failed completely across all providers:", lastError?.message);
-  throw new Error("AI generation failed. All providers are currently busy or misconfigured. Please check your environment variables.");
+  console.error("[ai] all providers failed. Last error:", describeError(lastError));
+  const err = new Error("The AI service couldn't produce a usable answer right now. Please try again in a moment.");
+  err.status = 503;
+  throw err;
 };
 
 export default generateWithGroq;
