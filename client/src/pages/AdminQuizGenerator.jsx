@@ -27,7 +27,6 @@ const TABS = [
   { id: "manual", label: "Manual", Icon: FileText },
 ];
 
-// Numbers are kept as strings while typing and converted when submitting.
 const INITIAL_METADATA = {
   title: "",
   difficulty: "Intermediate",
@@ -40,7 +39,7 @@ const INITIAL_METADATA = {
 };
 
 const emptyQuestion = () => ({
-  cid: newId(), // stable id: keeps image uploads and inputs attached to the right question
+  cid: newId(),
   question: "",
   options: ["", "", "", ""],
   correctOptionIndex: null,
@@ -84,7 +83,6 @@ export default function AdminQuizGenerator() {
     setMetadata((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Warn before leaving with reviewed-but-not-created questions.
   useEffect(() => {
     if (!isReviewing || generatedQuiz) return;
     const warn = (e) => { e.preventDefault(); e.returnValue = ""; };
@@ -97,7 +95,6 @@ export default function AdminQuizGenerator() {
     if (!ok) setErrorMessage("Couldn't copy. Select the text and copy it manually.");
   };
 
-  /* ---------------- validation ---------------- */
   const readSettings = (needQuestionCount) => {
     const title = metadata.title.trim();
     if (!title) return { error: "Enter a quiz title." };
@@ -133,7 +130,6 @@ export default function AdminQuizGenerator() {
     };
   };
 
-  /* ---------------- notes upload ---------------- */
   const handleFileUpload = async (e) => {
     const picked = Array.from(e.target.files || []);
     e.target.value = "";
@@ -149,7 +145,6 @@ export default function AdminQuizGenerator() {
     setErrorMessage("");
     let extracted = "";
 
-    // Each file has its own try/catch: one bad file doesn't lose the others.
     for (const file of files) {
       try {
         if (file.type === "text/plain" || /\.txt$/i.test(file.name)) {
@@ -179,7 +174,6 @@ export default function AdminQuizGenerator() {
     setIsUploadingNotes(false);
   };
 
-  /* ---------------- question images (manual) ---------------- */
   const handleImageUpload = async (cid, file) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) return setErrorMessage("Choose an image file.");
@@ -190,9 +184,7 @@ export default function AdminQuizGenerator() {
     try {
       const formData = new FormData();
       formData.append("image", file);
-      // No manual Content-Type header: the browser adds the correct multipart boundary.
       const res = await api.post("/quiz/upload/quiz-image", formData);
-      // Matching by id means the image can't land on another question if the list changed.
       setManualQuestions((prev) => prev.map((q) => (q.cid === cid ? { ...q, imageUrl: res.data.imageUrl } : q)));
     } catch (err) {
       setErrorMessage(err.response?.data?.message || "Couldn't upload the image. Try again.");
@@ -201,7 +193,6 @@ export default function AdminQuizGenerator() {
     }
   };
 
-  /* ---------------- AI flow ---------------- */
   const handleAIGenerate = async () => {
     const s = readSettings(true);
     if (s.error) return setErrorMessage(s.error);
@@ -267,7 +258,20 @@ export default function AdminQuizGenerator() {
     await createQuiz(s.value, previewQuestions.map(toPayloadQuestion));
   };
 
-  /* ---------------- manual flow ---------------- */
+  // ✅ NEW: Add a blank custom question to the AI review list
+  const addQuestionToPreview = () => {
+    setPreviewQuestions((prev) => [
+      ...prev,
+      {
+        cid: `manual-${Date.now()}`,
+        question: "",
+        options: ["", "", "", ""],
+        correctAnswer: "",
+        explanation: "",
+      },
+    ]);
+  };
+
   const updateManualQuestion = (cid, patch) =>
     setManualQuestions((prev) => prev.map((q) => (q.cid === cid ? { ...q, ...patch } : q)));
 
@@ -290,7 +294,6 @@ export default function AdminQuizGenerator() {
     const questionError = validateQuestions(prepared);
     if (questionError) return setErrorMessage(questionError);
 
-    // eslint-disable-next-line no-unused-vars
     const questions = prepared.map(({ correctOptionIndex, ...q }) => toPayloadQuestion(q));
     await createQuiz(s.value, questions);
   };
@@ -306,7 +309,6 @@ export default function AdminQuizGenerator() {
     setErrorMessage("");
   };
 
-  /* ---------------- tabs ---------------- */
   const switchTab = (id) => {
     setActiveTab(id);
     setErrorMessage("");
@@ -361,7 +363,6 @@ export default function AdminQuizGenerator() {
           </div>
         )}
 
-        {/* Settings */}
         <div className={`${card} space-y-5`}>
           <div>
             <h2 className="text-lg font-semibold text-foreground">Quiz settings</h2>
@@ -428,7 +429,6 @@ export default function AdminQuizGenerator() {
           </fieldset>
         </div>
 
-        {/* Review (AI tab) */}
         {isAI && isReviewing && !generatedQuiz && (
           <div className="space-y-4 rounded-2xl border border-brand/30 bg-card p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex items-center justify-between gap-3">
@@ -444,6 +444,14 @@ export default function AdminQuizGenerator() {
               {requestedCount !== null && previewQuestions.length !== requestedCount && <> You asked for {requestedCount}.</>}
             </p>
 
+            {/* ✅ NEW: Add Custom Question Button */}
+            <button
+              onClick={addQuestionToPreview}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand/50 bg-brand/5 py-3 text-sm font-semibold text-brand transition hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <Plus className="h-4 w-4" /> Add Custom Question
+            </button>
+
             <QuestionReviewList questions={previewQuestions} onChange={setPreviewQuestions} />
 
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
@@ -458,7 +466,6 @@ export default function AdminQuizGenerator() {
           </div>
         )}
 
-        {/* AI generator */}
         {isAI && !isReviewing && !generatedQuiz && (
           <div role="tabpanel" id="panel-ai" aria-labelledby="tab-ai" className={`${card} space-y-4`}>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
@@ -522,7 +529,6 @@ export default function AdminQuizGenerator() {
           </div>
         )}
 
-        {/* Manual builder */}
         {!isAI && !generatedQuiz && (
           <div role="tabpanel" id="panel-manual" aria-labelledby="tab-manual" className="space-y-4">
             {manualQuestions.map((q, idx) => (
@@ -643,7 +649,6 @@ export default function AdminQuizGenerator() {
           </div>
         )}
 
-        {/* Created */}
         {generatedQuiz && (
           <div className="space-y-6 rounded-2xl border border-green-500/30 bg-green-500/5 p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
