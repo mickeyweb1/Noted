@@ -46,24 +46,24 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, difficulty, numQuestions } = req.body;
     if (typeof notes !== 'string' || !notes.trim()) return res.status(400).json({ success: false, message: 'Please provide some notes.' });
-    
-    // ✅ INCREASED CAP TO 50
-    const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
-    
-const systemPrompt = `You are an expert examiner. Generate ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}.
+   // ✅ Increased cap to 50 questions
+const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
+
+const systemPrompt = `You are an expert examiner. Generate EXACTLY ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}.
 
 IMPORTANT FORMATTING RULES:
-- For mathematical expressions, use LaTeX format wrapped in single dollar signs: $\\frac{numerator}{denominator}$, $\\sqrt{x}$, $x^{2}$, etc.
-- CRITICAL: You MUST randomize the position of the correct answer. Do NOT always make it option B. Distribute correct answers evenly across A, B, C, and D.
-- Ordinary words and sentences stay outside the dollar signs.
+- For mathematical expressions, use LaTeX format wrapped in single dollar signs: $\\frac{numerator}{denominator}$, $\\sqrt{x}$, $x^{2}$, $\\sum$, $\\int$.
+- Example: "What is $\\frac{2x-1}{x^2+x}$?" NOT "What is (2x-1)/(x^2+x)?"
+- Example: "Solve for x: $x^{2} + 5x + 6 = 0$" NOT "Solve for x: x^2 + 5x + 6 = 0"
+- Ordinary words and sentences stay outside the dollar signs. Never wrap plain words in dollar signs.
 
 Output VALID JSON ONLY in this exact format:
 {
   "questions": [
     {
       "question": "The question text with $LaTeX$?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": "Exact text of the correct option (MUST exactly match one of the options above)",
+      "options": ["Option A with $LaTeX$", "Option B", "Option C", "Option D"],
+      "correctAnswer": "Exact text of the correct option",
       "explanation": "Brief explanation why"
     }
   ]
