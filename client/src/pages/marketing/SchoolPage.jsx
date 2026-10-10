@@ -9,46 +9,49 @@ import {
   Users,
   CheckCircle2,
   Sparkles,
+  Trophy,
+  WifiOff,
+  FileQuestion,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
 
 const schoolFeatures = [
   {
-    icon: BookCheck,
-    title: "Classroom-ready planning",
+    icon: BrainCircuit,
+    title: "Instant AI Quiz Generation",
     description:
-      "Keep lesson content, assessments, and study tracks organized for every class and academic term.",
+      "Teachers can paste lesson notes or upload documents, and our AI instantly generates perfectly formatted, multiple-choice questions with explanations.",
   },
   {
-    icon: BarChart3,
-    title: "Deep learning insights",
+    icon: Trophy,
+    title: "Live Game Show Mode",
     description:
-      "Spot performance trends earlier and support students with interventions based on real progress data.",
+      "Transform standard tests into engaging, real-time competitive quizzes. Features live scoreboards, team modes, and exciting 'steal' mechanics.",
   },
   {
     icon: ShieldCheck,
-    title: "Safe and structured",
+    title: "Secure & Anti-Cheat Testing",
     description:
-      "Give staff, students, and admin teams one transparent, secure system built for accountability.",
+      "Ensure assessment integrity with built-in tab-switch detection, right-click disabling, and automatic submission if limits are exceeded.",
+  },
+  {
+    icon: WifiOff,
+    title: "Offline-Resilient Assessments",
+    description:
+      "No internet? No problem. Students can continue taking quizzes offline, and their answers will automatically sync and submit the moment they reconnect.",
+  },
+  {
+    icon: BarChart3,
+    title: "Deep Performance Insights",
+    description:
+      "Instantly grade tests and view detailed breakdowns of student performance, time taken per question, and class-wide misconceptions.",
   },
   {
     icon: KeyRound,
-    title: "Seamless admissions portal",
+    title: "Frictionless Student Access",
     description:
-      "Manage new enrollments effortlessly. Generate unique, one-time invite codes to securely link new students to your school.",
-  },
-  {
-    icon: BrainCircuit,
-    title: "AI-powered student success",
-    description:
-      "Give your students access to our AI engine to turn their dense textbooks into engaging audio and visual summaries.",
-  },
-  {
-    icon: Users,
-    title: "Parent-teacher connection",
-    description:
-      "Keep families in the loop with clear, automated progress snapshots and study habit reports.",
+      "No complex logins. Teachers generate unique, one-time access codes, and students can jump straight into their assigned tests in seconds.",
   },
 ];
 
@@ -56,17 +59,17 @@ const howItWorks = [
   {
     step: "01",
     title: "Register your institution",
-    description: "Set up your school's profile, configure your academic terms, and customize your admin dashboard in minutes.",
+    description: "Set up your school's profile, add your teachers, and customize your admin dashboard in minutes.",
   },
   {
     step: "02",
-    title: "Invite & enroll students",
-    description: "Use our secure admissions portal to approve new students and generate one-time invite codes for them to join.",
+    title: "Generate & assign quizzes",
+    description: "Use our AI to instantly create a standard test or a Live Game Show, then share simple access codes with your students.",
   },
   {
     step: "03",
     title: "Monitor & empower",
-    description: "Watch your students engage with AI study tools, track their focus hours, and celebrate their academic growth.",
+    description: "Watch live results roll in, prevent cheating automatically, and use detailed reports to celebrate student growth.",
   },
 ];
 
@@ -82,12 +85,11 @@ export default function SchoolPage() {
               For Educational Institutions
             </div>
             <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-              Give your school a smarter study ecosystem.
+              The smartest way to test, track, and teach.
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted-foreground">
-              Noted brings together classroom planning, AI revision support, and
-              student tracking so schools can help learners stay consistent, 
-              reduce burnout, and improve national exam outcomes.
+              Noted brings together <strong>AI-generated quizzes</strong>, <strong>interactive game shows</strong>, and 
+              deep student tracking so schools can run secure assessments, reduce teacher burnout, and improve national exam outcomes.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
@@ -97,7 +99,7 @@ export default function SchoolPage() {
                 Register your school
                 <ArrowRight className="h-4 w-4" />
               </Link>
-                <Link
+              <Link
                 to="/contact"
                 className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3.5 text-sm font-medium text-foreground transition hover:bg-accent"
               >
@@ -107,7 +109,7 @@ export default function SchoolPage() {
             
             {/* Trust badges */}
             <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
-              {["Secure data", "Easy onboarding", "24/7 AI access"].map((item) => (
+              {["Anti-cheat built-in", "Works offline", "AI question generation"].map((item) => (
                 <div key={item} className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-brand" />
                   {item}
@@ -122,10 +124,10 @@ export default function SchoolPage() {
               <div className="flex items-center justify-between rounded-2xl border border-border bg-background/90 p-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    School overview
+                    Live Assessment
                   </p>
                   <p className="mt-1 font-display text-2xl font-bold text-foreground">
-                    Westfield Academy
+                    Grade 10 Math Game Show
                   </p>
                 </div>
                 <div className="rounded-full bg-brand/10 px-3 py-1.5 text-xs font-medium text-brand flex items-center gap-1">
@@ -135,9 +137,9 @@ export default function SchoolPage() {
 
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
                 {[
-                  { value: "94%", label: "engagement" },
-                  { value: "18", label: "active classes" },
-                  { value: "2.4x", label: "study consistency" },
+                  { value: "28/30", label: "students active" },
+                  { value: "12", label: "questions answered" },
+                  { value: "94%", label: "avg. class score" },
                 ].map((item) => (
                   <div
                     key={item.label}
@@ -155,15 +157,15 @@ export default function SchoolPage() {
               
               {/* Mini activity feed inside mockup */}
               <div className="mt-4 rounded-2xl border border-border bg-background p-4">
-                <p className="text-xs font-semibold text-muted-foreground mb-3">RECENT ACTIVITY</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-3">LIVE ACTIVITY</p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-foreground">Grade 10 Biology AI Summaries</span>
-                    <span className="text-xs text-brand font-medium">+42 generated</span>
+                    <span className="text-foreground">David O. answered Q12 correctly</span>
+                    <span className="text-xs text-brand font-medium">+10 pts</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-foreground">New student admissions approved</span>
-                    <span className="text-xs text-brand font-medium">+12 enrolled</span>
+                    <span className="text-foreground">Sarah M. triggered tab-switch warning</span>
+                    <span className="text-xs text-destructive font-medium">Flagged</span>
                   </div>
                 </div>
               </div>
@@ -180,7 +182,7 @@ export default function SchoolPage() {
               The Admin Journey
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Onboard your entire school in 3 simple steps.
+              Run a secure, engaging assessment in 3 simple steps.
             </h2>
           </div>
 
@@ -207,10 +209,10 @@ export default function SchoolPage() {
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <div className="mb-10 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-            Platform Capabilities
+            Assessment Capabilities
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Everything you need to run a modern, digital school.
+            Everything you need to run modern, digital tests.
           </h2>
         </div>
 
@@ -248,8 +250,8 @@ export default function SchoolPage() {
               <p className="mt-5 text-lg leading-8 text-muted-foreground">
                 By adopting Noted, your school isn't just buying software; you are 
                 joining a national movement to modernize education. You are giving 
-                your students the exact same AI-powered advantages as students in 
-                top-tier international academies, right here at home.
+                your students the exact same AI-powered testing and revision advantages 
+                as students in top-tier international academies, right here at home.
               </p>
             </div>
             <div className="rounded-[30px] border border-border bg-card p-8 shadow-soft">
@@ -257,11 +259,11 @@ export default function SchoolPage() {
               <ul className="space-y-4">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-brand mt-0.5 flex-shrink-0" />
-                  <span className="text-foreground"><strong>Higher Pass Rates:</strong> AI revision tools directly improve exam readiness.</span>
+                  <span className="text-foreground"><strong>Higher Pass Rates:</strong> AI revision tools and instant quiz feedback directly improve exam readiness.</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-brand mt-0.5 flex-shrink-0" />
-                  <span className="text-foreground"><strong>Reduced Teacher Burnout:</strong> Automate routine tracking so teachers can focus on mentoring.</span>
+                  <span className="text-foreground"><strong>Reduced Teacher Burnout:</strong> Automate quiz creation and grading so teachers can focus on mentoring.</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-brand mt-0.5 flex-shrink-0" />
@@ -280,7 +282,7 @@ export default function SchoolPage() {
           <div className="relative z-10 max-w-2xl mx-auto">
             <Building2 className="h-10 w-10 text-white/80 mx-auto mb-4" />
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Ready to transform your school's study culture?
+              Ready to transform your school's assessment culture?
             </h2>
             <p className="mt-4 text-lg text-white/80">
               Join the network of forward-thinking schools using Noted to build 
