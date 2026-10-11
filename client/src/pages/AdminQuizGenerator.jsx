@@ -36,6 +36,7 @@ const INITIAL_METADATA = {
   timeUnit: "minutes",
   timeType: "total",
   maxTabSwitches: "",
+  layoutMode: "scroll",
 };
 
 const emptyQuestion = () => ({
@@ -126,7 +127,7 @@ export default function AdminQuizGenerator() {
         timeUnit: metadata.timeUnit,
         timeType: metadata.timeType,
         maxTabSwitches,
-          layoutMode: "scroll",
+        layoutMode: metadata.layoutMode,
       },
     };
   };
@@ -237,6 +238,7 @@ export default function AdminQuizGenerator() {
         timeType: settings.timeType,
         numQuestions: questions.length,
         maxTabSwitches: settings.maxTabSwitches,
+        layoutMode: settings.layoutMode,
         questions,
         useAIAutocomplete: false,
       });
@@ -410,6 +412,12 @@ export default function AdminQuizGenerator() {
 
               <Field label="Max tab switches (optional)" htmlFor="quiz-tabs" hint="Leave blank to turn this off.">
                 <NumberInput id="quiz-tabs" aria-describedby="quiz-tabs-hint" value={metadata.maxTabSwitches} onChange={setField("maxTabSwitches")} placeholder="e.g., 6" />
+              </Field>
+                            <Field label="Question layout" htmlFor="quiz-layout">
+                <SelectField id="quiz-layout" value={metadata.layoutMode} onChange={(e) => setField("layoutMode")(e.target.value)}>
+                  <option value="scroll">Scroll (All questions at once)</option>
+                  <option value="paginated">One by one (Paginated)</option>
+                </SelectField>
               </Field>
 
               <Field label="Time limit" htmlFor="quiz-time" className="md:col-span-2">
