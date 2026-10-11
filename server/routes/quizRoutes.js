@@ -103,13 +103,20 @@ CRITICAL RULES:
 router.post('/create-manual', protect, async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const { title, difficulty, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, questions, gameMode = 'test', baseMarks = 10, bonusMarks = 5 } = req.body;
+    // ✅ ADD layoutMode here with a default fallback
+    const { title, difficulty, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, layoutMode = 'scroll', questions, gameMode = 'test', baseMarks = 10, bonusMarks = 5 } = req.body;
+    
     if (!Array.isArray(questions) || questions.length === 0) return res.status(400).json({ success: false, message: 'A quiz needs at least one question.' });
     const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
     const studentCount = Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
     const accessCodes = [];
     for (let i = 0; i < studentCount; i++) { let code = generateAccessCode(mode); while (accessCodes.includes(code)) code = generateAccessCode(mode); accessCodes.push(code); }
-    const quiz = await Quiz.create({ title, difficulty, timeLimit, timeUnit, timeType, maxTabSwitches: maxTabSwitches || null, numberOfStudents: studentCount, gameMode: mode, baseMarks: Number(baseMarks) || 10, bonusMarks: Number(bonusMarks) || 5, questions, accessCodes, createdBy: userId });
+    
+    const quiz = await Quiz.create({ 
+      title, difficulty, timeLimit, timeUnit, timeType, maxTabSwitches: maxTabSwitches || null, 
+      layoutMode, // ✅ SAVE IT HERE
+      numberOfStudents: studentCount, gameMode: mode, baseMarks: Number(baseMarks) || 10, bonusMarks: Number(bonusMarks) || 5, questions, accessCodes, createdBy: userId 
+    });
     res.json({ success: true, data: quiz, accessCodes });
   } catch (error) { next(error); }
 });
