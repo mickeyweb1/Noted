@@ -134,7 +134,25 @@ router.post('/session/start', async (req, res, next) => {
     if (!session) {
       try { session = await QuizSession.create({ code, quizId: quiz._id, startTime: Date.now(), tabSwitchCount: 0, answers: [] }); } catch (err) { if (err.code === 11000) session = await QuizSession.findOne({ code }); else throw err; }
     }
-    res.json({ success: true, data: { startTime: session.startTime, tabSwitchCount: session.tabSwitchCount, maxTabSwitches: quiz.maxTabSwitches, timeLimit: quiz.timeLimit, timeUnit: quiz.timeUnit, timeType: quiz.timeType, title: quiz.title, difficulty: quiz.difficulty, questions: quiz.questions.map(q => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })), savedAnswers: session.answers || [], savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null } });
+    
+    // ✅ ADD layoutMode HERE
+    res.json({ 
+      success: true, 
+      data: { 
+        startTime: session.startTime, 
+        tabSwitchCount: session.tabSwitchCount, 
+        maxTabSwitches: quiz.maxTabSwitches, 
+        timeLimit: quiz.timeLimit, 
+        timeUnit: quiz.timeUnit, 
+        timeType: quiz.timeType, 
+        title: quiz.title, 
+        difficulty: quiz.difficulty, 
+        layoutMode: quiz.layoutMode || 'scroll', // ✅ THIS IS THE FIX
+        questions: quiz.questions.map(q => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })), 
+        savedAnswers: session.answers || [], 
+        savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null 
+      } 
+    });
   } catch (error) { next(error); }
 });
 
@@ -251,7 +269,24 @@ router.post('/validate-code', async (req, res, next) => {
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
     const existingSubmission = await QuizSubmission.findOne({ quiz: quiz._id, accessCode: code });
     if (existingSubmission) return res.status(400).json({ success: false, message: 'This access code has already been used' });
-    res.json({ success: true, data: { quizId: quiz._id.toString(), title: quiz.title, gameMode: quiz.gameMode, difficulty: quiz.difficulty, timeLimit: quiz.timeLimit, timeUnit: quiz.timeUnit, timeType: quiz.timeType, maxTabSwitches: quiz.maxTabSwitches, bonusMarks: quiz.bonusMarks, questions: quiz.questions.map(q => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })) } });
+    
+    // ✅ ADD layoutMode HERE
+    res.json({ 
+      success: true, 
+      data: { 
+        quizId: quiz._id.toString(), 
+        title: quiz.title, 
+        gameMode: quiz.gameMode, 
+        difficulty: quiz.difficulty, 
+        timeLimit: quiz.timeLimit, 
+        timeUnit: quiz.timeUnit, 
+        timeType: quiz.timeType, 
+        maxTabSwitches: quiz.maxTabSwitches, 
+        bonusMarks: quiz.bonusMarks,
+        layoutMode: quiz.layoutMode || 'scroll', // ✅ THIS IS THE FIX
+        questions: quiz.questions.map(q => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })) 
+      } 
+    });
   } catch (error) { next(error); }
 });
 
