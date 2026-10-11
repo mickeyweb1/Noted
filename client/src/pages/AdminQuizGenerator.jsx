@@ -126,6 +126,7 @@ export default function AdminQuizGenerator() {
         timeUnit: metadata.timeUnit,
         timeType: metadata.timeType,
         maxTabSwitches,
+          layoutMode: "scroll",
       },
     };
   };
