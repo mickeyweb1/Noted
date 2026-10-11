@@ -28,7 +28,7 @@ const teamMembers = [
     name: "Ogunleye Kayode",
     role: "Founder & Lead Developer",
     bio: "The technical architect behind Noted AI. Passionate about using technology to democratize education and make learning accessible to every student.",
-    avatar: "https://ui-avatars.com/api/?name=Ogunleye+Kayode&background=0D8ABC&color=fff&size=128",
+    avatar: "/images/kayode.jpeg",
     isFounder: true,
   },
   {
