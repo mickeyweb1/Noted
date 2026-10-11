@@ -6,12 +6,20 @@ const quizSchema = new mongoose.Schema({
   timeLimit: { type: Number, required: true },
   timeUnit: { type: String, enum: ['minutes', 'seconds'], default: 'minutes' },
   timeType: { type: String, enum: ['perQuestion', 'total'], default: 'total' },
-  maxTabSwitches: { type: Number, default: null }, // ✅ NEW: Optional anti-cheat limit
+  maxTabSwitches: { type: Number, default: null },
   numberOfStudents: { type: Number, required: true },
   gameMode: { type: String, enum: ['test', 'gameShow'], default: 'test' },
   baseMarks: { type: Number, default: 10 },
   bonusMarks: { type: Number, default: 5 },
-   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  
+  // ✅ ADD THIS NEW FIELD HERE:
+  layoutMode: { 
+    type: String, 
+    enum: ['scroll', 'paginated'], 
+    default: 'scroll' 
+  },
+
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   questions: [{
     question: { type: String, required: true },
     options: [{ type: String, required: true }],
