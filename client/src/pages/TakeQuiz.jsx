@@ -26,6 +26,7 @@ export default function TakeQuiz() {
   const [maxTabSwitches, setMaxTabSwitches] = useState(null); const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine); const [isSyncing, setIsSyncing] = useState(false);
   const timerRef = useRef(null); const answersRef = useRef({}); const endTimeRef = useRef(null); const retryIntervalRef = useRef(null);
+    const [currentIndex, setCurrentIndex] = useState(0); // ✅ ADD THIS for paginated mode
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
 
@@ -98,22 +99,125 @@ export default function TakeQuiz() {
   if (step === "info") { return (<div className={shell}><div className={panel}><Stepper current={1} /><div className="mb-5 flex items-start justify-between gap-3"><h1 className="min-w-0 break-words text-2xl font-bold text-foreground">{quizData.title}</h1><span className="shrink-0 rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium capitalize text-brand">{quizData.difficulty}</span></div><div className="mb-6 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-muted p-3"><ListChecks className="mb-1 h-4 w-4 text-muted-foreground" /><p className="text-lg font-bold text-foreground">{totalQuestions}</p><p className="text-xs text-muted-foreground">Questions</p></div><div className="rounded-2xl bg-muted p-3"><Clock className="mb-1 h-4 w-4 text-muted-foreground" /><p className="font-mono text-lg font-bold text-foreground">{formatTime(timeLeft)}</p><p className="text-xs text-muted-foreground">Total Time</p></div></div><form onSubmit={handleStartQuiz} className="space-y-4"><div><label htmlFor="first-name" className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground"><User className="h-4 w-4 text-muted-foreground" /> First name</label><input id="first-name" type="text" value={studentInfo.name} onChange={(e) => setStudentInfo({...studentInfo, name: e.target.value})} className={inputCls} required /></div><div><label htmlFor="surname" className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground"><User className="h-4 w-4 text-muted-foreground" /> Surname</label><input id="surname" type="text" value={studentInfo.surname} onChange={(e) => setStudentInfo({...studentInfo, surname: e.target.value})} className={inputCls} required /></div><div><label htmlFor="class-name" className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground"><School className="h-4 w-4 text-muted-foreground" /> Class <span className="font-normal text-muted-foreground">(optional)</span></label><input id="class-name" type="text" value={studentInfo.className} onChange={(e) => setStudentInfo({...studentInfo, className: e.target.value})} className={inputCls} placeholder="e.g., Grade 10A" /></div><ErrorNote>{error}</ErrorNote><button type="submit" disabled={isSubmitting} className={primaryBtn}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start quiz"} <ArrowRight className="h-4 w-4" /></button></form></div></div>); }
   if (step === "offline-waiting") { return (<div className={shell}><div className={`${panel} text-center`}><div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/10"><WifiOff className="h-8 w-8 text-yellow-500" /></div><h1 className="mb-2 text-2xl font-bold text-foreground">Waiting for Connection...</h1><p className="mb-6 text-muted-foreground">Your answers are safely stored. We will automatically submit your quiz as soon as your internet returns.</p>{isSyncing ? <Loader2 className="h-8 w-8 animate-spin mx-auto text-brand" /> : <button onClick={attemptSync} className={primaryBtn}>Try Submitting Now</button>}</div></div>); }
   if (step === "quiz") {
-    const lowTime = timeLeft < 60; const nearTabLimit = maxTabSwitches && tabSwitchCount >= maxTabSwitches - 2;
-    return (<div className="min-h-dvh bg-muted p-4 md:p-8 select-none" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
-      {isOffline && (<div className="max-w-3xl mx-auto mb-4 flex items-center gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 text-yellow-700 dark:text-yellow-400 text-sm font-medium animate-pulse"><WifiOff className="h-4 w-4 shrink-0" /><span>You are offline. Your answers are saving locally.</span></div>)}
-      {showAutoSubmitModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"><div className="w-full max-w-sm bg-card p-6 rounded-2xl border border-border shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200"><AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" /><h3 className="text-xl font-bold text-foreground mb-2">Auto-Submitting Quiz</h3><p className="text-muted-foreground mb-6">You have switched tabs too many times.</p><Loader2 className="h-6 w-6 animate-spin mx-auto text-brand" /></div></div>)}
-      <div className="mx-auto max-w-3xl space-y-6">
-        <div className="sticky top-4 z-10 rounded-2xl border border-border bg-card p-4 shadow-lg">
-          <div className="flex items-center justify-between gap-3"><div className="min-w-0"><h1 className="truncate text-lg font-bold text-foreground sm:text-xl">{quizData.title}</h1><p className="truncate text-sm text-muted-foreground">{studentInfo.name} {studentInfo.surname}</p></div><div role="timer" className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 font-mono text-base font-bold sm:px-4 sm:text-lg ${lowTime ? "bg-destructive/10 text-destructive motion-safe:animate-pulse" : "bg-brand-soft text-brand"}`}><Clock className="h-5 w-5" /> {formatTime(timeLeft)}</div></div>
-          <div className="mt-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="progressbar"><div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} /></div><span className="shrink-0 text-xs font-medium text-muted-foreground">{answeredCount}/{totalQuestions} answered</span></div>
-          {maxTabSwitches && (<p className={`mt-3 flex items-center gap-1.5 text-xs ${nearTabLimit ? "font-semibold text-destructive" : "text-muted-foreground"}`}><AlertTriangle className="h-3.5 w-3.5" /> Tab switches: {tabSwitchCount} / {maxTabSwitches}</p>)}
+    const lowTime = timeLeft < 60; 
+    const nearTabLimit = maxTabSwitches && tabSwitchCount >= maxTabSwitches - 2;
+    const isPaginated = quizData?.layoutMode === "paginated";
+    const currentQuestion = quizData.questions[currentIndex];
+    const isAnswered = !!answers[currentQuestion._id];
+
+    return (
+      <div className="min-h-dvh bg-muted p-4 md:p-8 select-none" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
+        {isOffline && (<div className="max-w-3xl mx-auto mb-4 flex items-center gap-2 rounded-xl bg-yellow-500/10 border border-yellow-500/30 p-3 text-yellow-700 dark:text-yellow-400 text-sm font-medium animate-pulse"><WifiOff className="h-4 w-4 shrink-0" /><span>You are offline. Your answers are saving locally.</span></div>)}
+        {showAutoSubmitModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"><div className="w-full max-w-sm bg-card p-6 rounded-2xl border border-border shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200"><AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" /><h3 className="text-xl font-bold text-foreground mb-2">Auto-Submitting Quiz</h3><p className="text-muted-foreground mb-6">You have switched tabs too many times.</p><Loader2 className="h-6 w-6 animate-spin mx-auto text-brand" /></div></div>)}
+        
+        <div className="mx-auto max-w-3xl space-y-6">
+          {/* Sticky Header (Same for both modes) */}
+          <div className="sticky top-4 z-10 rounded-2xl border border-border bg-card p-4 shadow-lg">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0"><h1 className="truncate text-lg font-bold text-foreground sm:text-xl">{quizData.title}</h1><p className="truncate text-sm text-muted-foreground">{studentInfo.name} {studentInfo.surname}</p></div>
+              <div role="timer" className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 font-mono text-base font-bold sm:px-4 sm:text-lg ${lowTime ? "bg-destructive/10 text-destructive motion-safe:animate-pulse" : "bg-brand-soft text-brand"}`}><Clock className="h-5 w-5" /> {formatTime(timeLeft)}</div>
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" role="progressbar"><div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} /></div>
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">{answeredCount}/{totalQuestions} answered</span>
+            </div>
+            {maxTabSwitches && (<p className={`mt-3 flex items-center gap-1.5 text-xs ${nearTabLimit ? "font-semibold text-destructive" : "text-muted-foreground"}`}><AlertTriangle className="h-3.5 w-3.5" /> Tab switches: {tabSwitchCount} / {maxTabSwitches}</p>)}
+          </div>
+
+          {/* ✅ PAGINATED MODE: One question at a time */}
+          {isPaginated ? (
+            <div className="space-y-6">
+              <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6 animate-in fade-in slide-in-from-bottom-4 duration-300" aria-labelledby={`q-${currentQuestion._id}`}>
+                {currentQuestion.imageUrl && <img src={currentQuestion.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" draggable="false" />}
+                <div className="mb-4 flex items-start gap-3">
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${isAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"}`}>{currentIndex + 1}</span>
+                  <h3 id={`q-${currentQuestion._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground"><MathRenderer>{currentQuestion.question}</MathRenderer></h3>
+                </div>
+                <div className="space-y-3" role="group" aria-labelledby={`q-${currentQuestion._id}`}>
+                  {currentQuestion.options.map((opt, optIdx) => {
+                    const isSelected = answers[currentQuestion._id] === opt;
+                    return (
+                      <button key={optIdx} type="button" aria-pressed={isSelected} onClick={() => handleSelectAnswer(currentQuestion._id, opt)} className={`flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${focusRing} ${isSelected ? "border-brand bg-brand-soft text-foreground" : "border-border bg-background text-foreground hover:border-brand/40 hover:bg-muted"}`}>
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors ${isSelected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>{String.fromCharCode(65 + optIdx)}</span>
+                        <span className="min-w-0 flex-1 break-words"><MathRenderer>{opt}</MathRenderer></span>
+                        {isSelected && <Check className="h-5 w-5 shrink-0 text-brand" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Pagination Controls */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <button 
+                  onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                  disabled={currentIndex === 0}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 font-semibold text-foreground transition hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← Previous
+                </button>
+                
+                <select 
+                  value={currentIndex} 
+                  onChange={(e) => setCurrentIndex(Number(e.target.value))}
+                  className="w-full sm:w-auto rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand"
+                >
+                  {quizData.questions.map((_, idx) => (
+                    <option key={idx} value={idx}>Question {idx + 1} {answers[quizData.questions[idx]._id] ? "✓" : ""}</option>
+                  ))}
+                </select>
+
+                {currentIndex === totalQuestions - 1 ? (
+                  <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting || isSyncing} className={`${primaryBtn} flex-1 sm:flex-none`}>
+                    {isSubmitting || isSyncing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit Quiz"}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setCurrentIndex(prev => Math.min(totalQuestions - 1, prev + 1))}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-foreground transition hover:bg-brand/90"
+                  >
+                    Next →
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ✅ SCROLL MODE: Original long list */
+            <div className="space-y-6">
+              {quizData.questions.map((q, idx) => { 
+                const isQAnswered = !!answers[q._id]; 
+                return (
+                  <section key={q._id} className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby={`q-${q._id}`}>
+                    {q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" draggable="false" />}
+                    <div className="mb-4 flex items-start gap-3">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${isQAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"}`}>{idx + 1}</span>
+                      <h3 id={`q-${q._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground"><MathRenderer>{q.question}</MathRenderer></h3>
+                    </div>
+                    <div className="space-y-3" role="group" aria-labelledby={`q-${q._id}`}>
+                      {q.options.map((opt, optIdx) => {
+                        const isSelected = answers[q._id] === opt;
+                        return (
+                          <button key={optIdx} type="button" aria-pressed={isSelected} onClick={() => handleSelectAnswer(q._id, opt)} className={`flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${focusRing} ${isSelected ? "border-brand bg-brand-soft text-foreground" : "border-border bg-background text-foreground hover:border-brand/40 hover:bg-muted"}`}>
+                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors ${isSelected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>{String.fromCharCode(65 + optIdx)}</span>
+                            <span className="min-w-0 flex-1 break-words"><MathRenderer>{opt}</MathRenderer></span>
+                            {isSelected && <Check className="h-5 w-5 shrink-0 text-brand" />}
+                          </button>
+                        ); 
+                      })}
+                    </div>
+                  </section>
+                ); 
+              })}
+              <div className="space-y-4 rounded-2xl border border-border bg-card p-5 pb-6 text-center shadow-sm sm:p-6">
+                <p className="text-sm text-muted-foreground">{answeredCount === totalQuestions ? "You've answered every question. Ready when you are." : `${totalQuestions - answeredCount} ${totalQuestions - answeredCount === 1 ? "question" : "questions"} still unanswered.`}</p>
+                <ErrorNote>{error}</ErrorNote>
+                <button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting || isSyncing} className={`${primaryBtn} text-lg`}>{isSubmitting || isSyncing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit quiz"}</button>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="space-y-6">
-          {quizData.questions.map((q, idx) => { const isAnswered = !!answers[q._id]; return (<section key={q._id} className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby={`q-${q._id}`}>{q.imageUrl && <img src={q.imageUrl} alt="Question visual" className="mb-4 max-h-64 w-full rounded-xl border border-border bg-muted object-contain" draggable="false" />}<div className="mb-4 flex items-start gap-3"><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${isAnswered ? "bg-brand text-brand-foreground" : "bg-brand-soft text-brand"}`}>{idx + 1}</span><h3 id={`q-${q._id}`} className="min-w-0 break-words pt-0.5 text-lg font-semibold leading-snug text-foreground"><MathRenderer>{q.question}</MathRenderer></h3></div><div className="space-y-3" role="group" aria-labelledby={`q-${q._id}`}>{q.options.map((opt, optIdx) => { const isSelected = answers[q._id] === opt; return (<button key={optIdx} type="button" aria-pressed={isSelected} onClick={() => handleSelectAnswer(q._id, opt)} className={`flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${focusRing} ${isSelected ? "border-brand bg-brand-soft text-foreground" : "border-border bg-background text-foreground hover:border-brand/40 hover:bg-muted"}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors ${isSelected ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>{String.fromCharCode(65 + optIdx)}</span><span className="min-w-0 flex-1 break-words"><MathRenderer>{opt}</MathRenderer></span>{isSelected && <Check className="h-5 w-5 shrink-0 text-brand" />}</button>); })}</div></section>); })}
-        </div>
-        <div className="space-y-4 rounded-2xl border border-border bg-card p-5 pb-6 text-center shadow-sm sm:p-6"><p className="text-sm text-muted-foreground">{answeredCount === totalQuestions ? "You've answered every question. Ready when you are." : `${totalQuestions - answeredCount} ${totalQuestions - answeredCount === 1 ? "question" : "questions"} still unanswered.`}</p><ErrorNote>{error}</ErrorNote><button onClick={() => handleSubmitQuiz(false)} disabled={isSubmitting || isSyncing} className={`${primaryBtn} text-lg`}>{isSubmitting || isSyncing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit quiz"}</button></div>
       </div>
-    </div>);
+    );
   }
   if (step === "result") { return (<div className={shell}><div className={`${panel} text-center`}><div className="relative mx-auto mb-5 h-44 w-44"><svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true"><circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" className="stroke-muted" /><circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - percentage / 100)} className={`transition-all duration-700 ${isPassing ? "stroke-green-500" : "stroke-destructive"}`} /></svg><div className="absolute inset-0 flex flex-col items-center justify-center"><span className={`text-4xl font-black ${isPassing ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>{percentage}%</span><span className="text-sm text-muted-foreground">{result.score} of {result.totalQuestions}</span></div></div><h1 className="mb-1 flex items-center justify-center gap-2 text-2xl font-bold text-foreground">{isPassing ? <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" /> : <XCircle className="h-6 w-6 text-destructive" />} Quiz submitted</h1><p className="mb-6 text-muted-foreground">Great effort, {studentInfo.name}.</p><div className="mb-6 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-muted p-3"><p className="text-2xl font-bold text-green-600 dark:text-green-400">{result.score}</p><p className="text-xs text-muted-foreground">Correct</p></div><div className="rounded-2xl bg-muted p-3"><p className="text-2xl font-bold text-foreground">{result.totalQuestions - result.score}</p><p className="text-xs text-muted-foreground">Missed</p></div></div>{result.tabSwitchCount > 0 && (<p className="mb-6 flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive"><AlertTriangle className="h-3.5 w-3.5" /> Tab switches detected: {result.tabSwitchCount}</p>)}<button onClick={() => navigate("/")} className={primaryBtn}>Return to home</button></div></div>); }
   return null;
