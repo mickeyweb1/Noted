@@ -13,6 +13,8 @@ import StudioHub from "./pages/StudioHub";
 import SupportPage from "./pages/SupportPage";
 import SuperAdminSupportInbox from "./pages/schoolAdmin/SuperAdminSupportInbox";
 import GameShowBoard from "./pages/GameShowBoard";
+import AdminHelp from "./pages/AdminHelp";
+import StudentHelp from "./pages/StudentHelp";
 
 // Auth Pages
 import LoginPage from "./auth/LoginPage";
@@ -99,6 +101,8 @@ function App() {
         <Route path="/ai" element={<StudioHub />} /> 
         <Route path="/podcast" element={<PodcastGenerator />} />
         <Route path="/focusTime" element={<FocusTime />} />
+<Route path="/help/student" element={<StudentHelp />} />
+
         <Route path="/support" element={<SupportPage />} />
         <Route path="/reminder" element={<StudentSchedule />} />
         <Route path="/studentSetting" element={<StudentSetting />} />
@@ -125,6 +129,7 @@ function App() {
           <Route path="/game-show" element={<GameShowBoard />} /> 
         <Route path="/admin/game-show-creator" element={<AdminGameShowCreator />} /> {/* ✅ ADD THIS LINE */}
 <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
+ <Route path="/help/admin" element={<AdminHelp />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
         <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
