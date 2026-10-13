@@ -41,45 +41,42 @@ const getOwnedQuiz = async (req, res) => {
   if (String(quiz.createdBy) !== String(req.user._id)) { res.status(403).json({ success: false, message: 'You do not have access to this quiz' }); return null; }
   return quiz;
 };
-// 🎯 1. AI Generate Questions PREVIEW (UPDATED)
+// 🎯 1. AI Generate Questions PREVIEW
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, difficulty, numQuestions } = req.body;
-    if (typeof notes !== 'string' || !notes.trim()) return res.status(400).json({ success: false, message: 'Please provide some notes.' });
-   // ✅ Increased cap to 50 questions
-const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
-
-const systemPrompt = `You are an expert examiner. Generate EXACTLY ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}.
+    if (typeof notes !== 'string' || !notes.trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide some notes.' });
+    }
+    
+    // ✅ Increased cap to 50 questions
+    const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
+    
+    // ✅ Bulletproof Prompt: Explicitly tells AI how to format JSON and LaTeX
+    const systemPrompt = `You are an expert examiner. Generate EXACTLY ${count} multiple-choice questions based on the provided notes. Difficulty: ${difficulty}.
 
 IMPORTANT FORMATTING RULES:
-- For mathematical expressions, use LaTeX format wrapped in single dollar signs: $\\frac{numerator}{denominator}$, $\\sqrt{x}$, $x^{2}$, $\\sum$, $\\int$.
-- Example: "What is $\\frac{2x-1}{x^2+x}$?" NOT "What is (2x-1)/(x^2+x)?"
-- Example: "Solve for x: $x^{2} + 5x + 6 = 0$" NOT "Solve for x: x^2 + 5x + 6 = 0"
-- Ordinary words and sentences stay outside the dollar signs. Never wrap plain words in dollar signs.
+1. Output VALID JSON ONLY. Do not include markdown like \`\`\`json.
+2. For mathematical expressions, use LaTeX wrapped in single dollar signs, e.g., $\\frac{numerator}{denominator}$, $\\sqrt{x}$, $x^{2}$.
+3. Ordinary words and sentences must stay OUTSIDE the dollar signs.
+4. Keep explanations to ONE short sentence maximum.
 
-Output VALID JSON ONLY in this exact format:
+Required JSON format:
 {
   "questions": [
     {
       "question": "The question text with $LaTeX$?",
-      "options": ["Option A with $LaTeX$", "Option B", "Option C", "Option D"],
+      "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswer": "Exact text of the correct option",
       "explanation": "Brief explanation why"
     }
   ]
-}
+}`;
 
-CRITICAL RULES:
-1. You MUST generate exactly ${count} questions. Do not stop early.
-2. Every explanation MUST be a complete, finished sentence. DO NOT cut off mid-sentence.
-3. If you reach the token limit, prioritize finishing the current question's explanation over starting a new one.`;
-    
-    const strictPrompt = systemPrompt;
-    
-    // ✅ INCREASED TOKEN LIMIT TO PREVENT CUT-OFFS (up to 8000 tokens for 50 questions)
+    // ✅ Increased token limit to prevent cut-offs (up to 8000 tokens)
     const response = await generateWithGroq(
       [
-        { role: 'system', content: strictPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: `Notes:\n${notes.slice(0, 8000)}` }
       ],
       { max_tokens: Math.min(250 * count + 500, 8000), json: true }
@@ -91,12 +88,17 @@ CRITICAL RULES:
       parsed = JSON.parse(jsonStr);
       if (!Array.isArray(parsed.questions)) throw new Error('No questions array found');
     } catch (parseError) {
-      console.error("AI JSON Parse Error:", parseError);
-      return res.status(400).json({ success: false, message: "AI generated an invalid response. Please try again with fewer notes or fewer questions." });
+      console.error("❌ AI JSON Parse Error:", parseError);
+      return res.status(400).json({
+        success: false,
+        message: "AI generated an invalid response. Please try again with fewer notes or fewer questions."
+      });
     }
     
     res.json({ success: true, data: { questions: parsed.questions } });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 });
 
 // 🎯 2. Finalize Quiz
