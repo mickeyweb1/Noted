@@ -2,11 +2,6 @@ import { Fragment, useMemo } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 
-/**
- * Renders text that may contain math.
- * $x^{2}$ or \( x^{2} \) -> inline math
- * $$x^{2}$$ or \[ x^{2} \] -> display (centered) math
- */
 function findClosingDollar(text, from) {
   if (from >= text.length || /\s/.test(text[from])) return -1;
   for (let j = from; j < text.length; j++) {
@@ -22,12 +17,9 @@ function findClosingDollar(text, from) {
 }
 
 function splitMath(text) {
-  const out = [];
-  let buf = "";
-  let i = 0;
+  const out = []; let buf = ""; let i = 0;
   const flush = () => { if (buf) { out.push({ type: "text", value: buf }); buf = ""; } };
   const pushMath = (value, display, raw) => { flush(); out.push({ type: "math", value, display, raw }); };
-
   while (i < text.length) {
     const two = text.slice(i, i + 2);
     if (two === "\\$") { buf += "$"; i += 2; continue; }
@@ -47,11 +39,9 @@ function splitMath(text) {
       const end = findClosingDollar(text, i + 1);
       if (end !== -1) { pushMath(text.slice(i + 1, end), false, text.slice(i, end + 1)); i = end + 1; continue; }
     }
-    buf += text[i];
-    i++;
+    buf += text[i]; i++;
   }
-  flush();
-  return out;
+  flush(); return out;
 }
 
 const LATEX_HINT = /\\[a-zA-Z]{2,}|[A-Za-z0-9][\^_]\{/;
@@ -82,8 +72,7 @@ function matchLatexRun(text, start) {
 }
 
 function autoWrapLatex(text) {
-  let out = "";
-  let i = 0;
+  let out = ""; let i = 0;
   while (i < text.length) {
     const end = matchLatexRun(text, i);
     if (end > i) { out += `$${text.slice(i, end)}$`; i = end; }
