@@ -107,7 +107,7 @@ const saveGameShowResults = async (game) => {
             tabSwitchCount: 0,
             gameMode: 'gameShow'
           },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: 'after' }
         );
       } catch (err) {
         console.error("Failed to save game show result:", err);
@@ -391,7 +391,7 @@ io.on('connection', (socket) => {
           await QuizSubmission.findOneAndUpdate(
             { quiz: game.quizId, accessCode: safeAccessCode },
             { quiz: game.quizId, studentName: player.name, studentSurname: "GameShow", studentClass: "Live Match", accessCode: safeAccessCode, answers: submissionAnswers, score: totalScore, totalQuestions: game.questions.length, maxScore: maxScore, timeTaken: 0, tabSwitchCount: 0, gameMode: 'gameShow' },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
           );
         } catch (err) {
           console.error("Failed to auto-save disconnected player result:", err);
