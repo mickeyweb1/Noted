@@ -220,7 +220,7 @@ export const generateContent = async (req, res, next) => {
          - DO NOT use brackets like [ x ] or ( x ) for math.
       6. Keep responses structured and easy to read. Avoid massive walls of text.`;
       
-      const safeMessages = Array.isArray(messages) ? messages.slice(-20).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
+      const safeMessages = Array.isArray(messages) ? messages.slice(-35).filter((m) => m && typeof m.content === "string" && m.content.trim()).map((m) => ({ role: m.role === "ai" || m.role === "assistant" ? "assistant" : "user", content: m.content.trim().slice(0, 10000) })) : [];
       aiContent = await runGroq([{ role: "system", content: tutorSystemPrompt }, ...safeMessages]);
       aiTitle = requestedTitle || "Tutor Chat";
     } else if (mode === "summary") {
