@@ -5,18 +5,15 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /* ------------------------------------------------------------------ */
-/* Settings                                                            */
-/* ------------------------------------------------------------------ */
 const REQUEST_TIMEOUT_MS = 30_000; 
 const TEMPERATURE = 0.4; 
 
-// ✅ UPDATED: Correct, active model names for each provider
+// ✅ UPDATED: Correct, currently active model names for each provider
 const GROQ_MODEL = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.1-8b-instruct:free"; // ":free" ensures it uses the free tier
-const COHERE_MODEL = process.env.COHERE_MODEL || "command-r-plus"; // Updated from deprecated 'command-r'
-const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct"; // Updated to the active 3.1 model
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.1-8b-instruct"; // ✅ Removed ":free"
+const COHERE_MODEL = process.env.COHERE_MODEL || "command-r"; // ✅ Reverted to stable free model
+const NVIDIA_MODEL = process.env.NVIDIA_MODEL || "meta/llama-3.1-8b-instruct"; // ✅ Updated to current NVIDIA NIM model
 const HF_MODEL = process.env.HF_MODEL || "meta-llama/Meta-Llama-3.1-8B-Instruct";
-
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
