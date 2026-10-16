@@ -246,22 +246,6 @@ export default function SettingsPage() {
         </form>
       </div>
 
-      {/* ================= 4. BILLING (Unified) ================= */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-4">
-          <CreditCard className="w-5 h-5 text-brand" />
-          <h2 className="text-lg font-semibold text-foreground">Billing & Subscription</h2>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-muted/30 border border-border">
-          <div>
-            <p className="font-semibold text-foreground">Premium School Plan</p>
-            <p className="text-sm text-muted-foreground mt-1">₦1,500 / student / month • Next billing date: Feb 15, 2026</p>
-          </div>
-          <button className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-background text-foreground text-sm font-medium hover:bg-accent transition-colors shrink-0">
-            Manage Plan
-          </button>
-        </div>
-      </div>
 
       {/* ================= 5. DANGER ZONE ================= */}
       <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6 shadow-sm">
