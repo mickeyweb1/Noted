@@ -29,9 +29,9 @@ export default function AdminSideBar({ isOpen, onClose }) {
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
     { to: "/admin/students", icon: Users, label: "My Students" },
     { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
-    { to: "/admin/quizzes", icon: Brain, label: "Formal Quizzes" }, 
+    { to: "/admin/quizzes", icon: Brain, label: "Formal Test" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
-    { to: "/admin/quiz-results", icon: BarChart3, label: "Quiz Results" },
+    { to: "/admin/quiz-results", icon: BarChart3, label: "Results" },
     { to: "/admin/support", icon: MessageSquare, label: "Report an Issue" }, // Everyone sees this
     
     // ✅ ONLY Super Admin sees the Inbox
