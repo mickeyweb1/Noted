@@ -29,7 +29,13 @@ app.set('trust proxy', 1);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const allowedOrigins = ["http://localhost:5173", "http://localhost:5174", process.env.CLIENT_URL].filter(Boolean);
+const allowedOrigins = [
+  "http://localhost:5173", 
+  "http://localhost:5174", 
+  "https://www.usenotedai.com",
+  "https://usenotedai.com",
+  process.env.CLIENT_URL
+].filter(Boolean);
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
