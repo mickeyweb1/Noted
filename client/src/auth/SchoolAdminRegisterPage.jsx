@@ -136,7 +136,7 @@ export default function SchoolAdminRegisterPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">
-                    Admin First Name
+                    First Name
                   </label>
                   <input
                     type="text"
@@ -151,7 +151,7 @@ export default function SchoolAdminRegisterPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">
-                    Admin Last Name
+                    Last Name
                   </label>
                   <input
                     type="text"
@@ -168,7 +168,7 @@ export default function SchoolAdminRegisterPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
-                  Official School Email
+                  Email Address
                 </label>
                 <input
                   type="email"
