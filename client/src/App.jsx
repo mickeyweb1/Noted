@@ -1,0 +1,149 @@
+import { Navigate, Routes, Route } from "react-router-dom";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+// Marketing Pages
+import LandingPage from "./pages/marketing/LandingPage";
+import AboutPage from "./pages/marketing/AboutPage";
+import SchoolPage from "./pages/marketing/SchoolPage";
+import StudentPage from "./pages/marketing/StudentPage";
+import PersonalPage from "./pages/marketing/PersonalPage";
+import ContactPage from "./pages/marketing/ContactPage";
+import GameShowLobby from "./pages/GameShowLobby";
+import StudioHub from "./pages/StudioHub";
+import SupportPage from "./pages/SupportPage";
+import SuperAdminSupportInbox from "./pages/schoolAdmin/SuperAdminSupportInbox";
+import GameShowBoard from "./pages/GameShowBoard";
+import AdminHelp from "./pages/AdminHelp";
+import StudentHelp from "./pages/StudentHelp";
+import PricingPage from "./pages/PricingPage";
+import AiFlashcards from "./pages/AiFlashcards"; 
+
+// Auth Pages
+import LoginPage from "./auth/LoginPage";
+import RoleSelectionPage from "./auth/RoleSelectionPage";
+import SchoolStudentRegisterPage from "./auth/SchoolStudentRegisterPage";
+import SchoolAdminRegisterPage from "./auth/SchoolAdminRegisterPage";
+import PersonalUserRegisterPage from "./auth/PersonalUserRegisterPage";
+import AdminGameShowCreator from "./pages/AdminGameShowCreator";
+
+import StudentDashboardLayout from "./components/layouts/StudentDashboardLayout";
+import StudentHome from "./pages/Dashboard/homePage";
+import StudentAiGenerator from "./pages/Dashboard/aiGenerator";
+import AiTeacher from "./pages/Dashboard/AiTeacher";
+import StudentLibrary from "./pages/Dashboard/libirary";
+import StudentQuiz from "./pages/Dashboard/StudentQuiz";
+import FocusTime from "./pages/Dashboard/focusTime";
+import StudentSchedule from "./pages/Dashboard/reminder";
+import StudentSetting from "./pages/Dashboard/setting";
+import MusicGenerator from "./pages/MusicGenerator";
+import StudentDirectorys from "./pages/Dashboard/StudentDirectory";
+import BattleArena from "./pages/Dashboard/BattleArena";
+import VideoGenerator from "./pages/VideoGenerator";
+import PodcastGenerator from "./pages/PodcastGenerator";
+
+// Admin Dashboard Pages
+import AdminDashboardLayout from "./components/layouts/AdminDashboardLayout";
+import AdminDashboard from "./pages/schoolAdmin/AdminDashboard";
+import AddStudent from "./pages/schoolAdmin/AddStudentPage";
+import StudentDirectory from "./pages/schoolAdmin/StudentManagementPage";
+import AdminBillingPage from "./pages/schoolAdmin/AdminBillingPage";
+import AdminQuizGenerator from "./pages/AdminQuizGenerator";
+// Add this import at the top with the other Admin pages:
+import {QuizResultsDashboard} from "./pages/QuizResultsPage";
+import QuizResultsPage from "./pages/QuizResultsPage";
+
+// ... inside your Admin Dashboard Routes, add these two:
+
+import SuperAdminFeedback from "./pages/schoolAdmin/SuperAdminFeedback";
+
+// Shared Pages
+import CheckoutPage from "./components/CheckoutPage";
+import SettingsPage from "./pages/SettingsPage";
+import Leaderboard from "./pages/Dashboard/Leaderboard";
+import TakeQuiz from "./pages/TakeQuiz";
+
+function App() {
+  return (
+    <Routes>
+      {/* ================= PUBLIC MARKETING ROUTES ================= */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/school" element={<SchoolPage />} />
+      <Route path="/game-show-lobby" element={<GameShowLobby />} />
+      <Route path="/student" element={<StudentPage />} />
+      <Route path="/personal" element={<PersonalPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/take-quiz" element={<TakeQuiz />} />
+
+      {/* ================= AUTH ROUTES ================= */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<RoleSelectionPage />} />
+      <Route path="/signup/school-student" element={<SchoolStudentRegisterPage />} />
+      <Route path="/signup/school-admin" element={<SchoolAdminRegisterPage />} />
+      <Route path="/signup/personal" element={<PersonalUserRegisterPage />} />
+
+      {/* ================= SHARED ROUTES ================= */}
+      <Route path="/checkout" element={<CheckoutPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
+
+      {/* ================= STUDENT DASHBOARD ROUTES ================= */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={["student", "personal_user"]}>
+            <StudentDashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/dashboard" element={<StudentHome />} />
+        <Route path="/battle-arena" element={<BattleArena />} />
+        <Route path="/ai-teacher" element={<AiTeacher />} />
+        <Route path="/aiGenerator" element={<StudentAiGenerator />} />
+        <Route path="/ai-flashcards" element={<AiFlashcards />} />
+        <Route path="/myLibrary" element={<StudentLibrary />} />
+        <Route path="/quiz" element={<StudentQuiz />} />
+        <Route path="/ai" element={<StudioHub />} /> 
+        <Route path="/podcast" element={<PodcastGenerator />} />
+        <Route path="/focusTime" element={<FocusTime />} />
+<Route path="/help/student" element={<StudentHelp />} />
+
+        <Route path="/support" element={<SupportPage />} />
+        <Route path="/reminder" element={<StudentSchedule />} />
+        <Route path="/studentSetting" element={<StudentSetting />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/directory" element={<StudentDirectorys />} />
+        <Route path="/music-studio" element={<MusicGenerator />} />
+        <Route path="/video-studio" element={<VideoGenerator />} />
+      </Route>
+
+      {/* ================= ADMIN DASHBOARD ROUTES ================= */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={["school_admin", "super_admin"]}>
+            <AdminDashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/students" element={<StudentDirectory />} />
+        <Route path="/admin/add-student" element={<AddStudent />} />
+        <Route path="/admin/billing" element={<AdminBillingPage />} />
+        <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
+        <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
+          <Route path="/game-show" element={<GameShowBoard />} /> 
+        <Route path="/admin/game-show-creator" element={<AdminGameShowCreator />} /> {/* ✅ ADD THIS LINE */}
+<Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
+ <Route path="/help/admin" element={<AdminHelp />} />
+        <Route path="/admin/settings" element={<SettingsPage />} />
+        <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
+        <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
+        <Route path="/admin/support" element={<SupportPage />} />
+      </Route>
+
+      {/* ================= CATCH-ALL (404) ================= */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+export default App;

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#6d28d9" />
+    <meta
+      name="description"
+      content="Noted is an AI-powered learning platform that helps students turn notes, textbooks, and class content into summaries, quizzes, audio lessons, and focused study plans."
+    />
+    <meta
+      name="keywords"
+      content="AI learning, study app, student notes, quizzes, educational technology, revision, note summarizer, AI tutor"
+    />
+    <meta name="author" content="Noted" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Noted | AI Learning for Smarter Study" />
+    <meta
+      property="og:description"
+      content="Transform how you learn with AI-generated summaries, quizzes, study plans, and audio-based study tools."
+    />
+    <meta property="og:image" content="/favicon.svg?v=2" />
+    <meta property="og:site_name" content="Noted" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Noted | AI Learning for Smarter Study" />
+    <meta
+      name="twitter:description"
+      content="Build better study habits with AI-powered notes, revision tools, and personalized learning support."
+    />
+    <meta name="twitter:image" content="/favicon.svg?v=2" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <link rel="apple-touch-icon" href="/favicon.svg?v=2" />
+    <script>
+      const theme = localStorage.getItem('theme');
+      if(theme === 'dark'){
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+    <title>Noted | AI Learning for Smarter Study</title>
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-8D4VHB2YVB"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-8D4VHB2YVB');
+</script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
