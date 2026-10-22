@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, ArrowLeft, AlertTriangle, Check, ListChecks, WifiOff } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, ArrowLeft, AlertTriangle, Check, ListChecks, WifiOff, Info } from "lucide-react";
 import api from "../utils/api";
 import MathRenderer from "../components/MathRenderer";
 
@@ -14,6 +14,9 @@ const secondaryBtn = `${btnBase} border border-border bg-background px-4 py-3 te
 const shell = "flex min-h-dvh items-center justify-center bg-muted p-4";
 const panel = "w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-xl sm:p-8";
 
+const PENDING_PREFIX = "offline_submission_";
+const TABCOUNT_PREFIX = "tabswitch_";
+
 /* ---------- Helpers ---------- */
 const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60);
@@ -24,6 +27,31 @@ const formatTime = (seconds) => {
 const getTotalSeconds = (data) => {
   const total = data.timeType === "perQuestion" ? data.timeLimit * data.questions.length : data.timeLimit;
   return total * (data.timeUnit === "minutes" ? 60 : 1);
+};
+
+// Finds a submission that was saved on this device but never reached the server
+const findPendingCode = () => {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(PENDING_PREFIX)) return key.slice(PENDING_PREFIX.length);
+    }
+  } catch { /* storage unavailable */ }
+  return "";
+};
+
+// fetch + keepalive is allowed to finish even while the tab is closing or hidden (axios/XHR is not).
+// Sent as application/json so the server actually parses it — navigator.sendBeacon with a string would arrive as text/plain.
+const postKeepalive = (path, payload) => {
+  try {
+    const base = (api.defaults.baseURL || "").replace(/\/$/, "");
+    fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* best effort only */ }
 };
 
 /* ---------- Small components ---------- */
@@ -168,8 +196,9 @@ export default function TakeQuiz() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const [recoveredCode] = useState(findPendingCode);
   const [step, setStep] = useState("validate");
-  const [code, setCode] = useState(location.state?.code || "");
+  const [code, setCode] = useState(location.state?.code || recoveredCode || "");
   const [quizData, setQuizData] = useState(null);
   const [studentInfo, setStudentInfo] = useState({ name: "", surname: "", className: "" });
   const [answers, setAnswers] = useState({});
@@ -192,15 +221,38 @@ export default function TakeQuiz() {
   const toastTimerRef = useRef(null);
   const retryIntervalRef = useRef(null);
   const answersRef = useRef({});
+  const studentInfoRef = useRef(studentInfo);
+  const quizDataRef = useRef(null);
   const endTimeRef = useRef(null);
-  const submittingRef = useRef(false); // blocks double-submits (timer + button + tab limit can all fire)
+  const tabCountRef = useRef(0);          // client-side tab-switch count: keeps counting even while offline
+  const autoSubmitRef = useRef(false);    // the tab limit was hit — only trigger once
+  const submittingRef = useRef(false);    // blocks double-submits (timer + button + tab limit can all fire)
   const syncingRef = useRef(false);
-  const submitRef = useRef(() => {});  // always points at the latest submit handler (no stale closures)
+  const submitRef = useRef(() => {});     // always points at the latest submit handler (no stale closures)
 
-  const pendingKey = `offline_submission_${code}`;
+  const pendingKey = `${PENDING_PREFIX}${code}`;
+  const tabKey = `${TABCOUNT_PREFIX}${code}`;
   const isPaginated = quizData?.layoutMode === "paginated";
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { studentInfoRef.current = studentInfo; }, [studentInfo]);
+  useEffect(() => { quizDataRef.current = quizData; }, [quizData]);
+
+  // Saves everything needed to finish the quiz on this device (survives closing the tab / losing data)
+  const stashPending = () => {
+    try {
+      localStorage.setItem(pendingKey, JSON.stringify({
+        studentInfo: studentInfoRef.current,
+        answers: answersRef.current,
+        tabSwitchCount: tabCountRef.current,
+        submittedAt: Date.now(),
+      }));
+    } catch { /* storage full/unavailable */ }
+  };
+
+  const clearLocalQuizState = () => {
+    try { localStorage.removeItem(pendingKey); localStorage.removeItem(tabKey); } catch { /* ignore */ }
+  };
 
   // Paginated mode: jump back to the top when the question changes
   useEffect(() => {
@@ -265,16 +317,21 @@ export default function TakeQuiz() {
         studentSurname: saved.studentInfo.surname,
         studentClass: saved.studentInfo.className,
         answers: formatted,
+        tabSwitchCount: saved.tabSwitchCount || 0,
       });
-      localStorage.removeItem(pendingKey);
+      clearLocalQuizState();
       setStudentInfo(saved.studentInfo);
       setResult(res.data);
       setStep("result");
     } catch (err) {
       const status = err.response?.status;
-      if (status && status < 500) {
-        // The server rejected it (already used / expired) — retrying forever would never help
-        localStorage.removeItem(pendingKey);
+      if (status === 409) {
+        // Already received (e.g. the background send made it through) — nothing left to do
+        clearLocalQuizState();
+        setStep("already-submitted");
+      } else if (status && status < 500) {
+        // The server rejected it — retrying forever would never help
+        clearLocalQuizState();
         setError(err.response?.data?.message || "We couldn't submit your quiz.");
         setStep("submit-failed");
       }
@@ -283,7 +340,7 @@ export default function TakeQuiz() {
       syncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [code, quizData, pendingKey]);
+  }, [code, quizData, pendingKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleOffline = () => setIsOffline(true);
@@ -306,28 +363,50 @@ export default function TakeQuiz() {
     return () => clearInterval(retryIntervalRef.current);
   }, [step, attemptSync]);
 
-  /* ----- Tab-switch tracking ----- */
+  /* ----- Tab-switch tracking: counted on the device first, so going offline can't hide it ----- */
   useEffect(() => {
     if (step !== "quiz") return;
-    const handleVisibilityChange = async () => {
+
+    const handleVisibilityChange = () => {
       if (!document.hidden || submittingRef.current) return;
-      try {
-        const res = await api.post("/quiz/session/update-tab", { code });
-        setTabSwitchCount(res.data.tabSwitchCount);
-        if (res.data.shouldAutoSubmit) {
-          setShowAutoSubmitModal(true);
-          setTimeout(() => {
-            setShowAutoSubmitModal(false);
-            submitRef.current(true);
-          }, 2000);
-        }
-      } catch (err) {
-        console.error("Failed to update tab count", err);
+
+      tabCountRef.current += 1;
+      const count = tabCountRef.current;
+      setTabSwitchCount(count);
+      try { localStorage.setItem(tabKey, String(count)); } catch { /* ignore */ }
+
+      // Tell the server too (best effort — it keeps its own count when online)
+      postKeepalive("/quiz/session/update-tab", { code });
+
+      if (maxTabSwitches && count >= maxTabSwitches && !autoSubmitRef.current) {
+        autoSubmitRef.current = true;
+
+        // 1) Keep the answers on this device in case the tab is closed or the data is off
+        stashPending();
+
+        // 2) Best-effort send that can still complete while the tab is closing
+        const info = studentInfoRef.current;
+        postKeepalive("/quiz/submit", {
+          code,
+          studentName: info.name,
+          studentSurname: info.surname,
+          studentClass: info.className,
+          answers: (quizDataRef.current?.questions || []).map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+          tabSwitchCount: count,
+        });
+
+        // 3) Normal submit flow (shows the result, or queues + retries if offline)
+        setShowAutoSubmitModal(true);
+        setTimeout(() => {
+          setShowAutoSubmitModal(false);
+          submitRef.current(true);
+        }, 2000);
       }
     };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [step, code]);
+  }, [step, code, maxTabSwitches]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ----- Countdown (based on a fixed end time, so it survives throttled/background tabs) ----- */
   useEffect(() => {
@@ -375,8 +454,8 @@ export default function TakeQuiz() {
       setMaxTabSwitches(data.maxTabSwitches);
       setTimeLeft(getTotalSeconds(data));
 
-      // An earlier submission that never reached the server (e.g. page reloaded while offline)
-      const pending = localStorage.getItem(`offline_submission_${trimmed}`);
+      // Answers saved on this device that never reached the server (page closed / data was off)
+      const pending = localStorage.getItem(`${PENDING_PREFIX}${trimmed}`);
       if (pending) {
         try { setStudentInfo(JSON.parse(pending).studentInfo); } catch { /* ignore bad data */ }
         setStep("offline-waiting");
@@ -384,6 +463,11 @@ export default function TakeQuiz() {
       }
       setStep("info");
     } catch (err) {
+      const status = err.response?.status;
+      // A leftover record for a code that's now used/invalid shouldn't keep nagging
+      if (trimmed === recoveredCode && (status === 400 || status === 404)) {
+        try { localStorage.removeItem(`${PENDING_PREFIX}${trimmed}`); } catch { /* ignore */ }
+      }
       setError(err.response?.data?.message || "Invalid or already used code.");
     } finally {
       setIsValidating(false);
@@ -401,7 +485,13 @@ export default function TakeQuiz() {
 
       setQuizData((prev) => ({ ...prev, ...data }));
       setMaxTabSwitches(data.maxTabSwitches);
-      setTabSwitchCount(data.tabSwitchCount || 0);
+
+      // Resume the higher of the server count and what this device recorded (e.g. while offline)
+      let localCount = 0;
+      try { localCount = Number(localStorage.getItem(tabKey)) || 0; } catch { /* ignore */ }
+      tabCountRef.current = Math.max(data.tabSwitchCount || 0, localCount);
+      setTabSwitchCount(tabCountRef.current);
+      autoSubmitRef.current = false;
 
       if (data.savedStudentInfo) {
         setStudentInfo({
@@ -440,7 +530,7 @@ export default function TakeQuiz() {
 
     // Keep the answers safe on this device and let the retry loop send them
     const stashAndWait = () => {
-      localStorage.setItem(pendingKey, JSON.stringify({ studentInfo, answers: answersRef.current, submittedAt: Date.now() }));
+      stashPending();
       clearInterval(timerRef.current);
       submittingRef.current = false;
       setIsSubmitting(false);
@@ -457,14 +547,23 @@ export default function TakeQuiz() {
         studentSurname: studentInfo.surname,
         studentClass: studentInfo.className,
         answers: formatted,
+        tabSwitchCount: tabCountRef.current,
       });
       clearInterval(timerRef.current);
-      localStorage.removeItem(pendingKey);
+      clearLocalQuizState();
       setResult(res.data);
       setStep("result");
     } catch (err) {
+      const status = err.response?.status;
+      if (status === 409) {
+        // The background send already went through
+        clearInterval(timerRef.current);
+        clearLocalQuizState();
+        setStep("already-submitted");
+        return;
+      }
       // No response (network) or server trouble: don't lose the student's work — queue it and retry
-      if (!err.response || err.response.status >= 500) return stashAndWait();
+      if (!err.response || status >= 500) return stashAndWait();
       submittingRef.current = false;
       setIsSubmitting(false);
       setError(err.response?.data?.message || "Failed to submit quiz.");
@@ -505,6 +604,14 @@ export default function TakeQuiz() {
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-soft"><ListChecks className="h-8 w-8 text-brand" /></div>
           <h1 className="mb-2 text-2xl font-bold text-foreground">Join a quiz</h1>
           <p className="mb-6 text-muted-foreground">Enter the code your teacher gave you.</p>
+
+          {recoveredCode && code === recoveredCode && (
+            <p role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-brand/20 bg-brand-soft px-3 py-2 text-left text-sm text-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+              <span>We found answers from your last quiz that haven't been sent yet. Tap Continue and we'll send them now.</span>
+            </p>
+          )}
+
           <form onSubmit={handleValidateCode} className="space-y-4">
             <input
               type="text"
@@ -560,7 +667,7 @@ export default function TakeQuiz() {
           <ul className="mb-5 space-y-2 rounded-2xl border border-border bg-background p-3 text-sm text-muted-foreground">
             <li className="flex items-start gap-2"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> The timer starts when you tap Start and can't be paused.</li>
             {maxTabSwitches ? (
-              <li className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" /> Leaving this page counts as a tab switch. After {maxTabSwitches}, your quiz is submitted automatically.</li>
+              <li className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" /> Leaving this page counts as a tab switch — even if your internet is off. After {maxTabSwitches}, your quiz is submitted automatically.</li>
             ) : null}
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> Your answers save as you go.</li>
           </ul>
@@ -608,6 +715,19 @@ export default function TakeQuiz() {
     );
   }
 
+  if (step === "already-submitted") {
+    return (
+      <div className={shell}>
+        <div className={`${panel} text-center`}>
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-green-500/10"><CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" /></div>
+          <h1 className="mb-2 text-2xl font-bold text-foreground">Quiz submitted</h1>
+          <p className="mb-6 text-muted-foreground">Your answers were received. Your teacher will share your results.</p>
+          <button type="button" onClick={() => navigate("/")} className={primaryBtn}>Return to home</button>
+        </div>
+      </div>
+    );
+  }
+
   if (step === "submit-failed") {
     return (
       <div className={shell}>
@@ -631,7 +751,7 @@ export default function TakeQuiz() {
       <div className={`min-h-dvh select-none bg-muted px-3 pt-3 sm:p-6 md:p-8 ${isPaginated ? "pb-28" : "pb-8"}`} style={{ userSelect: "none", WebkitUserSelect: "none" }}>
         {isOffline && (
           <div role="status" className="mx-auto mb-3 flex max-w-3xl items-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm font-medium text-yellow-700 dark:text-yellow-400">
-            <WifiOff className="h-4 w-4 shrink-0" /> <span>You're offline. Keep going — you can submit once you're back online.</span>
+            <WifiOff className="h-4 w-4 shrink-0" /> <span>You're offline. Keep going — tab switches still count, and you can submit once you're back online.</span>
           </div>
         )}
 
