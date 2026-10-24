@@ -3,11 +3,11 @@ import { ArrowLeft, CheckCircle2, AlertCircle, Lock, Loader2 } from "lucide-reac
 import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "./authLayout"; 
 import api from "../utils/api";
-import { useUserContext } from "../context/userContext"; // ✅ MAGIC LINE 1: Import the context
+import { useUserContext } from "../context/userContext";
 
 export default function SchoolStudentRegisterPage() {
   const navigate = useNavigate();
-  const { login } = useUserContext(); // ✅ MAGIC LINE 2: Get the login function
+  const { login } = useUserContext();
   
   const [formData, setFormData] = useState({ 
     uniqueInviteCode: "", 
@@ -22,7 +22,12 @@ export default function SchoolStudentRegisterPage() {
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const validateCode = async (code) => {
-    if (code.length < 5) { setCodeStatus("idle"); return; } 
+    // If blank, reset to idle and don't show an error
+    if (!code || code.trim().length === 0) { 
+      setCodeStatus("idle"); 
+      setSchoolName("");
+      return; 
+    } 
     
     setCodeStatus("checking");
     try {
@@ -42,16 +47,20 @@ export default function SchoolStudentRegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (codeStatus !== "valid") { 
+    
+    // ✅ NEW: Only require a valid code if the user actually typed one in
+    if (formData.uniqueInviteCode.trim() !== "" && codeStatus !== "valid") { 
       setError("Please enter a valid invite code."); 
       return; 
     }
+    
     setIsSubmitting(true);
     setError("");
     
     try {
       const response = await api.post("/auth/claim", {
-        uniqueInviteCode: formData.uniqueInviteCode,
+        // Send undefined if blank, so the backend knows it's optional
+        uniqueInviteCode: formData.uniqueInviteCode.trim() || undefined,
         email: formData.email,
         password: formData.password,
       });
@@ -60,12 +69,9 @@ export default function SchoolStudentRegisterPage() {
         const userData = response.data.user;
         const token = response.data.token;
         
-        // ✅ MAGIC LINE 3: Update the React Context so the security guard knows you are a teacher!
         login(userData, token);
         
-        // ✅ SMART REDIRECT: Check the actual role from the backend
         const userRole = userData.role;
-        
         if (userRole === "teacher" || userRole === "school_admin" || userRole === "super_admin") {
           navigate("/admin/dashboard", { replace: true });
         } else {
@@ -92,7 +98,7 @@ export default function SchoolStudentRegisterPage() {
                 <Lock className="w-6 h-6" />
               </div>
               <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Activate Your Account</h1>
-              <p className="text-sm text-muted-foreground">Enter the unique code your administrator gave you to set your password.</p>
+              <p className="text-sm text-muted-foreground">Enter the unique code your administrator gave you, or leave blank to proceed.</p>
             </div>
             
             {error && (
@@ -103,7 +109,10 @@ export default function SchoolStudentRegisterPage() {
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Your Unique Invite Code <span className="text-red-500">*</span></label>
+                {/* ✅ REMOVED red asterisk, added (Optional) */}
+                <label className="text-sm font-medium text-foreground">
+                  Your Unique Invite Code <span className="text-muted-foreground text-xs font-normal">(Optional)</span>
+                </label>
                 <div className="relative">
                   <input 
                     type="text" 
@@ -111,8 +120,8 @@ export default function SchoolStudentRegisterPage() {
                     value={formData.uniqueInviteCode} 
                     onChange={handleChange} 
                     onBlur={handleCodeBlur} 
-                    placeholder="e.g., T-8X92A1B3 or STU-A3K7" 
-                    required
+                    placeholder="e.g., T-8X92A1B3 or leave blank" 
+                    // ✅ REMOVED the 'required' attribute
                     className={`flex h-11 w-full rounded-md border px-3 py-2 text-sm font-mono tracking-wider uppercase focus-visible:outline-none focus-visible:ring-2 transition-all ${
                       codeStatus === "valid" ? "border-green-500 bg-green-500/5" : 
                       codeStatus === "invalid" ? "border-red-500 bg-red-500/5" : 
@@ -153,9 +162,10 @@ export default function SchoolStudentRegisterPage() {
                 />
               </div>
 
+              {/* ✅ REMOVED 'codeStatus !== "valid"' from disabled check so it can always be pressed */}
               <button 
                 type="submit" 
-                disabled={isSubmitting || codeStatus !== "valid"} 
+                disabled={isSubmitting} 
                 className="w-full inline-flex items-center justify-center gap-2 h-11 rounded-md bg-brand text-brand-foreground font-semibold text-sm hover:bg-brand/90 transition-colors mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand/20"
               >
                 {isSubmitting ? (
