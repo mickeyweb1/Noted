@@ -382,7 +382,7 @@ router.post('/submit', async (req, res, next) => {
 /* ------------------------------------------------------------------ */
 router.post('/:id/regenerate-code', protect, async (req, res, next) => {
   try {
-    const quiz = await loadQuiz(req, res); // creator only
+    const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // ✅ Allow creator OR school owner
     if (!quiz) return;
 
     const limits = getLimits(req.user);
