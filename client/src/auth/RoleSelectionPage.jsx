@@ -7,7 +7,7 @@ const roles = [
   {
     to: "/signup/school-admin",
     icon: Building2,
-    title: "School Admin/Teacher",
+    title: "School Admin",
     description: "Register your school and manage students.",
   },
   {
