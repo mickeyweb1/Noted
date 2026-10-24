@@ -75,7 +75,10 @@ export const registerUser = async (req, res, next) => {
 
     // Only students and teachers join an existing school with a code (a school_admin creates their own)
     const code = typeof inviteCode === 'string' ? inviteCode.trim() : '';
-    if (finalRole === 'teacher' && !code) throw httpError('Teachers must join with a school invite code.');
+if (finalRole === 'teacher' && !code) {
+  // Allow independent teachers to sign up without a code
+  finalSchoolName = "Independent Teacher";
+}
 
     if ((finalRole === 'student' || finalRole === 'teacher') && code) {
       const org = await Organization.findOne({ inviteCode: code });
