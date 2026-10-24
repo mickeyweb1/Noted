@@ -32,13 +32,12 @@ export default function AdminSideBar({ isOpen, onClose }) {
     ...(isOwner ? [
       { to: "/admin/teachers", icon: GraduationCap, label: "My Teachers" },
       { to: "/admin/add-teacher", icon: UserPlus, label: "Add Teacher" },
-      { to: "/admin/students", icon: Users, label: "My Students" }, // ✅ MOVED INSIDE
-      { to: "/admin/add-student", icon: UserPlus, label: "Add Student" }, // ✅ MOVED INSIDE
+      // ✅ REMOVED: "My Students" and "Add Student" to keep it clean
     ] : []),
     { to: "/admin/quizzes", icon: Brain, label: "Formal Test" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
     { to: "/admin/quiz-results", icon: BarChart3, label: "My Results" },
-    
+    ...(isOwner ? [{ to: "/admin/billing", icon: CreditCard, label: "Billing & Plan" }] : []),
     { to: "/admin/support", icon: MessageSquare, label: "Report an Issue" },
     ...(user?.role === "super_admin" ? [{ to: "/admin/support-inbox", icon: MessageSquare, label: "Support Inbox" }] : []),
     { to: "/admin/settings", icon: Settings, label: "Settings" },
