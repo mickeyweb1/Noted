@@ -13,7 +13,7 @@ const roles = [
   {
     to: "/signup/school-student",
     icon: GraduationCap,
-    title: "School Student",
+    title: "Teacher",
     description: "Join your school's portal with an invite code.",
   },
   {
