@@ -297,8 +297,8 @@ export const addTeacher = async (req, res, next) => {
       await User.findByIdAndUpdate(req.user._id, { schoolName: org.name, schoolId: org._id });
     }
     
-    // Reserve a slot atomically (super admins skip the limit)
-    if (req.user.role !== 'super_admin') {
+    // Reserve a slot atomically (super admins AND school admins skip the limit for testing)
+    if (req.user.role !== 'super_admin' && req.user.role !== 'school_admin') {
       const owner = await User.findOneAndUpdate(
         { _id: req.user._id, subscriptionTier: 'school_owner', $expr: { $lt: ['$currentTeachersCount', '$maxTeachersAllowed'] } },
         { $inc: { currentTeachersCount: 1 } }, 
