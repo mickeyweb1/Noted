@@ -19,7 +19,7 @@ const roles = [
   {
     to: "/signup/personal",
     icon: User,
-    title: "Personal User",
+    title: "Studentr",
     description: "Use AI study tools independently.",
   },
 ];
