@@ -111,7 +111,7 @@ export default function SchoolStudentRegisterPage() {
               <div className="space-y-2">
                 {/* ✅ REMOVED red asterisk, added (Optional) */}
                 <label className="text-sm font-medium text-foreground">
-                  Your Unique Invite Code <span className="text-muted-foreground text-xs font-normal">(Optional)</span>
+                  Your Unique Invite Code 
                 </label>
                 <div className="relative">
                   <input 
