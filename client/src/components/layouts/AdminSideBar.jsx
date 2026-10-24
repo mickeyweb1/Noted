@@ -37,7 +37,6 @@ export default function AdminSideBar({ isOpen, onClose }) {
     { to: "/admin/quizzes", icon: Brain, label: "Formal Test" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
     { to: "/admin/quiz-results", icon: BarChart3, label: "My Results" },
-    ...(isOwner ? [{ to: "/admin/billing", icon: CreditCard, label: "Billing & Plan" }] : []),
     { to: "/admin/support", icon: MessageSquare, label: "Report an Issue" },
     ...(user?.role === "super_admin" ? [{ to: "/admin/support-inbox", icon: MessageSquare, label: "Support Inbox" }] : []),
     { to: "/admin/settings", icon: Settings, label: "Settings" },
