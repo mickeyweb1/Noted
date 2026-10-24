@@ -27,8 +27,13 @@ const quizSchema = new mongoose.Schema({
     explanation: { type: String },
     imageUrl: { type: String }
   }],
-  accessCodes: [{ type: String }],
+  accessCodes: [{
+    code: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
   createdAt: { type: Date, default: Date.now }
 });
+
+quizSchema.index({ 'accessCodes.code': 1 });
 
 export const Quiz = mongoose.model('Quiz', quizSchema);

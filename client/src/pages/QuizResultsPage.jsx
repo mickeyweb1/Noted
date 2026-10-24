@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Check, Award, Eye, Search } from "lucide-react";
+import { Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Check, Award, Eye, Search, Trash2 } from "lucide-react";
 import api from "../utils/api";
 import Modal from "../components/Modal";
 import { useClipboard } from "../components/QuizFormKit";
@@ -32,20 +32,219 @@ function EmptyState({ icon: Icon, title, children, action }) { return (<div clas
 function ErrorState({ message, onRetry }) { return (<div className="flex min-h-dvh items-center justify-center bg-background p-4"><div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm"><div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive"><AlertTriangle className="h-7 w-7" /></div><h3 className="text-lg font-semibold text-foreground">Something went wrong</h3><p className="mt-1 text-sm text-muted-foreground">{message}</p><button onClick={onRetry} className={`${primaryBtn} mt-5`}>Try again</button></div></div>); }
 function SearchInput({ value, onChange, placeholder, label }) { return (<div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input type="search" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputCls} /></div>); }
 
-function QuizCard({ quiz, onResults, onResume }) {
-  const isGameShow = quiz.gameMode === "gameShow"; const resumeCode = quiz.accessCodes?.[0];
-  return (<article className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:border-brand/40 hover:shadow-md"><div className="mb-4 flex items-start justify-between gap-3"><div className={`flex h-11 w-11 items-center justify-center rounded-xl ${isGameShow ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-brand-soft text-brand"}`}>{isGameShow ? <Trophy className="h-6 w-6" /> : <BarChart3 className="h-6 w-6" />}</div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isGameShow ? "bg-purple-500/10 text-purple-700 dark:text-purple-400" : "bg-muted text-muted-foreground"}`}>{isGameShow ? "Game show" : "Quiz"}</span></div><h3 className="mb-3 line-clamp-2 break-words text-lg font-bold text-foreground">{quiz.title}</h3><div className="mb-5 space-y-2 text-sm text-muted-foreground"><p className="flex items-center gap-2"><Calendar className="h-4 w-4 shrink-0" />{formatDate(quiz.createdAt)}</p><p className="flex items-center gap-2"><Users className="h-4 w-4 shrink-0" />{quiz.numberOfStudents} access codes</p></div><div className="mt-auto flex flex-col gap-2"><button onClick={onResults} className={`${primaryBtn} w-full`}>View results <ArrowRight className="h-4 w-4" /></button>{isGameShow && resumeCode && (<button onClick={() => onResume(resumeCode)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border border-purple-500/40 bg-background px-4 py-2.5 text-sm font-semibold text-purple-700 transition hover:bg-purple-500/10 dark:text-purple-400 ${focusRing}`}><Trophy className="h-4 w-4" /> Resume live match</button>)}</div></article>);
+function QuizCard({ quiz, onResults, onResume, onDelete, canDelete = true, teacherName }) {
+  const isGameShow = quiz.gameMode === "gameShow"; 
+  const resumeCode = quiz.accessCodes?.[0];
+  
+  return (
+    <article className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:border-brand/40 hover:shadow-md">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${isGameShow ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-brand-soft text-brand"}`}>
+          {isGameShow ? <Trophy className="h-6 w-6" /> : <BarChart3 className="h-6 w-6" />}
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isGameShow ? "bg-purple-500/10 text-purple-700 dark:text-purple-400" : "bg-muted text-muted-foreground"}`}>
+          {isGameShow ? "Game show" : "Quiz"}
+        </span>
+      </div>
+      <h3 className="mb-1 line-clamp-2 break-words text-lg font-bold text-foreground">{quiz.title}</h3>
+      
+      {/* ✅ SHOW TEACHER NAME IF IT'S NOT THE OWNER'S QUIZ */}
+      {!canDelete && teacherName && (
+        <p className="mb-3 text-xs text-muted-foreground">Created by: {teacherName}</p>
+      )}
+
+      <div className="mb-5 space-y-2 text-sm text-muted-foreground">
+        <p className="flex items-center gap-2"><Calendar className="h-4 w-4 shrink-0" />{formatDate(quiz.createdAt)}</p>
+        <p className="flex items-center gap-2"><Users className="h-4 w-4 shrink-0" />{quiz.numberOfStudents} access codes</p>
+      </div>
+      <div className="mt-auto flex flex-col gap-2">
+        <button onClick={onResults} className={`${primaryBtn} w-full`}>View results <ArrowRight className="h-4 w-4" /></button>
+        {isGameShow && resumeCode && (
+          <button onClick={() => onResume(resumeCode)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border border-purple-500/40 bg-background px-4 py-2.5 text-sm font-semibold text-purple-700 transition hover:bg-purple-500/10 dark:text-purple-400 ${focusRing}`}>
+            <Trophy className="h-4 w-4" /> Resume live match
+          </button>
+        )}
+        
+        {/* ✅ ONLY RENDER DELETE BUTTON IF canDelete IS TRUE */}
+        {canDelete && (
+          <button 
+            onClick={() => {
+              if (window.confirm(`Are you sure you want to delete "${quiz.title}"? This will permanently remove the quiz and all student submissions.`)) {
+                onDelete(quiz._id);
+              }
+            }} 
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-background px-4 py-2.5 text-sm font-semibold text-destructive transition hover:bg-destructive/10"
+          >
+            <Trash2 className="h-4 w-4" /> Delete Quiz
+          </button>
+        )}
+      </div>
+    </article>
+  );
 }
 
 export function QuizResultsDashboard() {
-  const navigate = useNavigate(); const [quizzes, setQuizzes] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [query, setQuery] = useState(""); const [filter, setFilter] = useState("all");
-  const fetchQuizzes = useCallback(async () => { setLoading(true); setError(""); try { const res = await api.get("/quiz/admin/quizzes"); setQuizzes(res.data.data ?? []); } catch (err) { setError("Couldn't load your quizzes."); } finally { setLoading(false); } }, []);
+  const navigate = useNavigate(); 
+  const [quizzes, setQuizzes] = useState([]); 
+  const [loading, setLoading] = useState(true); 
+  const [error, setError] = useState(""); 
+  const [query, setQuery] = useState(""); 
+  const [filter, setFilter] = useState("all");
+  const [hasTeacherSection, setHasTeacherSection] = useState(false);
+
+  const fetchQuizzes = useCallback(async () => { 
+    setLoading(true); 
+    setError(""); 
+    try { 
+      const res = await api.get("/quiz/admin/quizzes"); 
+      setQuizzes(res.data.data ?? []); 
+      setHasTeacherSection(res.data.hasTeacherSection ?? false);
+    } catch (err) { 
+      setError("Couldn't load your quizzes."); 
+    } finally { 
+      setLoading(false); 
+    } 
+  }, []);
+
+  const handleDeleteQuiz = async (quizId) => {
+    try {
+      await api.delete(`/quiz/${quizId}`);
+      setQuizzes(prev => prev.filter(q => q._id !== quizId));
+    } catch (err) {
+      alert("Failed to delete quiz. Please try again.");
+    }
+  };
+
   useEffect(() => { fetchQuizzes(); }, [fetchQuizzes]);
-  const counts = useMemo(() => { const gameShows = quizzes.filter((q) => q.gameMode === "gameShow").length; return { all: quizzes.length, gameShow: gameShows, quiz: quizzes.length - gameShows }; }, [quizzes]);
-  const visible = useMemo(() => { const q = query.trim().toLowerCase(); return quizzes.filter((z) => filter === "all" || (filter === "gameShow") === (z.gameMode === "gameShow")).filter((z) => !q || (z.title ?? "").toLowerCase().includes(q)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); }, [quizzes, query, filter]);
-  if (loading) return <PageSpinner />; if (error) return <ErrorState message={error} onRetry={fetchQuizzes} />;
+  
+  const counts = useMemo(() => { 
+    const gameShows = quizzes.filter((q) => q.gameMode === "gameShow").length; 
+    return { all: quizzes.length, gameShow: gameShows, quiz: quizzes.length - gameShows }; 
+  }, [quizzes]);
+  
+  const visible = useMemo(() => { 
+    const q = query.trim().toLowerCase(); 
+    return quizzes.filter((z) => filter === "all" || (filter === "gameShow") === (z.gameMode === "gameShow"))
+      .filter((z) => !q || (z.title ?? "").toLowerCase().includes(q))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); 
+  }, [quizzes, query, filter]);
+
+  // ✅ Split quizzes into owner's and teachers'
+  const ownerQuizzes = hasTeacherSection ? visible.filter(q => q.isOwnerQuiz) : visible;
+  const teacherQuizzes = hasTeacherSection ? visible.filter(q => !q.isOwnerQuiz) : [];
+
+  if (loading) return <PageSpinner />; 
+  if (error) return <ErrorState message={error} onRetry={fetchQuizzes} />;
+  
   const chips = [ { id: "all", label: "All" }, { id: "quiz", label: "Quizzes" }, { id: "gameShow", label: "Game shows" } ];
-  return (<div className="min-h-dvh bg-background p-4 md:p-8"><div className="mx-auto max-w-6xl space-y-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-bold text-foreground">Quiz results</h1><p className="text-muted-foreground">Pick a quiz to see how your students did.</p></div><div className="flex flex-wrap gap-2"><button onClick={() => navigate("/admin/quizzes")} className={secondaryBtn}><Plus className="h-4 w-4" /> New quiz</button><button onClick={() => navigate("/admin/game-show-creator")} className={primaryBtn}><Trophy className="h-4 w-4" /> New game show</button></div></div>{quizzes.length === 0 ? (<div className="rounded-2xl border border-border bg-card shadow-sm"><EmptyState icon={FileText} title="No quizzes yet" action={<button onClick={() => navigate("/admin/quizzes")} className={`${primaryBtn} mt-5`}>Create your first quiz</button>}>Create a quiz or game show to get started.</EmptyState></div>) : (<><div className="flex flex-col gap-3 sm:flex-row sm:items-center"><SearchInput value={query} onChange={setQuery} placeholder="Search by title" label="Search quizzes" /><div role="group" aria-label="Filter by type" className="flex gap-1 rounded-xl border border-border bg-card p-1">{chips.map((c) => (<button key={c.id} onClick={() => setFilter(c.id)} aria-pressed={filter === c.id} className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${focusRing} ${filter === c.id ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{c.label} <span className="tabular-nums opacity-70">{counts[c.id]}</span></button>))}</div></div>{visible.length === 0 ? (<div className="rounded-2xl border border-border bg-card shadow-sm"><EmptyState icon={Search} title="Nothing matches">Try a different search or filter.</EmptyState></div>) : (<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{visible.map((quiz) => (<QuizCard key={quiz._id} quiz={quiz} onResults={() => navigate(`/admin/quiz/${quiz._id}/results`)} onResume={(code) => navigate(`/game-show?code=${code}`)} />))}</div>)}</>)}</div></div>);
+  
+  return (
+    <div className="min-h-dvh bg-background p-4 md:p-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Quiz results</h1>
+            <p className="text-muted-foreground">Pick a quiz to see how your students did.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => navigate("/admin/quizzes")} className={secondaryBtn}>
+              <Plus className="h-4 w-4" /> New quiz
+            </button>
+            <button onClick={() => navigate("/admin/game-show-creator")} className={primaryBtn}>
+              <Trophy className="h-4 w-4" /> New game show
+            </button>
+          </div>
+        </div>
+
+        {quizzes.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-card shadow-sm">
+            <EmptyState icon={FileText} title="No quizzes yet" action={
+              <button onClick={() => navigate("/admin/quizzes")} className={`${primaryBtn} mt-5`}>
+                Create your first quiz
+              </button>
+            }>
+              Create a quiz or game show to get started.
+            </EmptyState>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <SearchInput value={query} onChange={setQuery} placeholder="Search by title" label="Search quizzes" />
+              <div role="group" aria-label="Filter by type" className="flex gap-1 rounded-xl border border-border bg-card p-1">
+                {chips.map((c) => (
+                  <button 
+                    key={c.id} 
+                    onClick={() => setFilter(c.id)} 
+                    aria-pressed={filter === c.id} 
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${focusRing} ${
+                      filter === c.id ? "bg-brand text-brand-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {c.label} <span className="tabular-nums opacity-70">{counts[c.id]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {visible.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-card shadow-sm">
+                <EmptyState icon={Search} title="Nothing matches">
+                  Try a different search or filter.
+                </EmptyState>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* ✅ SECTION 1: Owner's Quizzes */}
+                {ownerQuizzes.length > 0 && (
+                  <section>
+                    <h2 className="mb-4 text-xl font-bold text-foreground flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-brand" />
+                      {hasTeacherSection ? "My Quizzes" : "Your Quizzes"}
+                    </h2>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {ownerQuizzes.map((quiz) => (
+                        <QuizCard 
+                          key={quiz._id} 
+                          quiz={quiz} 
+                          onResults={() => navigate(`/admin/quiz/${quiz._id}/results`)} 
+                          onResume={(code) => navigate(`/game-show?code=${code}`)} 
+                          onDelete={handleDeleteQuiz} 
+                          canDelete={true} 
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* ✅ SECTION 2: Teacher Quizzes (Only for School Owners) */}
+                {hasTeacherSection && teacherQuizzes.length > 0 && (
+                  <section>
+                    <h2 className="mb-4 text-xl font-bold text-foreground flex items-center gap-2">
+                      <Users className="h-5 w-5 text-purple-600" />
+                      Teacher Quizzes
+                    </h2>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {teacherQuizzes.map((quiz) => (
+                        <QuizCard 
+                          key={quiz._id} 
+                          quiz={quiz} 
+                          onResults={() => navigate(`/admin/quiz/${quiz._id}/results`)} 
+                          onResume={(code) => navigate(`/game-show?code=${code}`)} 
+                          onDelete={handleDeleteQuiz} 
+                          canDelete={false} 
+                           teacherName={quiz.teacherName} // ✅ Pass the teacher's name
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function SubmissionBreakdown({ sub, questionById }) {
@@ -79,7 +278,7 @@ export default function QuizResultsPage() {
 
   // ✅ FIXED: Moved useMemo to the TOP, before any early returns, to obey React Rules of Hooks
   const mostMissedQuestion = useMemo(() => {
-    if (!quizData || !quizData.questions || submissions.length === 0) return null;
+    if (isGameShow || !quizData || !quizData.questions || submissions.length === 0) return null;
     const questionStats = new Map();
     quizData.questions.forEach(q => {
       questionStats.set(q._id, { total: 0, missed: 0, question: q });

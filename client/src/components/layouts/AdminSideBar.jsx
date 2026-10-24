@@ -10,7 +10,8 @@ import {
   UserPlus,
   X,
   MessageSquare,
-  Trophy
+  Trophy,
+  GraduationCap // ✅ Added for Teachers
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -25,18 +26,21 @@ export default function AdminSideBar({ isOpen, onClose }) {
     avatar: null,
   };
 
+  const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
   const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
-    { to: "/admin/students", icon: Users, label: "My Students" },
-    { to: "/admin/add-student", icon: UserPlus, label: "Add Student" },
+    ...(isOwner ? [
+      { to: "/admin/teachers", icon: GraduationCap, label: "My Teachers" },
+      { to: "/admin/add-teacher", icon: UserPlus, label: "Add Teacher" },
+      { to: "/admin/students", icon: Users, label: "My Students" }, // ✅ MOVED INSIDE
+      { to: "/admin/add-student", icon: UserPlus, label: "Add Student" }, // ✅ MOVED INSIDE
+    ] : []),
     { to: "/admin/quizzes", icon: Brain, label: "Formal Test" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
-    { to: "/admin/quiz-results", icon: BarChart3, label: "Results" },
-    { to: "/admin/support", icon: MessageSquare, label: "Report an Issue" }, // Everyone sees this
+    { to: "/admin/quiz-results", icon: BarChart3, label: "My Results" },
     
-    // ✅ ONLY Super Admin sees the Inbox
+    { to: "/admin/support", icon: MessageSquare, label: "Report an Issue" },
     ...(user?.role === "super_admin" ? [{ to: "/admin/support-inbox", icon: MessageSquare, label: "Support Inbox" }] : []),
-    
     { to: "/admin/settings", icon: Settings, label: "Settings" },
   ];
 

@@ -17,6 +17,7 @@ import AdminHelp from "./pages/AdminHelp";
 import StudentHelp from "./pages/StudentHelp";
 import PricingPage from "./pages/PricingPage";
 import AiFlashcards from "./pages/AiFlashcards"; 
+import AddTeacher from "./pages/schoolAdmin/AddTeacher"; 
 
 // Auth Pages
 import LoginPage from "./auth/LoginPage";
@@ -49,6 +50,7 @@ import StudentDirectory from "./pages/schoolAdmin/StudentManagementPage";
 import AdminBillingPage from "./pages/schoolAdmin/AdminBillingPage";
 import AdminQuizGenerator from "./pages/AdminQuizGenerator";
 // Add this import at the top with the other Admin pages:
+import MyTeachers from "./pages/schoolAdmin/MyTeachers";
 import {QuizResultsDashboard} from "./pages/QuizResultsPage";
 import QuizResultsPage from "./pages/QuizResultsPage";
 
@@ -84,7 +86,14 @@ function App() {
 
       {/* ================= SHARED ROUTES ================= */}
       <Route path="/checkout" element={<CheckoutPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
+         <Route 
+        path="/settings" 
+        element={
+          <ProtectedRoute allowedRoles={["student", "personal_user", "teacher", "school_admin", "super_admin"]}>
+            <SettingsPage />
+          </ProtectedRoute>
+        } 
+      />
             <Route path="/pricing" element={<PricingPage />} />
 
       {/* ================= STUDENT DASHBOARD ROUTES ================= */}
@@ -119,13 +128,15 @@ function App() {
       {/* ================= ADMIN DASHBOARD ROUTES ================= */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={["school_admin", "super_admin"]}>
+          // ✅ FIX: Added "teacher" so they can access the admin layout
+          <ProtectedRoute allowedRoles={["school_admin", "super_admin", "teacher"]}>
             <AdminDashboardLayout />
           </ProtectedRoute>
         }
       >
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/students" element={<StudentDirectory />} />
+            <Route path="/admin/teachers" element={<MyTeachers />} />
         <Route path="/admin/add-student" element={<AddStudent />} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
@@ -136,6 +147,7 @@ function App() {
  <Route path="/help/admin" element={<AdminHelp />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
+<Route path="/admin/add-teacher" element={<AddTeacher />} />
         <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
         <Route path="/admin/support" element={<SupportPage />} />
       </Route>

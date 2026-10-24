@@ -55,6 +55,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.post('/api/contact', submitContactForm);
 app.use('/api/ai/generate', aiLimiter);
+app.use('/api/quiz/generate-ai-preview', aiLimiter);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/quiz', quizRoutes);
@@ -129,7 +130,7 @@ io.on('connection', (socket) => {
 
   socket.on('join_game', async ({ code, playerName, role = 'student', quizId, token }) => {
     try {
-      const quiz = await Quiz.findOne({ accessCodes: code.toUpperCase() });
+     const quiz = await Quiz.findOne({ 'accessCodes.code': code.toUpperCase() });
       if (!quiz) {
         socket.emit('error', 'Invalid game code');
         return;
@@ -240,18 +241,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('pick_card', ({ quizId, cardIndex }) => {
-    const game = activeGames.get(quizId);
-    const playerName = socket.data.playerName;
-    
-    // ✅ BLOCK disqualified players
-    if (game.disqualified.includes(playerName)) {
-      console.log(`🚫 Disqualified player ${playerName} tried to pick a card. Blocked.`);
-      return;
-    }
-    
-    if (!game || game.status !== 'live' || game.activeCard || game.completedCards.includes(cardIndex)) return;
-    if (game.lastPicker === playerName && game.completedCards.length > 0) return; 
+socket.on('pick_card', ({ quizId, cardIndex }) => {
+  const game = activeGames.get(quizId);
+  const playerName = socket.data.playerName;
+  
+  // ✅ FIX: Check if game exists FIRST
+  if (!game || game.status !== 'live' || game.activeCard || game.completedCards.includes(cardIndex)) return;
+
+  // ✅ NOW it's safe to check disqualified
+  if (game.disqualified.includes(playerName)) {
+    console.log(`🚫 Disqualified player ${playerName} tried to pick a card. Blocked.`);
+    return;
+  }
+      
+  if (game.lastPicker === playerName && game.completedCards.length > 0) return; 
 
     game.activeCard = { index: cardIndex, player: playerName, attempt: 1, pickedAt: Date.now() };
     game.lastPicker = playerName;

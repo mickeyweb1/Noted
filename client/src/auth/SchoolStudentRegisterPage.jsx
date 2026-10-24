@@ -3,9 +3,12 @@ import { ArrowLeft, CheckCircle2, AlertCircle, Lock, Loader2 } from "lucide-reac
 import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "./authLayout"; 
 import api from "../utils/api";
+import { useUserContext } from "../context/userContext"; // ✅ MAGIC LINE 1: Import the context
 
 export default function SchoolStudentRegisterPage() {
   const navigate = useNavigate();
+  const { login } = useUserContext(); // ✅ MAGIC LINE 2: Get the login function
+  
   const [formData, setFormData] = useState({ 
     uniqueInviteCode: "", 
     email: "", 
@@ -54,9 +57,20 @@ export default function SchoolStudentRegisterPage() {
       });
       
       if (response.data.success) {
-        localStorage.setItem("userToken", response.data.token);
-        localStorage.setItem("userInfo", JSON.stringify(response.data.user));
-        navigate("/dashboard", { replace: true });
+        const userData = response.data.user;
+        const token = response.data.token;
+        
+        // ✅ MAGIC LINE 3: Update the React Context so the security guard knows you are a teacher!
+        login(userData, token);
+        
+        // ✅ SMART REDIRECT: Check the actual role from the backend
+        const userRole = userData.role;
+        
+        if (userRole === "teacher" || userRole === "school_admin" || userRole === "super_admin") {
+          navigate("/admin/dashboard", { replace: true });
+        } else {
+          navigate("/dashboard", { replace: true });
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || "Activation failed. Check your details and try again.");
@@ -97,7 +111,7 @@ export default function SchoolStudentRegisterPage() {
                     value={formData.uniqueInviteCode} 
                     onChange={handleChange} 
                     onBlur={handleCodeBlur} 
-                    placeholder="e.g., STU-A3K7-X9M2" 
+                    placeholder="e.g., T-8X92A1B3 or STU-A3K7" 
                     required
                     className={`flex h-11 w-full rounded-md border px-3 py-2 text-sm font-mono tracking-wider uppercase focus-visible:outline-none focus-visible:ring-2 transition-all ${
                       codeStatus === "valid" ? "border-green-500 bg-green-500/5" : 
@@ -119,7 +133,7 @@ export default function SchoolStudentRegisterPage() {
                   name="email" 
                   value={formData.email} 
                   onChange={handleChange} 
-                  placeholder="e.g., adebayo@student.com" 
+                  placeholder="e.g., teacher@school.com" 
                   required 
                   className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" 
                 />
