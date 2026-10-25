@@ -9,7 +9,7 @@ const roles = [
   {
     to: "/signup/school-admin",
     icon: Building2,
-    title: "School owner / admin",
+    title: "School admin / Teacher",
     description: "Register your school, add and manage teachers, and see school-wide results.",
     badge: "Principals & admins",
   },
@@ -23,7 +23,7 @@ const roles = [
   {
     to: "/signup/personal",
     icon: User,
-    title: "Independent student",
+    title: "Student",
     description: "Use AI study tools, flashcards and focus timers to master any subject on your own.",
     badge: "Self-study",
   },
