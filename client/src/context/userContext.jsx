@@ -3,13 +3,17 @@ import api from "../utils/api"; // Adjust path if your utils folder is elsewhere
 
 const UserContext = createContext(null);
 
+const getStoredUser = () => {
+  try {
+    const value = JSON.parse(localStorage.getItem("userInfo") || "null");
+    return value && typeof value === "object" ? value : null;
+  } catch { return null; }
+};
+
 export function UserContextProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem("userToken"));
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("userInfo") || "null"); }
-    catch { return null; }
-  });
-  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem("userToken") && localStorage.getItem("userInfo")));
+  const [user, setUser] = useState(getStoredUser);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem("userToken") && getStoredUser()));
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   
   const [formState, setFormState] = useState({
