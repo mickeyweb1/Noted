@@ -34,7 +34,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        const requestPath = error.config?.url?.split('?')[0];
+        const isLoginRequest = requestPath?.endsWith('/auth/login');
+
+        if (error.response?.status === 401 && !isLoginRequest) {
             localStorage.removeItem('userToken');
             localStorage.removeItem('userInfo');
             window.location.href = '/login';
