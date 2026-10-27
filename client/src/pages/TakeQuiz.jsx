@@ -218,7 +218,8 @@ export default function TakeQuiz() {
   const [isStarting, setIsStarting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [hasUnsyncedProgress, setHasUnsyncedProgress] = useState(false);
+  const [hasUnsyncedProgress, setHasUnsyncedProgress] = useState(() => !navigator.onLine);
+  const [isProgressSyncing, setIsProgressSyncing] = useState(false);
 
   const timerRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -291,13 +292,14 @@ export default function TakeQuiz() {
     };
   }, [step]);
 
-  const syncProgress = useCallback(async () => {
-    if (step !== "quiz" || !navigator.onLine || progressSyncingRef.current) return;
+  const syncProgress = useCallback(async (force = false) => {
+    if (step !== "quiz" || !navigator.onLine || progressSyncingRef.current || (!force && !hasUnsyncedProgress)) return;
     const activeQuiz = quizDataRef.current;
     if (!activeQuiz || !code) return;
 
     progressSyncingRef.current = true;
     setHasUnsyncedProgress(true);
+    setIsProgressSyncing(true);
     const progress = {
       code,
       studentName: studentInfoRef.current.name,
@@ -318,8 +320,9 @@ export default function TakeQuiz() {
       console.error("Failed to sync quiz progress", err);
     } finally {
       progressSyncingRef.current = false;
+      setIsProgressSyncing(false);
     }
-  }, [code, draftKey, step]);
+  }, [code, draftKey, hasUnsyncedProgress, step]);
 
   /* ----- Keep a local draft immediately and sync progress to the server ----- */
   useEffect(() => {
@@ -335,8 +338,6 @@ export default function TakeQuiz() {
       savedAt: Date.now(),
     };
     try { localStorage.setItem(draftKey, JSON.stringify(progress)); } catch { /* storage full/unavailable */ }
-    setHasUnsyncedProgress(true);
-
     const saveTimer = setTimeout(async () => {
       if (!navigator.onLine) return;
       try {
@@ -346,6 +347,7 @@ export default function TakeQuiz() {
         const savedDraft = JSON.parse(localStorage.getItem(draftKey) || "null");
         if (!savedDraft || savedDraft.savedAt <= progress.savedAt) setHasUnsyncedProgress(false);
       } catch (err) {
+        setHasUnsyncedProgress(true);
         console.error("Failed to save progress", err);
       }
     }, 400);
@@ -395,10 +397,14 @@ export default function TakeQuiz() {
   }, [code, quizData, pendingKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const handleOffline = () => setIsOffline(true);
+    const handleOffline = () => {
+      setIsOffline(true);
+      if (step === "quiz") setHasUnsyncedProgress(true);
+    };
     const handleOnline = () => {
       setIsOffline(false);
       if (step === "offline-waiting") attemptSync();
+      else if (step === "quiz") syncProgress(true);
     };
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
@@ -406,7 +412,15 @@ export default function TakeQuiz() {
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
     };
-  }, [step, attemptSync]);
+  }, [step, attemptSync, syncProgress]);
+
+  useEffect(() => {
+    if (step !== "quiz") return;
+    const retrySync = setInterval(() => {
+      if (navigator.onLine && hasUnsyncedProgress) syncProgress();
+    }, 10000);
+    return () => clearInterval(retrySync);
+  }, [step, hasUnsyncedProgress, syncProgress]);
 
   useEffect(() => {
     if (step !== "offline-waiting") return;
@@ -430,6 +444,7 @@ export default function TakeQuiz() {
           studentSurname: studentInfoRef.current.surname,
           studentClass: studentInfoRef.current.className,
           answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+          currentQuestionIndex: currentIndexRef.current,
         });
       }
 
@@ -476,6 +491,7 @@ export default function TakeQuiz() {
         studentSurname: studentInfoRef.current.surname,
         studentClass: studentInfoRef.current.className,
         answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+        currentQuestionIndex: currentIndexRef.current,
       });
     };
 
@@ -599,7 +615,10 @@ export default function TakeQuiz() {
       const endTime = new Date(data.startTime).getTime() + getTotalSeconds(data) * 1000;
       endTimeRef.current = endTime;
       setTimeLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
-      setCurrentIndex(0);
+      const restoredIndex = useLocalDraft
+        ? localDraft.currentQuestionIndex || 0
+        : data.currentQuestionIndex || 0;
+      setCurrentIndex(restoredIndex);
       submittingRef.current = false;
       setStep("quiz");
     } catch (err) {
@@ -850,7 +869,14 @@ export default function TakeQuiz() {
       <div className={`min-h-dvh select-none bg-muted px-3 pt-3 sm:p-6 md:p-8 ${isPaginated ? "pb-28" : "pb-8"}`} style={{ userSelect: "none", WebkitUserSelect: "none" }}>
         {isOffline && (
           <div role="status" className="mx-auto mb-3 flex max-w-3xl items-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm font-medium text-yellow-700 dark:text-yellow-400">
-            <WifiOff className="h-4 w-4 shrink-0" /> <span>You're offline. Keep going — tab switches still count, and you can submit once you're back online.</span>
+            <WifiOff className="h-4 w-4 shrink-0" /> <span>You're offline. Your answers are saved on this device and will sync when you're back online. You can keep working.</span>
+          </div>
+        )}
+
+        {!isOffline && hasUnsyncedProgress && (
+          <div role="status" className="mx-auto mb-3 flex max-w-3xl items-center gap-2 rounded-xl border border-brand/20 bg-brand-soft p-3 text-sm font-medium text-foreground">
+            {isProgressSyncing ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand" /> : <Info className="h-4 w-4 shrink-0 text-brand" />}
+            <span>{isProgressSyncing ? "Syncing your saved answers…" : "Your latest answers are saved on this device and will retry syncing."}</span>
           </div>
         )}
 
