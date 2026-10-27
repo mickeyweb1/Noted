@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import api from "../../utils/api";
 import FeedbackModal from "../../components/FeedbackModal";
+import { getDueReviewItems } from "../../utils/spacedReview";
 
 const WEEKLY_STUDY_GOAL = 3;
 
@@ -42,6 +43,7 @@ export default function StudentHome() {
 
   const [libraryData, setLibraryData] = useState([]);
   const [stats, setStats] = useState({ streak: 0, weeklyStudyDays: 0, totalNotes: 0, totalQuizzes: 0 });
+  const [dueReviewCount, setDueReviewCount] = useState(() => getDueReviewItems().length);
   const [isLoading, setIsLoading] = useState(true);
   const [topStudents, setTopStudents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
@@ -59,6 +61,17 @@ export default function StudentHome() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const refreshDueReviews = () => setDueReviewCount(getDueReviewItems().length);
+    refreshDueReviews();
+    window.addEventListener("noted-spaced-review-updated", refreshDueReviews);
+    window.addEventListener("storage", refreshDueReviews);
+    return () => {
+      window.removeEventListener("noted-spaced-review-updated", refreshDueReviews);
+      window.removeEventListener("storage", refreshDueReviews);
+    };
+  }, []);
 
   const formatTime = (minutes) => {
     if (!minutes || minutes === 0) return "0m";
@@ -267,6 +280,21 @@ export default function StudentHome() {
           </div>
         </div>
       </div>
+
+      {dueReviewCount > 0 && (
+        <section className="flex flex-col gap-4 rounded-2xl border border-brand/20 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Spaced reviews due">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Clock className="h-5 w-5" /></span>
+            <div>
+              <h2 className="font-semibold text-foreground">A few things are ready for review</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">{dueReviewCount} question{dueReviewCount === 1 ? "" : "s"} or flashcard{dueReviewCount === 1 ? "" : "s"} due. Take a quick look whenever it suits you.</p>
+            </div>
+          </div>
+          <NavLink to="/study-review" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
+            Review now <ArrowRight className="h-4 w-4" />
+          </NavLink>
+        </section>
+      )}
 
       {/* BOTTOM SECTION: Stats & Recent Activity */}
       <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">

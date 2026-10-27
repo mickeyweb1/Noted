@@ -36,6 +36,7 @@ const StudentLibrary = lazy(() => import("./pages/Dashboard/libirary"));
 const StudentQuiz = lazy(() => import("./pages/Dashboard/StudentQuiz"));
 const FocusTime = lazy(() => import("./pages/Dashboard/focusTime"));
 const StudentSchedule = lazy(() => import("./pages/Dashboard/reminder"));
+const StudyReview = lazy(() => import("./pages/Dashboard/StudyReview"));
 const StudentSetting = lazy(() => import("./pages/Dashboard/setting"));
 const MusicGenerator = lazy(() => import("./pages/MusicGenerator"));
 const StudentDirectorys = lazy(() => import("./pages/Dashboard/StudentDirectory"));
@@ -118,6 +119,7 @@ function App() {
 
         <Route path="/support" element={<SupportPage />} />
         <Route path="/reminder" element={<StudentSchedule />} />
+        <Route path="/study-review" element={<StudyReview />} />
         <Route path="/studentSetting" element={<StudentSetting />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/directory" element={<StudentDirectorys />} />

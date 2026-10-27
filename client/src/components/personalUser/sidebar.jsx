@@ -38,6 +38,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
     { to: "/podcast", label: "Podcast", icon: Mic },
     { to: "/quiz", label: "Quizzes", icon: Brain },
         { to: "/ai-flashcards", label: "AI Flashcards", icon: RotateCw },
+    { to: "/study-review", label: "Spaced Review", icon: Clock },
     { to: "/music-studio", label: "Music Studio", icon: Music },
     { to: "/video-studio", label: "Video Studio", icon: Video },
         { to: "/myLibrary", label: "My Library", icon: Library },
