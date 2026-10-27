@@ -1,141 +1,174 @@
-# 📚 Noted | study.butlouder
+# Noted
 
-> **Transforming how our nation learns, one note at a time.**
+Noted is an AI-powered study platform for turning learning materials into practical study resources. It serves independent learners and school communities with tools for creating and reviewing content, practicing with quizzes, and managing classroom learning.
 
-Noted is a modern, full-stack AI-powered study dashboard designed to transform messy lecture notes, textbooks, and recordings into actionable audio summaries, interactive quizzes, and focused study sessions. Built to bridge the education gap, it empowers students, schools, and parents with world-class, accessible learning tools.
+## What you can do
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![React](https://img.shields.io/badge/React-18.x-61DAFB?logo=react)
-![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js)
-![Tailwind](https://img.shields.io/badge/Tailwind_CSS-4.x-06B6D4?logo=tailwindcss)
+- Generate study content from notes and other learning materials, including summaries, quizzes, flashcards, podcasts, and video content.
+- Review saved learning materials in a personal library and track quiz results.
+- Use focus tools and take part in quiz battles and live classroom game shows.
+- Create school accounts, manage teachers and students, and review school quiz results.
+- Use the app on desktop or mobile, with light and dark themes.
 
----
+Feature availability can depend on the external services configured for your deployment.
 
-## ✨ Key Features
+## Technology
 
-### 🤖 AI-Powered Learning
-- **AI Summaries & Transcripts**: Instantly convert dense text into crisp, structured study materials.
-- **Audio Learning**: Generate podcast-style audio summaries or study tracks with background beats.
-- **Interactive Quizzes**: Auto-generate multiple-choice questions to test comprehension instantly.
-- **Video Storyboards**: Turn notes into animated educational video scripts with AI-sourced visuals.
+| Area | Stack |
+| --- | --- |
+| Web client | React 19, Vite, React Router |
+| Styling and icons | Tailwind CSS 4, Lucide React |
+| API | Node.js, Express 5, Socket.IO |
+| Data and authentication | MongoDB with Mongoose, JWT |
+| Integrations | Configurable AI providers, plus optional media, image, and email services |
 
-### 🎯 Student Productivity
-- **Focus Time**: Customizable Pomodoro-style timer with ambient sounds and global background music.
-- **Battle Arena**: Gamified learning where students can challenge classmates or share invite links for quiz battles.
-- **Smart Library**: A centralized, searchable archive of all generated notes, quizzes, and media.
-- **Progress Tracking**: XP system, study streaks, and daily focus logs to keep students motivated.
+## Requirements
 
-### 🛡️ School & Admin Tools
-- **Role-Based Access**: Dedicated dashboards for Personal Users, School Students, and School Administrators.
-- **Student Management**: Admins can easily add students, generate unique invite codes, and track class performance.
-- **Feedback System**: In-app feedback modal with direct email notifications to administrators.
+- Node.js `^20.19.0` or `>=22.12.0`
+- npm
+- MongoDB, available locally or through a hosted MongoDB service
 
-### 🎨 Modern UI/UX
-- **Responsive Design**: Fully adaptive layout with a collapsible mobile sidebar and desktop-optimized workspace.
-- **Dark/Light Mode**: Seamless theme toggling with persistent user preference (OKLCH color palette).
-- **Accessibility**: Built with shadcn/ui principles for a clean, keyboard-navigable, and accessible interface.
+The client and server are separate npm projects, each with its own lockfile and dependencies.
 
----
+## Run locally
 
-## 🛠️ Tech Stack
+### 1. Get the code and install dependencies
 
-| Category       | Technologies Used                                                                 |
-|----------------|-----------------------------------------------------------------------------------|
-| **Frontend**   | React 18, Vite, React Router DOM, React Context API                               |
-| **Styling**    | Tailwind CSS v4, shadcn/ui, CSS Variables                                         |
-| **Backend**    | Node.js, Express.js, JWT Authentication, Rate Limiting, Helmet                    |
-| **Database**   | MongoDB (Mongoose)                                                                |
-| **AI & Media** | Groq API, ElevenLabs (TTS), Replicate (Video), Pexels (Stock Media), OCR.space  |
-| **Utilities**  | Lucide React (Icons), Axios, Nodemailer, Fluent-FFmpeg, Cloudinary                |
+```bash
+git clone https://github.com/mickeyweb1/Noted.git
+cd Noted
 
----
+cd server
+npm ci
 
-## 🚀 Getting Started
+cd ../client
+npm ci
+```
 
-Follow these instructions to get a local copy of the project up and running.
+### 2. Configure environment variables
 
-### Prerequisites
-- **Node.js** (^20.19.0 or >=22.12.0)
-- **npm**, **yarn**, or **pnpm**
-- A **MongoDB** database URI (local or Atlas)
+Create local environment files from the examples:
 
-### Installation
+```bash
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+```
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/mickeyweb1/Noted.git
-   cd Noted
+Set at least the following values:
 
-2. **Install Backend Dependencies:**
-   cd server
-   npm install
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `MONGO_URI` | Yes | MongoDB connection string for the API |
+| `JWT_SECRET` | Yes | Private, long, randomly generated secret used to sign authentication tokens |
+| `VITE_API_URL` | Yes for local client setup | API base URL, including `/api`; locally, `http://localhost:5000/api` |
+| `CLIENT_URL` | Recommended | Frontend origin, used for CORS and generated links; locally, `http://localhost:5173` |
+| `PORT` | No | API port; defaults to `5000` |
 
-3. **Install Frontend Dependencies:**
-   cd ../client
-   npm install
+The API also supports optional integrations. Add credentials only for the features you intend to use:
 
-4. **Set Up Environment Variables:**
-   Copy `server/.env.example` to `server/.env` and set a valid `MONGO_URI` and a private, long random `JWT_SECRET`. Add credentials for optional services as needed.
-   Copy `client/.env.example` to `client/.env`. Set `VITE_API_URL` to the backend API URL, including `/api`.
+- **AI generation:** configure at least one of `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `COHERE_API_KEY`, `NVIDIA_API_KEY`, or `HF_API_KEY`. Provider model names can be overridden with `GROQ_MODEL`, `OPENROUTER_MODEL`, `COHERE_MODEL`, `NVIDIA_MODEL`, and `HF_MODEL`.
+- **Image and media features:** `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `PEXELS_API_KEY`, and `REPLICATE_API_TOKEN`.
+- **Audio generation:** `ELEVENLABS_API_KEY`; `ELEVENLABS_VOICE_ID` is optional.
+- **Text extraction:** `OCR_SPACE_API_KEY`.
+- **Email notifications:** `EMAIL_USER` and `EMAIL_PASS`.
 
-   For production, configure these values in the hosting providers' environment settings. `VITE_API_URL` is embedded during the frontend build and must point to the deployed backend.
+The example files list the core variables and common integration keys; other supported AI provider and model options are listed above. Keep real credentials in local environment files or your hosting provider's secret manager; do not commit them.
 
-5. **Start the Development Servers:**
-**Terminal 1 (Backend):**
-   cd server
-   npm run dev
+### 3. Start the API and web client
 
-**Terminal 2 (Frontend):**
-   cd client
-   npm run dev
+Run each command in a separate terminal from the repository root.
 
-6. **View the App:**
-**Open your browser and navigate to http://localhost:5173.**
+**Terminal 1 — API**
 
-**📂 Project Structure**
+```bash
+cd server
+npm run dev
+```
+
+**Terminal 2 — web client**
+
+```bash
+cd client
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). The API listens on port `5000` by default, and its root health response is available at [http://localhost:5000](http://localhost:5000).
+
+## Available scripts
+
+### Client (`client/`)
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Vite development server |
+| `npm run build` | Create a production build in `client/dist/` |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Run Oxlint |
+
+### Server (`server/`)
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the API with Nodemon |
+| `npm start` | Start the API with Node.js |
+| `npm run migrate:quiz-session-retention` | Run the quiz-session retention migration |
+
+## Routes
+
+Some of the main client routes are:
+
+| Route | Page |
+| --- | --- |
+| `/` | Landing page |
+| `/pricing` | Pricing |
+| `/personal`, `/school`, `/student` | Product and audience pages |
+| `/contact` | Contact form |
+| `/login` | Sign in |
+| `/signup` | Choose an account type |
+| `/signup/personal` | Personal account registration |
+| `/signup/school-admin` | School registration |
+| `/signup/school-student` | Join a school with an invite code |
+| `/dashboard` | Protected learner dashboard |
+| `/admin/dashboard` | Protected school administration dashboard |
+
+The API provides authentication, AI content, quiz, feedback, support, and contact endpoints under `/api`. Socket.IO powers live game-show interactions.
+
+## Production and deployment
+
+Deploy the client and API as separate services, and provision a reachable MongoDB database. Configure the API's environment variables in its hosting environment. Set `CLIENT_URL` to the deployed client origin so browser requests are allowed by CORS.
+
+Set `VITE_API_URL` to the deployed API base URL, including `/api`, in the client build environment. Vite embeds this value at build time, so update it and rebuild/redeploy the client when the API URL changes.
+
+## Repository layout
+
+```text
 Noted/
-├── client/                 # Frontend React Application
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── context/        # Global state (User, Music)
-│   │   ├── pages/          # Route components (Dashboard, Auth, Marketing)
-│   │   └── utils/          # API instances and helpers
-│   └── package.json
-├── server/                 # Backend Node.js Application
-│   ├── config/             # Database and AI service configurations
-│   ├── controllers/        # Route logic and business logic
-│   ├── middleware/         # Auth protection, error handling, rate limiting
-│   ├── models/             # Mongoose schemas (User, Content, Feedback)
-│   ├── routes/             # API endpoint definitions
-│   └── server.js           # Express application entry point
-└── README.md
+├── client/
+│   ├── public/                 # Static assets
+│   └── src/
+│       ├── auth/               # Sign-in and registration pages
+│       ├── components/         # Shared UI and layouts
+│       ├── context/            # Shared application state
+│       ├── pages/              # Marketing, dashboard, quiz, and admin pages
+│       └── utils/              # API and client utilities
+└── server/
+    ├── config/                 # External service configuration
+    ├── controllers/            # API handlers
+    ├── middleware/             # Authentication and error handling
+    ├── models/                 # Mongoose models
+    ├── routes/                 # API route definitions
+    ├── utils/                  # Server utilities
+    └── server.js               # Express and Socket.IO entry point
+```
 
-**🤝 Contributing**
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
-1. Fork the Project
-2. Create your Feature Branch (git checkout -b feature/AmazingFeature)
-3. Commit your Changes (git commit -m 'Add some AmazingFeature')
-4. Push to the Branch (git push origin feature/AmazingFeature)
-5. Open a Pull Request
+## Contributing
 
-**📄 License**
-Distributed under the MIT License. See LICENSE for more information.
+1. Fork the repository and create a branch for your change.
+2. Keep changes focused and avoid committing environment files or credentials.
+3. Run the relevant client lint and production build checks.
+4. Open a pull request describing the change and how you verified it.
 
-**📬 Contact**
-Noted AI Team
-📧 Email: hello@notedstudy.com
-🌐 Project Link: https://github.com/mickeyweb1/Noted
-   "Building the nation's brightest minds starts here." 🇳🇬
+## Project links
 
-
-### 💡 Why this README is better:
-1. **Professional Badges**: Adds instant visual credibility at the top.
-2. **Clear Value Proposition**: The tagline and "About" section immediately tell investors, principals, or developers *why* this app matters.
-3. **Organized Features**: Groups features logically (AI, Productivity, Admin, UI) so it's easy to scan.
-4. **Full-Stack Accuracy**: Includes the backend, database, and environment variable setup, which is crucial for anyone (or you, on a new machine) trying to run the app.
-5. **Project Structure**: Gives a quick mental map of how the codebase is organized.
-6. **Polished Formatting**: Uses tables, code blocks, and blockquotes to make it highly readable and visually appealing on GitHub. 
-
-
-
-
+- Repository: [github.com/mickeyweb1/Noted](https://github.com/mickeyweb1/Noted)
+- Website: [usenotedai.com](https://usenotedai.com)
