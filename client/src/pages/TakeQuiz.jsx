@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, ArrowLeft, AlertTriangle, Check, ListChecks, WifiOff, Info } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, ArrowLeft, AlertTriangle, Check, ListChecks, WifiOff, Info, BookOpen, RotateCcw } from "lucide-react";
 import api from "../utils/api";
 import MathRenderer from "../components/MathRenderer";
 
@@ -207,6 +207,12 @@ export default function TakeQuiz() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [result, setResult] = useState(null);
   const [resultAnimationProgress, setResultAnimationProgress] = useState(0);
+  const [studyPracticeStarted, setStudyPracticeStarted] = useState(false);
+  const [studyPracticeIndex, setStudyPracticeIndex] = useState(0);
+  const [studyPracticeAnswer, setStudyPracticeAnswer] = useState("");
+  const [studyPracticeChecked, setStudyPracticeChecked] = useState(false);
+  const [studyPracticeCorrect, setStudyPracticeCorrect] = useState(0);
+  const [studyPracticeComplete, setStudyPracticeComplete] = useState(false);
   const [error, setError] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [maxTabSwitches, setMaxTabSwitches] = useState(null);
@@ -706,6 +712,19 @@ export default function TakeQuiz() {
   const isPassing = percentage >= passMark;
   const showAnswerReview = result?.showAnswersAfterSubmission !== false;
   const resultReview = showAnswerReview ? result?.review || [] : [];
+  const studyPracticeQuestions = resultReview
+    .filter((item) => !item.isCorrect)
+    .map((item) => ({
+      ...item,
+      options: quizData?.questions.find((question) => String(question._id) === String(item.questionId))?.options || [],
+    }))
+    .filter((item) => item.options.length > 1);
+  const studyPlanSteps = [
+    ...(incorrectCount > 0 ? [`Review the ${incorrectCount} missed response${incorrectCount === 1 ? "" : "s"}`] : []),
+    ...(unansweredResultCount > 0 ? [`Try the ${unansweredResultCount} unanswered question${unansweredResultCount === 1 ? "" : "s"}`] : []),
+    "Read the explanations and revisit the related notes before your next quiz",
+  ];
+  const activeStudyQuestion = studyPracticeQuestions[studyPracticeIndex];
   const incorrectCount = resultReview.length
     ? resultReview.filter((item) => item.selectedAnswer && !item.isCorrect).length
     : Math.max(0, (result?.totalQuestions || 0) - (result?.score || 0));
@@ -716,6 +735,33 @@ export default function TakeQuiz() {
   const animatedUnansweredCount = Math.round(unansweredResultCount * resultAnimationProgress);
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
+
+  const startStudyPractice = () => {
+    setStudyPracticeIndex(0);
+    setStudyPracticeAnswer("");
+    setStudyPracticeChecked(false);
+    setStudyPracticeCorrect(0);
+    setStudyPracticeComplete(false);
+    setStudyPracticeStarted(true);
+  };
+
+  const checkStudyPracticeAnswer = () => {
+    if (!activeStudyQuestion || !studyPracticeAnswer || studyPracticeChecked) return;
+    if (studyPracticeAnswer === activeStudyQuestion.correctAnswer) {
+      setStudyPracticeCorrect((count) => count + 1);
+    }
+    setStudyPracticeChecked(true);
+  };
+
+  const advanceStudyPractice = () => {
+    if (studyPracticeIndex >= studyPracticeQuestions.length - 1) {
+      setStudyPracticeComplete(true);
+      return;
+    }
+    setStudyPracticeIndex((index) => index + 1);
+    setStudyPracticeAnswer("");
+    setStudyPracticeChecked(false);
+  };
 
   useEffect(() => {
     if (step !== "result" || !result) return undefined;
@@ -1081,6 +1127,96 @@ export default function TakeQuiz() {
             <p role="status" className="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
               Your teacher has turned off answer details for this quiz.
             </p>
+          )}
+
+          {studyPracticeQuestions.length > 0 && (
+            <section className="rounded-3xl border border-brand/20 bg-card p-5 shadow-sm sm:p-6" aria-labelledby="study-plan-title">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+                  <BookOpen className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 id="study-plan-title" className="text-lg font-bold text-foreground sm:text-xl">Your next study steps</h2>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Focus on the {studyPracticeQuestions.length} question{studyPracticeQuestions.length === 1 ? "" : "s"} to revisit. Retry them, then check the correct answers and explanations below.
+                  </p>
+                </div>
+              </div>
+
+              <ol className="mt-5 grid gap-3 sm:grid-cols-3">
+                {studyPlanSteps.map((stepText, index) => (
+                  <li key={stepText} className="flex items-start gap-2.5 rounded-2xl bg-muted p-3 text-sm leading-5 text-foreground">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand">{index + 1}</span>
+                    <span>{stepText}</span>
+                  </li>
+                ))}
+              </ol>
+
+              {!studyPracticeStarted && (
+                <button type="button" onClick={startStudyPractice} className={`${primaryBtnInline} mt-5 w-full sm:w-auto`}>
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" /> Start a short practice round
+                </button>
+              )}
+
+              {studyPracticeStarted && studyPracticeComplete && (
+                <div role="status" className="mt-5 rounded-2xl border border-green-500/20 bg-green-500/5 p-4">
+                  <p className="font-semibold text-foreground">Practice round complete</p>
+                  <p className="mt-1 text-sm text-muted-foreground">You got {studyPracticeCorrect} of {studyPracticeQuestions.length} practice questions correct. Your submitted quiz score hasn’t changed.</p>
+                </div>
+              )}
+
+              {studyPracticeStarted && !studyPracticeComplete && activeStudyQuestion && (
+                <div className="mt-5 rounded-2xl border border-border bg-background p-4 sm:p-5" aria-live="polite">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Practice {studyPracticeIndex + 1} of {studyPracticeQuestions.length}</p>
+                    <p className="text-xs font-medium text-green-700 dark:text-green-400">{studyPracticeCorrect} correct so far</p>
+                  </div>
+                  <p className="font-semibold leading-6 text-foreground"><MathRenderer>{activeStudyQuestion.question}</MathRenderer></p>
+                  {activeStudyQuestion.imageUrl && <img src={activeStudyQuestion.imageUrl} alt="Question visual" loading="lazy" className="mt-3 max-h-48 w-full rounded-xl border border-border bg-muted object-contain" />}
+                  <div role="group" aria-label={`Practice question ${studyPracticeIndex + 1} answers`} className="mt-4 grid gap-2">
+                    {activeStudyQuestion.options.map((option, optionIndex) => {
+                      const selected = studyPracticeAnswer === option;
+                      const correct = option === activeStudyQuestion.correctAnswer;
+                      const optionStyle = studyPracticeChecked && correct
+                        ? "border-green-500 bg-green-500/10 text-foreground"
+                        : studyPracticeChecked && selected
+                          ? "border-destructive bg-destructive/10 text-foreground"
+                          : selected
+                            ? "border-brand bg-brand-soft text-foreground"
+                            : "border-border bg-card text-foreground hover:bg-accent";
+                      return (
+                        <button
+                          key={`${optionIndex}-${option}`}
+                          type="button"
+                          aria-pressed={selected}
+                          disabled={studyPracticeChecked}
+                          onClick={() => setStudyPracticeAnswer(option)}
+                          className={`rounded-xl border p-3 text-left text-sm leading-6 transition ${optionStyle} disabled:cursor-default`}
+                        >
+                          <MathRenderer>{option}</MathRenderer>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {studyPracticeChecked && (
+                    <div className="mt-3 rounded-xl border border-brand/15 bg-brand-soft/50 p-3 text-sm leading-6 text-foreground">
+                      <p className="font-semibold">{studyPracticeAnswer === activeStudyQuestion.correctAnswer ? "That’s right." : "Take another look at this one."}</p>
+                      {activeStudyQuestion.explanation && <p className="mt-1 text-muted-foreground"><MathRenderer>{activeStudyQuestion.explanation}</MathRenderer></p>}
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    {!studyPracticeChecked ? (
+                      <button type="button" onClick={checkStudyPracticeAnswer} disabled={!studyPracticeAnswer} className={primaryBtnInline}>Check answer</button>
+                    ) : (
+                      <button type="button" onClick={advanceStudyPractice} className={primaryBtnInline}>
+                        {studyPracticeIndex === studyPracticeQuestions.length - 1 ? "Finish practice" : "Next question"}
+                        {studyPracticeIndex < studyPracticeQuestions.length - 1 && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
           {resultReview.length > 0 && (
