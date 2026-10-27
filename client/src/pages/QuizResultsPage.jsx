@@ -430,12 +430,38 @@ export default function QuizResultsPage() {
       { label: "Below 50%", count: pcts.filter((p) => p < 50).length, bar: "bg-destructive" },
     ];
     const perQuestion = (quizData?.questions ?? []).map((q, index) => {
-      let total = 0; let correct = 0;
-      submissions.forEach((s) => {
-        const a = s.answers?.find((x) => String(x.questionId) === String(q._id));
-        if (a) { total += 1; if (a.isCorrect) correct += 1; }
+      const responses = submissions.map((s) => s.answers?.find((x) => String(x.questionId) === String(q._id)));
+      const answered = responses.filter((answer) => typeof answer?.selectedAnswer === "string" && answer.selectedAnswer.trim());
+      const correct = responses.filter((answer) => answer?.isCorrect).length;
+      const wrongChoices = new Map();
+      answered.filter((answer) => !answer.isCorrect).forEach((answer) => {
+        wrongChoices.set(answer.selectedAnswer, (wrongChoices.get(answer.selectedAnswer) || 0) + 1);
       });
-      return { index, question: q, total, correct, pct: total ? Math.round((correct / total) * 100) : null };
+      const topDistractorEntry = [...wrongChoices.entries()].sort((a, b) => b[1] - a[1])[0];
+      const topDistractor = topDistractorEntry ? { answer: topDistractorEntry[0], count: topDistractorEntry[1] } : null;
+      const total = submissions.length;
+      const skipped = total - answered.length;
+      return {
+        index,
+        question: q,
+        total,
+        answered: answered.length,
+        correct,
+        skipped,
+        pct: total ? Math.round((correct / total) * 100) : null,
+        skipPct: total ? Math.round((skipped / total) * 100) : 0,
+        distractorPct: answered.length && topDistractor ? Math.round((topDistractor.count / answered.length) * 100) : 0,
+        topDistractor,
+      };
+    });
+    const qualityFlags = perQuestion.flatMap((question) => {
+      if (question.total < 3) return [];
+      if (question.skipPct >= 25) return [{ ...question, signal: "High skip rate", message: `${question.skipped} of ${question.total} students left this blank. Check the wording, prerequisites, or time pressure.` }];
+      if (question.pct <= 40) return [{ ...question, signal: "Low correct rate", message: `Only ${question.pct}% of the class got this right. Review the wording and related lesson coverage.` }];
+      if (question.topDistractor?.count >= 2 && question.distractorPct >= 35) {
+        return [{ ...question, signal: "Repeated wrong choice", message: `${question.topDistractor.count} students chose the same incorrect option. This may point to a common misconception or a distractor worth reviewing.` }];
+      }
+      return [];
     });
     return {
       count: n,
@@ -445,14 +471,9 @@ export default function QuizResultsPage() {
       flagged: submissions.filter((s) => (s.tabSwitchCount || 0) > 0).length,
       buckets,
       perQuestion,
+      qualityFlags,
     };
   }, [submissions, quizData, isGameShow]);
-
-  const hardest = useMemo(() => {
-    if (isGameShow) return null;
-    const worst = analysis.perQuestion.filter((q) => q.total >= 2 && q.pct !== null).sort((a, b) => a.pct - b.pct)[0];
-    return worst && worst.pct <= 60 ? worst : null;
-  }, [analysis, isGameShow]);
 
   const closeRegen = () => { if (!isRegenerating) setRegen({ step: null, code: "" }); };
   const executeRegenerate = async () => {
@@ -490,7 +511,7 @@ export default function QuizResultsPage() {
   if (loading) return <PageSpinner />;
   if (error) return <ErrorState message={error} onRetry={() => fetchResults()} />;
 
-  const { count, avgScore, passRate, avgTime, flagged, buckets, perQuestion } = analysis;
+  const { count, avgScore, passRate, avgTime, flagged, buckets, perQuestion, qualityFlags } = analysis;
   const codes = quizData?.accessCodes ?? [];
   const questions = quizData?.questions ?? [];
   const isTie = standings.length === 2 && standings[0].rank === standings[1].rank;
@@ -560,28 +581,48 @@ export default function QuizResultsPage() {
           </section>
         )}
 
-        {/* Teaching insight */}
-        {hardest && (
-          <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4 shadow-sm sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-yellow-500/20 text-yellow-600 dark:text-yellow-400"><Lightbulb className="h-5 w-5" /></div>
+        {/* Question quality insights */}
+        {!isGameShow && count > 0 && (
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby="question-quality-title">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Lightbulb className="h-5 w-5" aria-hidden="true" /></div>
               <div className="min-w-0 flex-1">
-                <h3 className="mb-1 text-base font-bold text-yellow-800 dark:text-yellow-300">Teaching insight: question {hardest.index + 1}</h3>
-                <p className="mb-3 text-sm text-yellow-700 dark:text-yellow-400">
-                  Only <strong>{hardest.pct}%</strong> of students got this right. Consider reviewing it in your next lesson.
-                </p>
-                <div className="rounded-xl border border-yellow-500/20 bg-white/50 p-3 dark:bg-black/20">
-                  <p className="break-words text-sm font-medium text-foreground"><MathRenderer>{hardest.question.question}</MathRenderer></p>
-                  <p className="mt-1 break-words text-xs text-muted-foreground"><strong>Correct answer:</strong> <MathRenderer>{hardest.question.correctAnswer}</MathRenderer></p>
-                </div>
+                <h2 id="question-quality-title" className="text-lg font-bold text-foreground">Question quality insights</h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">Response patterns can help you spot questions to review. These are prompts, not proof that a question is flawed; patterns appear after at least 3 submissions.</p>
               </div>
             </div>
-          </div>
+
+            {qualityFlags.length === 0 ? (
+              <p className="mt-4 rounded-xl bg-muted p-4 text-sm leading-6 text-muted-foreground">
+                No questions meet the current review signals yet. As more students submit, this section will highlight high skip rates, low correct rates, or repeated wrong choices.
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {qualityFlags.map((question) => (
+                  <li key={question.index} className="rounded-xl border border-yellow-500/25 bg-yellow-500/5 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-foreground">Question {question.index + 1} · {question.signal}</span>
+                      <span className="text-xs tabular-nums text-muted-foreground">{question.correct}/{question.total} correct · {question.skipped} skipped</span>
+                    </div>
+                    <p className="mt-2 break-words text-sm font-medium leading-6 text-foreground"><MathRenderer>{question.question.question}</MathRenderer></p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{question.message}</p>
+                    {question.signal === "Repeated wrong choice" && question.topDistractor && (
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">Most common incorrect answer: <span className="font-semibold text-foreground"><MathRenderer>{question.topDistractor.answer}</MathRenderer></span></p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button type="button" onClick={() => { setShowAnalysis(true); document.getElementById("question-analysis")?.scrollIntoView({ behavior: "smooth" }); }} className={`${secondaryBtn} mt-4 w-full sm:w-auto`}>
+              See response rates by question <ArrowRight className="h-4 w-4" />
+            </button>
+          </section>
         )}
 
         {/* Question analysis */}
         {!isGameShow && count > 0 && (
-          <section className="rounded-2xl border border-border bg-card shadow-sm">
+          <section id="question-analysis" className="scroll-mt-4 rounded-2xl border border-border bg-card shadow-sm">
             <button onClick={() => setShowAnalysis((v) => !v)} aria-expanded={showAnalysis} className={`flex w-full items-center justify-between gap-3 rounded-2xl p-5 text-left sm:p-6 ${focusRing}`}>
               <span className="flex items-center gap-2 text-lg font-bold text-foreground"><Target className="h-5 w-5 text-brand" /> Question analysis</span>
               <span className="flex items-center gap-1 text-sm text-muted-foreground">{showAnalysis ? "Hide" : "Show"} {showAnalysis ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>
