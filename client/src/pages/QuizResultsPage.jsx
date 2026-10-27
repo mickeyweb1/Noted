@@ -433,6 +433,8 @@ export default function QuizResultsPage() {
       const responses = submissions.map((s) => s.answers?.find((x) => String(x.questionId) === String(q._id)));
       const answered = responses.filter((answer) => typeof answer?.selectedAnswer === "string" && answer.selectedAnswer.trim());
       const correct = responses.filter((answer) => answer?.isCorrect).length;
+      const confidentMisses = responses.filter((answer) => answer?.confidence === "high" && !answer.isCorrect).length;
+      const lowConfidenceCorrect = responses.filter((answer) => ["low", "medium"].includes(answer?.confidence) && answer.isCorrect).length;
       const wrongChoices = new Map();
       answered.filter((answer) => !answer.isCorrect).forEach((answer) => {
         wrongChoices.set(answer.selectedAnswer, (wrongChoices.get(answer.selectedAnswer) || 0) + 1);
@@ -447,6 +449,8 @@ export default function QuizResultsPage() {
         total,
         answered: answered.length,
         correct,
+        confidentMisses,
+        lowConfidenceCorrect,
         skipped,
         pct: total ? Math.round((correct / total) * 100) : null,
         skipPct: total ? Math.round((skipped / total) * 100) : 0,
@@ -461,8 +465,34 @@ export default function QuizResultsPage() {
       if (question.topDistractor?.count >= 2 && question.distractorPct >= 35) {
         return [{ ...question, signal: "Repeated wrong choice", message: `${question.topDistractor.count} students chose the same incorrect option. This may point to a common misconception or a distractor worth reviewing.` }];
       }
+      if (question.confidentMisses >= 2) {
+        return [{ ...question, signal: "Confident mistakes", message: `${question.confidentMisses} students were very sure but chose an incorrect answer. Revisit the concept and check whether the distractors reveal a shared misconception.` }];
+      }
+      if (question.lowConfidenceCorrect >= 2) {
+        return [{ ...question, signal: "Correct, but unsure", message: `${question.lowConfidenceCorrect} students got this right while feeling unsure. A brief recap could help build confidence.` }];
+      }
       return [];
     });
+    const topicGroups = new Map();
+    (quizData?.questions ?? []).forEach((question) => {
+      const topic = typeof question.topic === "string" ? question.topic.trim() : "";
+      if (!topic) return;
+      const key = topic.toLocaleLowerCase();
+      if (!topicGroups.has(key)) topicGroups.set(key, { topic, questionCount: 0, total: 0, correct: 0, skipped: 0 });
+      const group = topicGroups.get(key);
+      group.questionCount++;
+      submissions.forEach((submission) => {
+        const answer = submission.answers?.find((item) => String(item.questionId) === String(question._id));
+        group.total++;
+        if (answer?.isCorrect) group.correct++;
+        if (!answer?.selectedAnswer?.trim()) group.skipped++;
+      });
+    });
+    const topicMastery = [...topicGroups.values()].map((group) => ({
+      ...group,
+      pct: group.total ? Math.round((group.correct / group.total) * 100) : 0,
+      studentCount: n,
+    }));
     return {
       count: n,
       avgScore: n ? Math.round(pcts.reduce((a, b) => a + b, 0) / n) : 0,
@@ -472,6 +502,7 @@ export default function QuizResultsPage() {
       buckets,
       perQuestion,
       qualityFlags,
+      topicMastery,
     };
   }, [submissions, quizData, isGameShow]);
 
