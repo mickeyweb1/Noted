@@ -1,19 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, ArrowRight, AudioLines, Eye, EyeOff, FolderOpen, Globe2, LockKeyhole, Mail, NotebookPen, Repeat, LoaderCircle } from 'lucide-react';
+import { AlertCircle, ArrowRight, AudioLines, Eye, EyeOff, LockKeyhole, Mail, LoaderCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import AuthLayout from './authLayout';
 import { ThemeToggle } from '../components/themeToggle';
 import api from '../utils/api';
 import { useUserContext } from '../context/userContext';
-import UnsplashCredit from '../components/UnsplashCredit';
 import { Button, Card, Input, Label } from '../components/ui/primitives';
 import { toast } from '../components/ui/toastApi';
-
-const features = [
-  { icon: NotebookPen, label: 'AI-generated study notes' },
-  { icon: Repeat, label: 'Smart revision tools' },
-  { icon: FolderOpen, label: 'Organized course materials' },
-  { icon: Globe2, label: 'Learn anywhere, anytime' },
-];
 
 const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
@@ -93,46 +86,18 @@ export default function LoginPage() {
   const passwordInvalid = Boolean(validationErrors.password);
 
   return (
-    <main className="grid min-h-screen w-full overflow-x-hidden bg-background lg:grid-cols-2">
-      <aside className="relative hidden min-h-screen flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0A0A0A] to-[#1A1A1A] p-12 text-white lg:flex xl:p-16">
-        <img
-          src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1600&q=80"
-          alt="Students studying together around a laptop"
-          fetchPriority="high"
-          className="absolute inset-0 h-full w-full object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/90 via-[#0A0A0A]/70 to-[#1A1A1A]/85" aria-hidden="true" />
-
-        <Link to="/" className="relative z-10 inline-flex w-fit items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Noted home">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-zinc-950"><AudioLines className="h-6 w-6" aria-hidden="true" /></span>
-          <span className="font-display text-2xl font-bold tracking-tight">Noted</span>
-        </Link>
-
-        <div className="relative z-10 max-w-xl py-14">
-          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-white/55">study.butlouder</p>
-          <h1 className="font-display text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">Transforming how our nation learns, one note at a time.</h1>
-          <p className="mt-5 max-w-lg text-base leading-7 text-white/65">Turn class notes into focused study material, keep revision on track, and make every study session count with AI-powered tools.</p>
-
-          <ul className="mt-10 grid gap-4 sm:grid-cols-2">
-            {features.map(({ icon: Icon, label }) => (
-              <li key={label} className="flex items-center gap-3 text-sm font-medium text-white/85">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-white"><Icon className="h-4 w-4" aria-hidden="true" /></span>
-                {label}
-              </li>
-            ))}
-          </ul>
+    <AuthLayout>
+      <div className="flex flex-1 flex-col p-5 sm:p-6 md:p-12">
+        <div className="mb-8 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand md:hidden" aria-label="Noted home">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-brand-foreground"><AudioLines className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="font-display text-xl font-bold text-foreground">Noted</span>
+          </Link>
+          <ThemeToggle />
         </div>
 
-        <div className="relative z-10 flex items-end justify-between gap-4">
-          <p className="text-xs text-white/60">A louder way to learn.</p>
-          <UnsplashCredit className="text-xs text-white/60 hover:text-white" />
-        </div>
-      </aside>
-
-      <section className="relative flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-8">
-        <div className="absolute right-4 top-4 sm:right-7 sm:top-7"><ThemeToggle /></div>
-
-        <Card className="login-fade-in w-full max-w-[420px] rounded-3xl border-border/80 p-6 shadow-soft sm:p-9">
+        <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center py-4">
+        <Card className="login-fade-in w-full rounded-3xl border-border/80 p-6 shadow-soft sm:p-9">
           <div className="mb-8 text-center">
             <Link to="/" className="mx-auto mb-6 inline-flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="Noted home">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-brand-foreground"><AudioLines className="h-5 w-5" aria-hidden="true" /></span>
@@ -187,7 +152,8 @@ export default function LoginPage() {
 
           <p className="mt-7 text-center text-sm text-muted-foreground">Don’t have an account? <Link to="/register" className="font-semibold text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Sign up</Link></p>
         </Card>
-      </section>
-    </main>
+        </div>
+      </div>
+    </AuthLayout>
   );
 }
