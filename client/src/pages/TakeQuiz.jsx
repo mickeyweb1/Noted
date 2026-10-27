@@ -719,16 +719,16 @@ export default function TakeQuiz() {
       options: quizData?.questions.find((question) => String(question._id) === String(item.questionId))?.options || [],
     }))
     .filter((item) => item.options.length > 1);
+  const incorrectCount = resultReview.length
+    ? resultReview.filter((item) => item.selectedAnswer && !item.isCorrect).length
+    : Math.max(0, (result?.totalQuestions || 0) - (result?.score || 0));
+  const unansweredResultCount = resultReview.filter((item) => !item.selectedAnswer).length;
   const studyPlanSteps = [
     ...(incorrectCount > 0 ? [`Review the ${incorrectCount} missed response${incorrectCount === 1 ? "" : "s"}`] : []),
     ...(unansweredResultCount > 0 ? [`Try the ${unansweredResultCount} unanswered question${unansweredResultCount === 1 ? "" : "s"}`] : []),
     "Read the explanations and revisit the related notes before your next quiz",
   ];
   const activeStudyQuestion = studyPracticeQuestions[studyPracticeIndex];
-  const incorrectCount = resultReview.length
-    ? resultReview.filter((item) => item.selectedAnswer && !item.isCorrect).length
-    : Math.max(0, (result?.totalQuestions || 0) - (result?.score || 0));
-  const unansweredResultCount = resultReview.filter((item) => !item.selectedAnswer).length;
   const animatedPercentage = Math.round(percentage * resultAnimationProgress);
   const animatedScore = Math.round((result?.score || 0) * resultAnimationProgress);
   const animatedIncorrectCount = Math.round(incorrectCount * resultAnimationProgress);
