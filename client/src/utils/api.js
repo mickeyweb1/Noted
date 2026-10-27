@@ -9,7 +9,7 @@ const api = axios.create({
 });
 
 // Hydrate the default immediately so requests made during the first render have a token.
-const initialToken = typeof window !== 'undefined' ? localStorage.getItem('userToken') : null;
+const initialToken = typeof window !== 'undefined' ? (localStorage.getItem('userToken') || localStorage.getItem('token')) : null;
 if (initialToken) api.defaults.headers.common.Authorization = `Bearer ${initialToken}`;
 const newSessionVersion = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 if (initialToken && !localStorage.getItem('userSessionVersion')) localStorage.setItem('userSessionVersion', newSessionVersion());
@@ -17,7 +17,7 @@ if (initialToken && !localStorage.getItem('userSessionVersion')) localStorage.se
 // INTERCEPTOR: Automatically attach the JWT token and set correct Content-Type
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('userToken');
+        const token = localStorage.getItem('userToken') || localStorage.getItem('token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
             config.headers['X-Auth-Session'] = localStorage.getItem('userSessionVersion') || '';
@@ -51,14 +51,16 @@ api.interceptors.response.use(
         const requestToken = typeof authorization === 'string' ? authorization.replace(/^Bearer\s+/i, '') : '';
         const requestSession = error.config?.headers?.['X-Auth-Session']
             || error.config?.headers?.get?.('X-Auth-Session');
-        const currentToken = localStorage.getItem('userToken');
+        const currentToken = localStorage.getItem('userToken') || localStorage.getItem('token');
         const currentSession = localStorage.getItem('userSessionVersion');
 
         // Only expire the exact session that made this request. A delayed 401 from a
         // startup request must never erase a newer token established by a fresh login.
         if (error.response?.status === 401 && !isAuthEntryRequest && requestToken && requestToken === currentToken && requestSession === currentSession) {
             localStorage.removeItem('userToken');
+            localStorage.removeItem('token');
             localStorage.removeItem('userInfo');
+            localStorage.removeItem('user');
             localStorage.removeItem('userSessionVersion');
             delete api.defaults.headers.common.Authorization;
             window.dispatchEvent(new CustomEvent('noted:auth-expired', { detail: { token: requestToken, session: requestSession } }));

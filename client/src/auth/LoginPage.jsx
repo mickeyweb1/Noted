@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, ArrowRight, AudioLines, Eye, EyeOff, FolderOpen, Globe2, LockKeyhole, Mail, NotebookPen, Repeat, LoaderCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import AuthLayout from './authLayout';
 import { ThemeToggle } from '../components/themeToggle';
 import api from '../utils/api';
 import { useUserContext } from '../context/userContext';

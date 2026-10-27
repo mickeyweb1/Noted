@@ -1,5 +1,6 @@
 import { User } from '../models/User.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { Organization } from '../models/Organization.js';
@@ -134,18 +135,23 @@ if (finalRole === 'teacher' && !code) {
 export const loginUser = async (req, res, next) => {
   try {
     const email = normalizeEmail(req.body?.email);
-    const { password } = req.body || {};
-    if (!email || typeof password !== 'string') throw httpError('Email and password are required.');
+    const rawPassword = req.body?.password;
+    if (!email || typeof rawPassword !== 'string' || !rawPassword.trim()) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+    const password = rawPassword.trim();
 
     const user = await User.findOne({ email }).select('+password');
-    if (!user || !(await user.matchPassword(password))) throw httpError('Invalid email or password', 401);
+    if (!user) return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    if (!isPasswordCorrect) return res.status(401).json({ success: false, message: 'Invalid email or password' });
 
     // Deactivated students/teachers (and accounts not activated yet) can't log in
     if (user.isActive === false) {
       throw httpError('Your account is not active. If your school gave you an activation code, use it to activate your account. Otherwise contact your school.', 403);
     }
 
-    res.json(buildAuthResponse(user));
+    return res.json(buildAuthResponse(user));
   } catch (error) {
     console.error('[Auth] Login handler failed:', error.message);
     next(error);
