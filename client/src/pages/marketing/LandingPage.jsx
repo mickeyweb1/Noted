@@ -241,7 +241,7 @@ export default function LandingPage() {
 
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {features.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="rounded-3xl border border-border bg-card p-6 shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow">
+            <div key={title} className="landing-interactive rounded-3xl border border-border bg-card p-6 shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
                 <Icon className="h-5 w-5" />
               </div>
@@ -288,7 +288,7 @@ export default function LandingPage() {
             
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-brand/10 to-electric/10 rounded-[30px] blur-2xl"></div>
-              <div className="group relative overflow-hidden rounded-[30px] border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow">
+              <div className="landing-interactive group relative overflow-hidden rounded-[30px] border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow">
                 <img
                   src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1200&q=85"
                   alt="A student writing notes beside an open textbook"
@@ -336,7 +336,7 @@ export default function LandingPage() {
               {index < howItWorks.length - 1 && (
                 <div className="hidden md:block absolute top-12 left-full w-full h-0.5 bg-gradient-to-r from-brand/50 to-transparent -translate-x-1/2 z-0"></div>
               )}
-              <div className="group relative z-10 flex flex-col items-center overflow-hidden text-center rounded-3xl border border-border bg-card shadow-soft hover:-translate-y-1 hover:shadow-glow transition duration-300">
+              <div className="landing-interactive group relative z-10 flex flex-col items-center overflow-hidden text-center rounded-3xl border border-border bg-card shadow-soft hover:-translate-y-1 hover:shadow-glow transition duration-300">
                 <div className="relative h-40 w-full overflow-hidden">
                   <img
                     src={`https://images.unsplash.com/${item.image}?auto=format&fit=crop&w=800&q=80`}
@@ -345,14 +345,7 @@ export default function LandingPage() {
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 to-transparent" />
-                  <a
-                    href="https://unsplash.com/license"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="absolute bottom-2 right-3 text-xs text-white/85 underline underline-offset-2"
-                  >
-                    Photo via Unsplash
-                  </a>
+                  <span className="absolute bottom-2 right-3 text-xs text-white/85">Photo via Unsplash</span>
                 </div>
                 <div className="p-6">
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-primary-foreground shadow-md">
@@ -379,7 +372,7 @@ export default function LandingPage() {
           </div>
           <div className="grid gap-8 lg:grid-cols-3">
             {audienceCards.map(({ title, text, link, accent, image, imageAlt }) => (
-              <Link key={title} to={link} className={`group overflow-hidden rounded-[26px] border border-border bg-gradient-to-br ${accent} shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow`}>
+              <Link key={title} to={link} className={`landing-interactive group overflow-hidden rounded-[26px] border border-border bg-gradient-to-br ${accent} shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow`}>
                 <div className="relative h-48 overflow-hidden">
                   <img
                     src={`https://images.unsplash.com/${image}?auto=format&fit=crop&w=900&q=80`}
@@ -388,7 +381,7 @@ export default function LandingPage() {
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 to-transparent" />
-                  <span className="absolute bottom-3 right-4 text-xs text-white/85 underline underline-offset-2">Photo via Unsplash</span>
+                  <span className="absolute bottom-3 right-4 text-xs text-white/85">Photo via Unsplash</span>
                 </div>
                 <div className="h-full bg-background p-6">
                   <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-soft text-brand">
@@ -403,6 +396,12 @@ export default function LandingPage() {
               </Link>
             ))}
           </div>
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Photos via{" "}
+            <a href="https://unsplash.com/license" target="_blank" rel="noreferrer" className="underline underline-offset-2">
+              Unsplash
+            </a>
+          </p>
         </div>
       </section>
 

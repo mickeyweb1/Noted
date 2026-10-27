@@ -217,4 +217,14 @@
   .landing-enter {
     animation: none;
   }
+
+  .landing-interactive,
+  .landing-interactive * {
+    transition-duration: 0.01ms !important;
+  }
+
+  .landing-interactive:hover,
+  .landing-interactive:hover img {
+    transform: none !important;
+  }
 }
