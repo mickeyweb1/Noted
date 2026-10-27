@@ -184,36 +184,47 @@ export default function LandingPage() {
       </section>
 
       {/* ================= QUICK QUIZ ACCESS SECTION ================= */}
-      <section className="relative isolate overflow-hidden border-y border-border bg-muted/30">
-        <div aria-hidden="true" className="pointer-events-none absolute -left-24 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-brand/10 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -right-24 top-0 h-72 w-72 rounded-full bg-electric/10 blur-3xl" />
-        <div className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-18 lg:px-8 lg:py-20">
-          <div className="mx-auto grid max-w-5xl gap-8 rounded-[28px] border border-border bg-card p-5 shadow-soft sm:p-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-12 lg:p-10">
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-sm font-medium text-brand">
-                <KeyRound className="h-4 w-4" />
-                Quick access
+      <section className="border-y border-border bg-muted/30 px-4 py-14 sm:px-6 sm:py-18 lg:px-8 lg:py-20">
+        <div className="mx-auto grid max-w-6xl overflow-hidden rounded-[30px] border border-border bg-card shadow-soft lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="relative isolate flex flex-col justify-between overflow-hidden bg-slate-950 p-7 text-white sm:p-9 lg:p-11">
+            <div aria-hidden="true" className="pointer-events-none absolute right-0 top-0 z-0 h-72 w-72 translate-x-1/3 -translate-y-1/3 rounded-full bg-brand/40 blur-3xl" />
+            <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-0 h-64 w-64 -translate-x-1/3 translate-y-1/3 rounded-full bg-electric/25 blur-3xl" />
+            <div className="relative z-10">
+              <div className="mb-8 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-soft">
+                <KeyRound className="h-5 w-5" />
               </div>
-              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Have a quiz code?
-              </h2>
-              <p className="mt-3 max-w-md text-base leading-7 text-muted-foreground sm:text-lg">
-                Pick up where your class left off. Enter the code from your teacher to join your assessment.
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/65">
+                Quick quiz access
               </p>
-              <p className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
-                <CheckCircle2 className="h-4 w-4 text-brand" />
-                No account or login required
+              <h2 className="mt-3 max-w-sm text-3xl font-bold tracking-tight sm:text-4xl">
+                Your next quiz is one code away.
+              </h2>
+              <p className="mt-4 max-w-sm leading-7 text-white/75">
+                Enter the code shared by your teacher and go straight to your assessment.
               </p>
             </div>
+            <div className="relative z-10 mt-9 flex flex-wrap gap-2 text-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-white/85">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                No login needed
+              </span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-white/85">
+                10-character code
+              </span>
+            </div>
+          </div>
 
-            <form
-              onSubmit={handleJoinQuiz}
-              className="rounded-2xl border border-border bg-muted/40 p-4 sm:p-5"
-            >
-              <label htmlFor="quiz-code" className="mb-2 block text-sm font-semibold text-foreground">
-                Quiz access code
+          <div className="flex items-center p-6 sm:p-9 lg:p-11">
+            <form onSubmit={handleJoinQuiz} className="w-full">
+              <p className="text-sm font-medium text-muted-foreground">Join an assessment</p>
+              <label htmlFor="quiz-code" className="mt-1 block text-xl font-semibold text-foreground">
+                Enter your quiz code
               </label>
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                You can find it in the instructions from your teacher.
+              </p>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <div className="relative min-w-0 flex-1">
                   <KeyRound aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
@@ -226,13 +237,13 @@ export default function LandingPage() {
                     autoComplete="off"
                     autoCapitalize="characters"
                     aria-describedby="quiz-code-hint"
-                    className="h-12 w-full rounded-xl border border-border bg-background pl-11 pr-4 font-mono text-base tracking-wider text-foreground placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    className="h-14 w-full rounded-xl border border-border bg-background pl-11 pr-4 font-mono text-base tracking-wider text-foreground placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={quizCode.length !== 10}
-                  className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-32"
+                  className="inline-flex h-14 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-36"
                 >
                   Join quiz
                   <ArrowRight className="h-4 w-4" />
