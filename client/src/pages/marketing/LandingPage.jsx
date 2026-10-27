@@ -165,6 +165,26 @@ export default function LandingPage() {
 
               <div className="relative rounded-[28px] border border-border bg-card p-5 shadow-glow">
                 <div className="rounded-[22px] border border-border bg-gradient-to-br from-brand-soft via-background to-electric-soft p-5">
+                  <div className="relative mb-5 overflow-hidden rounded-2xl">
+                    <img
+                      src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=85"
+                      alt="Students collaborating around a laptop while studying"
+                      fetchPriority="high"
+                      className="h-40 w-full object-cover sm:h-48"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
+                    <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3 text-white">
+                      <p className="font-display text-lg font-semibold">Learning, together</p>
+                      <a
+                        href="https://unsplash.com/license"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-white/80 underline underline-offset-2"
+                      >
+                        Photo via Unsplash
+                      </a>
+                    </div>
+                  </div>
                   <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-background/80 p-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Today</p>
@@ -317,15 +337,33 @@ export default function LandingPage() {
             
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-brand/10 to-electric/10 rounded-[30px] blur-2xl"></div>
-              <div className="relative rounded-[30px] border border-border bg-card p-8 shadow-soft">
-                <Lightbulb className="h-10 w-10 text-brand mb-4" />
-                <h3 className="text-2xl font-bold text-foreground mb-2">The Problem We Solve</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Students today are overwhelmed by dense textbooks and short attention spans. 
-                  Traditional studying isn't working. By converting text into engaging audio and 
-                  visual formats, we meet students where they are, turning passive reading into 
-                  active, memorable learning.
-                </p>
+              <div className="relative overflow-hidden rounded-[30px] border border-border bg-card shadow-soft">
+                <img
+                  src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1200&q=85"
+                  alt="A student writing notes beside an open textbook"
+                  loading="lazy"
+                  className="h-56 w-full object-cover sm:h-64"
+                />
+                <div className="flex items-start gap-4 p-6 sm:p-8">
+                  <Lightbulb className="mt-1 h-10 w-10 shrink-0 text-brand" />
+                  <div>
+                    <h3 className="mb-2 text-2xl font-bold text-foreground">The Problem We Solve</h3>
+                    <p className="leading-relaxed text-muted-foreground">
+                      Students today are overwhelmed by dense textbooks and short attention spans.
+                      Traditional studying isn't working. By converting text into engaging audio and
+                      visual formats, we meet students where they are, turning passive reading into
+                      active, memorable learning.
+                    </p>
+                    <a
+                      href="https://unsplash.com/license"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-block text-xs text-muted-foreground underline underline-offset-2"
+                    >
+                      Photo via Unsplash
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
