@@ -5,8 +5,11 @@ const UserContext = createContext(null);
 
 export function UserContextProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem("userToken"));
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("userInfo") || "null"); }
+    catch { return null; }
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem("userToken") && localStorage.getItem("userInfo")));
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   
   const [formState, setFormState] = useState({
@@ -20,6 +23,17 @@ export function UserContextProvider({ children }) {
   });
 
   useEffect(() => {
+    const expireSession = (event) => {
+      const currentToken = localStorage.getItem("userToken");
+      const expiredToken = event.detail?.token;
+      if (currentToken && currentToken !== expiredToken) return;
+      setToken(null);
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAuthLoading(false);
+    };
+    window.addEventListener("noted:auth-expired", expireSession);
+
     const fetchUserData = async () => {
       const storedToken = localStorage.getItem("userToken");
       if (!storedToken) {
@@ -28,8 +42,10 @@ export function UserContextProvider({ children }) {
       }
 
       try {
-        const response = await api.get("/auth/me");
+        const response = await api.get("/auth/me", { headers: { Authorization: `Bearer ${storedToken}` } });
         const userData = response.data.data || response.data;
+        // Ignore late responses from a session that has already been replaced.
+        if (localStorage.getItem("userToken") !== storedToken) return;
         
         // ✅ Clean the role field here too
         const cleanUserData = {
@@ -38,31 +54,51 @@ export function UserContextProvider({ children }) {
         };
         
         setUser(cleanUserData);
+        localStorage.setItem("userInfo", JSON.stringify(cleanUserData));
         setIsAuthenticated(true);
       } catch (error) {
-        console.error("Failed to fetch user data, logging out");
-        localStorage.removeItem("userToken");
-        setToken(null);
-        setUser(null);
-        setIsAuthenticated(false);
+        console.error("[Auth] Session verification failed:", error.message);
+        // Only a confirmed 401 expires the same token. Network/5xx failures should
+        // leave a cached session intact so a temporary outage doesn't log users out.
+        if (error.response?.status === 401 && localStorage.getItem("userToken") === storedToken) {
+          localStorage.removeItem("userToken");
+          localStorage.removeItem("userInfo");
+          delete api.defaults.headers.common.Authorization;
+          setToken(null);
+          setUser(null);
+          setIsAuthenticated(false);
+        }
       } finally {
-        setIsAuthLoading(false);
+        if (!localStorage.getItem("userToken") || localStorage.getItem("userToken") === storedToken) setIsAuthLoading(false);
       }
     };
 
     fetchUserData();
+    return () => window.removeEventListener("noted:auth-expired", expireSession);
   }, []);
 
   const login = (userData, authToken) => {
+    if (!authToken || !userData?.role) throw new Error("[Auth] Login response is missing the user or token.");
+    const normalizedUser = {
+      ...userData,
+      email: typeof userData.email === "string" ? userData.email.trim().toLowerCase() : userData.email,
+      role: typeof userData.role === "string" ? userData.role.replace(/"/g, "") : userData.role,
+    };
+    // Persist and expose the session synchronously before the caller navigates.
     localStorage.setItem("userToken", authToken);
+    localStorage.setItem("userInfo", JSON.stringify(normalizedUser));
+    api.defaults.headers.common.Authorization = `Bearer ${authToken}`;
     setToken(authToken);
-    setUser(userData);
+    setUser(normalizedUser);
     setIsAuthenticated(true);
     setIsAuthLoading(false);
+    return normalizedUser;
   };
 
   const logout = () => {
     localStorage.removeItem("userToken");
+    localStorage.removeItem("userInfo");
+    delete api.defaults.headers.common.Authorization;
     // Optional: Clear AI tutor chat history on logout for privacy
     localStorage.removeItem("noted_ai_tutor_messages"); 
     setToken(null);

@@ -31,24 +31,21 @@ export default function LoginPage() {
 
     try {
       // 1. Send request to backend
-      const response = await api.post("/auth/login", { email: email.trim(), password });
+      const response = await api.post("/auth/login", { email: email.trim().toLowerCase(), password });
 
       // 2. Backend sends the user fields flat at the top level
-      const responseData = response.data;
+      const responseData = response.data?.data || response.data;
+      const returnedUser = responseData.user || responseData;
 
       // 3. Clean the role field (remove escaped quotes just in case)
       const userData = {
-        _id: responseData._id,
-        fullName: responseData.fullName,
-        email: responseData.email,
-        role: responseData.role?.replace(/"/g, "") || responseData.role,
-        level: responseData.level,
-        xp: responseData.xp,
-        schoolId: responseData.schoolId,
-        schoolName: responseData.schoolName,
+        ...returnedUser,
+        _id: returnedUser._id || returnedUser.id,
+        email: typeof returnedUser.email === "string" ? returnedUser.email.trim().toLowerCase() : returnedUser.email,
+        role: returnedUser.role?.replace(/"/g, "") || returnedUser.role,
       };
 
-      const authToken = responseData.token;
+      const authToken = responseData.token || response.data?.token;
 
       // 4. Safety check
       if (!authToken || !userData?.role) {
@@ -66,6 +63,7 @@ export default function LoginPage() {
         navigate("/dashboard", { replace: true });
       }
     } catch (err) {
+      console.error("[Auth] Login failed:", err.response?.data?.message || err.message);
       setError(
         err.response?.data?.message ||
           (err.request && !err.response

@@ -6,7 +6,7 @@ import { Organization } from '../models/Organization.js';
 
 dotenv.config();
 
-const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 const httpError = (message, status = 400) => {
   const error = new Error(message);
@@ -137,7 +137,7 @@ export const loginUser = async (req, res, next) => {
     const { password } = req.body || {};
     if (!email || typeof password !== 'string') throw httpError('Email and password are required.');
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
     if (!user || !(await user.matchPassword(password))) throw httpError('Invalid email or password', 401);
 
     // Deactivated students/teachers (and accounts not activated yet) can't log in
@@ -147,6 +147,7 @@ export const loginUser = async (req, res, next) => {
 
     res.json(buildAuthResponse(user));
   } catch (error) {
+    console.error('[Auth] Login handler failed:', error.message);
     next(error);
   }
 };

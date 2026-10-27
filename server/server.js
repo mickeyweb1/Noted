@@ -39,12 +39,12 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(helmet());
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cors({ origin: allowedOrigins, credentials: true, allowedHeaders: ['Content-Type', 'Authorization'] }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 15, message: { success: false, message: "Too many login attempts." }, standardHeaders: true, legacyHeaders: false });
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 15, message: { success: false, message: "Too many sign-in attempts. Please wait 15 minutes and try again." }, standardHeaders: true, legacyHeaders: false });
 const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, message: { success: false, message: "AI limit reached." }, standardHeaders: true, legacyHeaders: false });
 const registrationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { success: false, message: "Too many registration attempts." }, standardHeaders: true, legacyHeaders: false });
 const claimLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { success: false, message: "Too many activation attempts." }, standardHeaders: true, legacyHeaders: false });
