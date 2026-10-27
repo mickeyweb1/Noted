@@ -1,203 +1,179 @@
-import { useState } from "react";
-import { AudioLines, ArrowRight, Eye, EyeOff, AlertTriangle } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "./authLayout";
-import { ThemeToggle } from "../components/themeToggle";
-import api from "../utils/api";
-import { useUserContext } from "../context/userContext";
+import { useEffect, useState } from 'react';
+import { AlertCircle, ArrowRight, AudioLines, Eye, EyeOff, FolderOpen, Globe2, LockKeyhole, Mail, NotebookPen, Repeat, LoaderCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import AuthLayout from './authLayout';
+import { ThemeToggle } from '../components/themeToggle';
+import api from '../utils/api';
+import { useUserContext } from '../context/userContext';
+import { Button, Card, Input, Label } from '../components/ui/primitives';
+import { toast } from '../components/ui/toast';
 
-// text-base (16px) on inputs stops iPhone Safari from zooming in when a field is tapped
-const inputCls =
-  "flex h-12 w-full rounded-xl border border-input bg-background px-4 py-2 text-base text-foreground placeholder:text-muted-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
+const features = [
+  { icon: NotebookPen, label: 'AI-generated study notes' },
+  { icon: Repeat, label: 'Smart revision tools' },
+  { icon: FolderOpen, label: 'Organized course materials' },
+  { icon: Globe2, label: 'Learn anywhere, anytime' },
+];
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+function getRememberedEmail() {
+  try { return localStorage.getItem('rememberedLoginEmail') || ''; }
+  catch { return ''; }
+}
 
 export default function LoginPage() {
   const { login } = useUserContext();
   const navigate = useNavigate();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(getRememberedEmail);
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [capsLockOn, setCapsLockOn] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({ email: '', password: '' });
+  const [rememberMe, setRememberMe] = useState(Boolean(getRememberedEmail()));
 
-  const checkCapsLock = (e) => setCapsLockOn(Boolean(e.getModifierState?.("CapsLock")));
+  useEffect(() => {
+    document.title = 'Login - Noted';
+  }, []);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (isLoading) return;
-    setIsLoading(true);
-    setError("");
+  useEffect(() => {
+    setError('');
+    setValidationErrors({ email: '', password: '' });
+  }, [email, password]);
 
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    if (loading) return;
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const trimmedPassword = password.trim();
+    const nextValidationErrors = {
+      email: !normalizedEmail ? 'Enter your email address.' : !isValidEmail(normalizedEmail) ? 'Enter a valid email address.' : '',
+      password: !trimmedPassword ? 'Enter your password.' : '',
+    };
+    setValidationErrors(nextValidationErrors);
+    setError('');
+    if (nextValidationErrors.email || nextValidationErrors.password) return;
+
+    setLoading(true);
     try {
-      // 1. Send request to backend
-      const response = await api.post("/auth/login", { email: email.trim().toLowerCase(), password });
+      const res = await api.post('/auth/login', { email: normalizedEmail, password: trimmedPassword });
+      const token = res.data?.token;
+      const user = res.data?.user;
+      if (!token || !user?.role) throw new Error('The server returned an incomplete login response.');
 
-      // 2. Backend sends the user fields flat at the top level
-      const responseData = response.data?.data || response.data;
-      const returnedUser = responseData.user || responseData;
+      if (rememberMe) localStorage.setItem('rememberedLoginEmail', normalizedEmail);
+      else localStorage.removeItem('rememberedLoginEmail');
 
-      // 3. Clean the role field (remove escaped quotes just in case)
-      const userData = {
-        ...returnedUser,
-        _id: returnedUser._id || returnedUser.id,
-        email: typeof returnedUser.email === "string" ? returnedUser.email.trim().toLowerCase() : returnedUser.email,
-        role: returnedUser.role?.replace(/"/g, "") || returnedUser.role,
-      };
-
-      const authToken = responseData.token || response.data?.token;
-
-      // 4. Safety check
-      if (!authToken || !userData?.role) {
-        console.error("Login response missing token or role:", response.data);
-        throw new Error("Login response did not include a token and user role.");
-      }
-
-      // 5. Save the session in context
-      login(userData, authToken);
-
-      // 6. Smart redirect
-      if (userData.role === "school_admin" || userData.role === "super_admin") {
-        navigate("/admin/dashboard", { replace: true });
+      // The shared context persists both legacy app keys and the requested token/user keys,
+      // then updates Axios before the protected dashboard route mounts.
+      login(user, token);
+      toast.success('Welcome back!');
+      if (user.role === 'school_admin' || user.role === 'super_admin' || user.role === 'teacher') {
+        navigate('/admin/dashboard', { replace: true });
       } else {
-        navigate("/dashboard", { replace: true });
+        navigate('/dashboard', { replace: true });
       }
     } catch (err) {
-      console.error("[Auth] Login failed:", err.response?.data?.message || err.message);
-      setError(
-        err.response?.data?.message ||
-          (err.request && !err.response
-            ? "Can't reach the server. Check your internet connection and try again."
-            : "Login failed. Please check your credentials.")
-      );
+      console.error('[Auth] Login failed:', err.response?.data?.message || err.message);
+      const message = err.response?.data?.message || 'Login failed. Check your network.';
+      setError(message.toLowerCase().includes('invalid')
+        ? 'Invalid email or password. Please try again.'
+        : message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
+  const emailInvalid = Boolean(validationErrors.email);
+  const passwordInvalid = Boolean(validationErrors.password);
+
   return (
-    <AuthLayout>
-      <div className="flex flex-1 flex-col">
-        {/* Top Header */}
-        <div className="flex items-center justify-between p-5 sm:p-7 md:p-8">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-soft">
-              <AudioLines className="h-5 w-5" />
-            </div>
-            <span className="font-display text-lg font-bold text-foreground">Noted</span>
-          </div>
-          <ThemeToggle />
+    <main className="grid min-h-screen w-full overflow-x-hidden bg-background lg:grid-cols-2">
+      <aside className="relative hidden min-h-screen flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0A0A0A] to-[#1A1A1A] p-12 text-white lg:flex xl:p-16">
+        <Link to="/" className="inline-flex w-fit items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Noted home">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-zinc-950"><AudioLines className="h-6 w-6" aria-hidden="true" /></span>
+          <span className="font-display text-2xl font-bold tracking-tight">Noted</span>
+        </Link>
+
+        <div className="relative z-10 max-w-xl py-14">
+          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-white/55">study.butlouder</p>
+          <h1 className="font-display text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">Transforming how our nation learns, one note at a time.</h1>
+          <p className="mt-5 max-w-lg text-base leading-7 text-white/65">Turn class notes into focused study material, keep revision on track, and make every study session count with AI-powered tools.</p>
+
+          <ul className="mt-10 grid gap-4 sm:grid-cols-2">
+            {features.map(({ icon: Icon, label }) => (
+              <li key={label} className="flex items-center gap-3 text-sm font-medium text-white/85">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-white"><Icon className="h-4 w-4" aria-hidden="true" /></span>
+                {label}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        {/* Login Form */}
-        <div className="flex flex-1 items-center justify-center px-5 pb-10 sm:px-8 md:pb-14">
-          <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-soft sm:p-8">
-            <div className="mb-7 space-y-2 text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">Your learning space</p>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Welcome back</h1>
-              <p className="text-sm leading-6 text-muted-foreground">Enter your email to sign in to your account</p>
+        <p className="text-xs text-white/40">A louder way to learn.</p>
+      </aside>
+
+      <section className="relative flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-8">
+        <div className="absolute right-4 top-4 sm:right-7 sm:top-7"><ThemeToggle /></div>
+
+        <Card className="login-fade-in w-full max-w-[420px] rounded-3xl border-border/80 p-6 shadow-soft sm:p-9">
+          <div className="mb-8 text-center">
+            <Link to="/" className="mx-auto mb-6 inline-flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="Noted home">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-brand-foreground"><AudioLines className="h-5 w-5" aria-hidden="true" /></span>
+              <span className="font-display text-xl font-bold text-foreground">Noted</span>
+            </Link>
+            <h2 className="font-display text-3xl font-bold tracking-tight text-foreground">Welcome back</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Login to continue studying</p>
+          </div>
+
+          <form onSubmit={handleLogin} noValidate className="space-y-5">
+            {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>{error}</p></div>}
+
+            <div className="space-y-2">
+              <Label htmlFor="login-email">Email</Label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input id="login-email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" placeholder="you@university.edu.ng" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus disabled={loading} aria-invalid={emailInvalid} aria-describedby={emailInvalid ? 'login-email-error' : undefined} className={`pl-10 ${emailInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
+              </div>
+              {emailInvalid && <p id="login-email-error" className="text-xs font-medium text-destructive">{validationErrors.email}</p>}
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-5" noValidate={false}>
-              {error && (
-                <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-left text-sm text-destructive">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Email */}
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); if (error) setError(""); }}
-                  placeholder="m@example.com"
-                  autoComplete="email"
-                  inputMode="email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  required
-                  disabled={isLoading}
-                  className={inputCls}
-                />
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Password</Label>
+              <div className="relative">
+                <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input id="login-password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="Enter your password" disabled={loading} aria-invalid={passwordInvalid} aria-describedby={passwordInvalid ? 'login-password-error' : undefined} className={`pl-10 pr-12 ${passwordInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
+                <button type="button" onClick={() => setShowPassword((visible) => !visible)} disabled={loading} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
+                  {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+                </button>
               </div>
+              {passwordInvalid && <p id="login-password-error" className="text-xs font-medium text-destructive">{validationErrors.password}</p>}
+            </div>
 
-              {/* Password with show / hide button */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="password" className="text-sm font-medium text-foreground">Password</label>
-                  <Link
-                    to="/forgot-password"
-                    className="text-xs font-medium text-brand underline-offset-4 hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-                <div className="relative">
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); if (error) setError(""); }}
-                    onKeyDown={checkCapsLock}
-                    onKeyUp={checkCapsLock}
-                    onBlur={() => setCapsLockOn(false)}
-                    placeholder="••••••••"
-                    autoComplete="current-password"
-                    required
-                    disabled={isLoading}
-                    className={`${inputCls} pr-11`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    onMouseDown={(e) => e.preventDefault()} // keeps the cursor in the password box on desktop
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    aria-pressed={showPassword}
-                    className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {capsLockOn && (
-                  <p role="status" className="flex items-center gap-1.5 text-xs font-medium text-yellow-700 dark:text-yellow-400">
-                    <AlertTriangle className="h-3.5 w-3.5" /> Caps Lock is on
-                  </p>
-                )}
-              </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-muted-foreground">
+                <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded border-input accent-brand focus-visible:ring-2 focus-visible:ring-ring" />
+                Remember me
+              </label>
+              <Link to="/forgot-password" className="font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Forgot password?</Link>
+            </div>
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-sm font-semibold text-brand-foreground shadow-soft transition hover:bg-brand/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isLoading ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-foreground/30 border-t-brand-foreground" />
-                    Signing in…
-                  </>
-                ) : (
-                  <>
-                    Sign In
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </form>
+            <Button type="submit" disabled={loading} className="group h-12 w-full bg-zinc-950 text-sm text-white shadow-sm hover:scale-[1.01] hover:bg-zinc-800 active:scale-[0.99] dark:bg-zinc-950 dark:text-white dark:hover:bg-zinc-800">
+              {loading ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> Signing in…</> : <>Sign in <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></>}
+            </Button>
+          </form>
 
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <Link to="/signup" className="font-medium text-foreground underline-offset-4 hover:underline">
-                Sign up
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </AuthLayout>
+          <div className="my-6 flex items-center gap-3" aria-hidden="true"><span className="h-px flex-1 bg-border" /><span className="text-xs text-muted-foreground">or continue with</span><span className="h-px flex-1 bg-border" /></div>
+
+          <Button type="button" onClick={() => toast.info('Google sign-in is not set up yet.')} className="h-11 w-full border border-border bg-background text-sm text-foreground hover:bg-accent">
+            <span className="font-display text-lg font-bold text-[#4285F4]" aria-hidden="true">G</span> Continue with Google
+          </Button>
+
+          <p className="mt-7 text-center text-sm text-muted-foreground">Don’t have an account? <Link to="/register" className="font-semibold text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Sign up</Link></p>
+        </Card>
+      </section>
+    </main>
   );
 }

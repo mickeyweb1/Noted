@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { ToastViewport } from "./components/ui/toast";
 
 // Marketing Pages
 const LandingPage = lazy(() => import("./pages/marketing/LandingPage"));
@@ -81,6 +82,7 @@ function App() {
 
       {/* ================= AUTH ROUTES ================= */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<Navigate to="/signup" replace />} />
       <Route path="/signup" element={<RoleSelectionPage />} />
       <Route path="/signup/school-student" element={<SchoolStudentRegisterPage />} />
       <Route path="/signup/school-admin" element={<SchoolAdminRegisterPage />} />
@@ -159,6 +161,7 @@ function App() {
       {/* ================= CATCH-ALL (404) ================= */}
       <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ToastViewport />
     </Suspense>
   );
 }
