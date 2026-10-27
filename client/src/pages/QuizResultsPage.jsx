@@ -496,7 +496,7 @@ export default function QuizResultsPage() {
     return {
       count: n,
       avgScore: n ? Math.round(pcts.reduce((a, b) => a + b, 0) / n) : 0,
-      passRate: n ? Math.round((pcts.filter((p) => p >= 50).length / n) * 100) : 0,
+      passRate: n ? Math.round((pcts.filter((p) => p >= (quizData?.passMark ?? 50)).length / n) * 100) : 0,
       avgTime: timed.length ? Math.round(timed.reduce((a, s) => a + s.timeTaken, 0) / timed.length) : 0,
       flagged: submissions.filter((s) => (s.tabSwitchCount || 0) > 0).length,
       buckets,
@@ -576,7 +576,7 @@ export default function QuizResultsPage() {
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <StatCard icon={User} label="Students">{count}</StatCard>
           <StatCard icon={Trophy} label="Average score">{avgScore}%</StatCard>
-          <StatCard icon={Target} label="Pass rate" hint="Scored 50% or more">{passRate}%</StatCard>
+          <StatCard icon={Target} label="Pass rate" hint={`Scored ${quizData?.passMark ?? 50}% or more`}>{passRate}%</StatCard>
           {isGameShow
             ? <StatCard icon={FileText} label="Questions">{questions.length}</StatCard>
             : <StatCard icon={Clock} label="Average time">{avgTime ? formatDuration(avgTime) : "—"}</StatCard>}
