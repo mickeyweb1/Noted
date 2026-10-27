@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, X, Crown, Users, Zap, Star } from "lucide-react";
+import { Check, X, Crown, Users, Zap } from "lucide-react";
 import { useUserContext } from "../context/userContext"; 
+import MarketingLayout from "./marketing/MarketingLayout";
 
 const tiers = [
   {
@@ -67,7 +66,6 @@ const tiers = [
 ];
 
 export default function PricingPage() {
-  const navigate = useNavigate();
   const { user } = useUserContext(); 
 
   const handleUpgrade = (tierName) => {
@@ -82,21 +80,25 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-muted py-12 px-4 sm:px-6 lg:px-8 dark:bg-background">
-      <div className="max-w-7xl mx-auto text-center">
-        <h2 className="text-3xl font-extrabold text-foreground sm:text-4xl">
+    <MarketingLayout>
+    <div className="min-h-screen bg-background px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+      <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-2xl text-center">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand">Plans for every classroom</p>
+        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Simple, transparent pricing
-        </h2>
-        <p className="mt-4 text-xl text-muted-foreground">
+        </h1>
+        <p className="mt-4 text-base leading-7 text-muted-foreground sm:text-lg">
           Choose the plan that fits your classroom or entire school.
         </p>
+        </div>
 
-        <div className="mt-12 space-y-4 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-6 lg:max-w-5xl lg:mx-auto xl:grid-cols-3 xl:gap-8">
+        <div className="mt-10 grid gap-5 sm:mt-14 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
           {tiers.map((tier) => (
             <div
               key={tier.name}
-              className={`relative flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-lg ${
-                tier.popular ? "border-brand ring-2 ring-brand/20" : "border-border"
+              className={`relative flex min-w-0 flex-col rounded-2xl border bg-card p-6 shadow-soft transition-shadow hover:shadow-lg sm:p-7 ${
+                tier.popular ? "border-brand" : "border-border"
               }`}
             >
               {tier.popular && (
@@ -153,5 +155,6 @@ export default function PricingPage() {
         </div>
       </div>
     </div>
+    </MarketingLayout>
   );
 }

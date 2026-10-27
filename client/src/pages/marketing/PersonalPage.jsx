@@ -26,13 +26,13 @@ const personalFeatures = [
 export default function PersonalPage() {
   return (
     <MarketingLayout>
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+      <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+        <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-14">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand">
               For personal use
             </p>
-            <h1 className="mt-4 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+            <h1 className="mt-4 font-display text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-[3.5rem] lg:leading-[1.08]">
               Study on your own terms, with a smarter routine.
             </h1>
             <p className="mt-5 text-lg leading-8 text-muted-foreground">
@@ -43,7 +43,7 @@ export default function PersonalPage() {
             <div className="mt-8">
               <Link
                 to="/signup"
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-soft"
+                className="inline-flex min-h-12 items-center gap-2 rounded-full bg-brand px-6 py-3.5 text-sm font-semibold text-brand-foreground shadow-soft transition hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
               >
                 Create your account
                 <ArrowRight className="h-4 w-4" />
@@ -51,9 +51,9 @@ export default function PersonalPage() {
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-border bg-card p-6 shadow-soft lg:p-8">
-            <div className="rounded-[24px] border border-border bg-gradient-to-br from-electric-soft via-background to-brand-soft p-5">
-              <div className="rounded-2xl border border-border bg-background/90 p-4">
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft sm:p-7 lg:p-8">
+            <div className="rounded-2xl border border-border bg-muted/40 p-4 sm:p-5">
+              <div className="rounded-xl border border-border bg-background p-4 sm:p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                     Your week
@@ -85,7 +85,7 @@ export default function PersonalPage() {
 
       <section className="border-y border-border bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mb-10 text-center">
+          <div className="mx-auto mb-10 max-w-2xl text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
               Personal features
             </p>
@@ -98,7 +98,7 @@ export default function PersonalPage() {
             {personalFeatures.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
-                className="rounded-3xl border border-border bg-card p-6 shadow-soft"
+                className="rounded-2xl border border-border bg-card p-6 shadow-soft transition-shadow hover:shadow-md"
               >
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
                   <Icon className="h-5 w-5" />

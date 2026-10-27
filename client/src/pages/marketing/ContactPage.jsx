@@ -55,10 +55,10 @@ export default function ContactPage() {
 
   return (
     <MarketingLayout>
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="mb-12 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Get in Touch</p>
-          <h1 className="mt-3 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+      <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+        <div className="mx-auto mb-10 max-w-3xl text-center sm:mb-12">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand">Get in touch</p>
+          <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-5xl">
             Let’s build a smarter learning experience.
           </h1>
           <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
@@ -67,18 +67,18 @@ export default function ContactPage() {
           </p>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[0.85fr_1.15fr] lg:gap-8">
           {/* LEFT SIDE: Contact Info */}
           <div className="space-y-6">
-            <div className="rounded-[30px] border border-border bg-card p-6 shadow-soft lg:p-8">
+            <div className="rounded-3xl border border-border bg-card p-5 shadow-soft sm:p-6 lg:p-8">
               {CONTACT_INFO.map(({ icon: Icon, title, detail, description }) => (
-                <div key={title} className="flex items-start gap-4 rounded-2xl border border-border bg-muted/30 p-4 mb-4 last:mb-0 transition hover:bg-muted/50">
+                <div key={title} className="flex min-w-0 items-start gap-4 rounded-2xl border border-border bg-muted/30 p-4 mb-3 last:mb-0 transition-colors hover:bg-muted/50">
                   <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand">
                     <Icon className="h-5 w-5" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{title}</p>
-                    <p className="mt-1 font-medium text-brand">{detail}</p>
+                    <p className="mt-1 break-words font-medium text-brand">{detail}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{description}</p>
                   </div>
                 </div>
@@ -89,7 +89,7 @@ export default function ContactPage() {
           </div>
 
           {/* RIGHT SIDE: Contact Form */}
-          <div className="rounded-[30px] border border-border bg-card p-6 shadow-soft lg:p-8">
+          <div className="min-w-0 rounded-3xl border border-border bg-card p-5 shadow-soft sm:p-7 lg:p-8">
             {isSuccess ? (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-12">
                 <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -104,23 +104,23 @@ export default function ContactPage() {
                 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-foreground">First name <span className="text-red-500">*</span></label>
-                    <input name="firstName" value={formData.firstName} onChange={handleChange} required className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none ring-0 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all" placeholder="Jane" />
+                    <label htmlFor="firstName" className="mb-2 block text-sm font-medium text-foreground">First name <span className="text-red-500">*</span></label>
+                    <input id="firstName" name="firstName" value={formData.firstName} onChange={handleChange} required autoComplete="given-name" className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all" placeholder="Jane" />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-foreground">Last name <span className="text-red-500">*</span></label>
-                    <input name="lastName" value={formData.lastName} onChange={handleChange} required className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none ring-0 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all" placeholder="Doe" />
+                    <label htmlFor="lastName" className="mb-2 block text-sm font-medium text-foreground">Last name <span className="text-red-500">*</span></label>
+                    <input id="lastName" name="lastName" value={formData.lastName} onChange={handleChange} required autoComplete="family-name" className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all" placeholder="Doe" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">Email address <span className="text-red-500">*</span></label>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} required className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none ring-0 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all" placeholder="you@example.com" />
+                  <label htmlFor="contactEmail" className="mb-2 block text-sm font-medium text-foreground">Email address <span className="text-red-500">*</span></label>
+                  <input id="contactEmail" type="email" name="email" value={formData.email} onChange={handleChange} required autoComplete="email" className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all" placeholder="you@example.com" />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">I am a...</label>
-                  <select name="role" value={formData.role} onChange={handleChange} className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none ring-0 text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all">
+                  <label htmlFor="contactRole" className="mb-2 block text-sm font-medium text-foreground">I am a...</label>
+                  <select id="contactRole" name="role" value={formData.role} onChange={handleChange} className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-base text-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all">
                     <option value="">Select your role...</option>
                     <option value="student">Student</option>
                     <option value="parent">Parent / Guardian</option>
@@ -130,8 +130,8 @@ export default function ContactPage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">Message <span className="text-red-500">*</span></label>
-                  <textarea name="message" value={formData.message} onChange={handleChange} required rows={5} className="flex w-full rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none ring-0 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all resize-none" placeholder="Tell us how we can help your school, family, or learning journey..." />
+                  <label htmlFor="contactMessage" className="mb-2 block text-sm font-medium text-foreground">Message <span className="text-red-500">*</span></label>
+                  <textarea id="contactMessage" name="message" value={formData.message} onChange={handleChange} required rows={5} className="flex w-full resize-y rounded-xl border border-input bg-background px-3 py-3 text-base placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring transition-all" placeholder="Tell us how we can help your school, family, or learning journey..." />
                 </div>
 
                 <button type="submit" disabled={isSubmitting} className="mt-2 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-primary px-8 py-3.5 text-sm font-medium text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
