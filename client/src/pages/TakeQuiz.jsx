@@ -16,6 +16,7 @@ const panel = "w-full max-w-md rounded-3xl border border-border bg-card p-5 shad
 
 const PENDING_PREFIX = "offline_submission_";
 const TABCOUNT_PREFIX = "tabswitch_";
+const DRAFT_PREFIX = "quiz_draft_";
 
 /* ---------- Helpers ---------- */
 const formatTime = (seconds) => {
@@ -208,6 +209,7 @@ export default function TakeQuiz() {
   const [error, setError] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [maxTabSwitches, setMaxTabSwitches] = useState(null);
+  const [hasSavedProgress, setHasSavedProgress] = useState(false);
   const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [timeToast, setTimeToast] = useState("");
@@ -232,13 +234,14 @@ export default function TakeQuiz() {
 
   const pendingKey = `${PENDING_PREFIX}${code}`;
   const tabKey = `${TABCOUNT_PREFIX}${code}`;
+  const draftKey = `${DRAFT_PREFIX}${code}`;
   const isPaginated = quizData?.layoutMode === "paginated";
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
   useEffect(() => { studentInfoRef.current = studentInfo; }, [studentInfo]);
   useEffect(() => { quizDataRef.current = quizData; }, [quizData]);
 
-  // Saves everything needed to finish the quiz on this device (survives closing the tab / losing data)
+  // Preserve a local fallback as well as the server copy for interrupted sessions.
   const stashPending = () => {
     try {
       localStorage.setItem(pendingKey, JSON.stringify({
@@ -251,7 +254,11 @@ export default function TakeQuiz() {
   };
 
   const clearLocalQuizState = () => {
-    try { localStorage.removeItem(pendingKey); localStorage.removeItem(tabKey); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem(pendingKey);
+      localStorage.removeItem(tabKey);
+      localStorage.removeItem(draftKey);
+    } catch { /* ignore */ }
   };
 
   // Paginated mode: jump back to the top when the question changes
@@ -279,26 +286,30 @@ export default function TakeQuiz() {
     };
   }, [step]);
 
-  /* ----- Auto-save progress (debounced) ----- */
+  /* ----- Keep a local draft immediately and sync progress to the server ----- */
   useEffect(() => {
     if (step !== "quiz" || !code || !quizData) return;
+    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answers[q._id] || null }));
+    const progress = {
+      code,
+      studentName: studentInfo.name,
+      studentSurname: studentInfo.surname,
+      studentClass: studentInfo.className,
+      answers: formatted,
+      savedAt: Date.now(),
+    };
+    try { localStorage.setItem(draftKey, JSON.stringify(progress)); } catch { /* storage full/unavailable */ }
+
     const saveTimer = setTimeout(async () => {
       if (!navigator.onLine) return;
       try {
-        const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answers[q._id] || null }));
-        await api.post("/quiz/session/save-progress", {
-          code,
-          studentName: studentInfo.name,
-          studentSurname: studentInfo.surname,
-          studentClass: studentInfo.className,
-          answers: formatted,
-        });
+        await api.post("/quiz/session/save-progress", progress);
       } catch (err) {
         console.error("Failed to save progress", err);
       }
-    }, 1000);
+    }, 400);
     return () => clearTimeout(saveTimer);
-  }, [answers, studentInfo, step, code, quizData]);
+  }, [answers, studentInfo, step, code, quizData, draftKey]);
 
   /* ----- Offline submission recovery ----- */
   const attemptSync = useCallback(async () => {
@@ -370,6 +381,17 @@ export default function TakeQuiz() {
     const handleVisibilityChange = () => {
       if (!document.hidden || submittingRef.current) return;
 
+      const activeQuiz = quizDataRef.current;
+      if (activeQuiz && code) {
+        postKeepalive("/quiz/session/save-progress", {
+          code,
+          studentName: studentInfoRef.current.name,
+          studentSurname: studentInfoRef.current.surname,
+          studentClass: studentInfoRef.current.className,
+          answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+        });
+      }
+
       tabCountRef.current += 1;
       const count = tabCountRef.current;
       setTabSwitchCount(count);
@@ -404,8 +426,24 @@ export default function TakeQuiz() {
       }
     };
 
+    const handlePageHide = () => {
+      const activeQuiz = quizDataRef.current;
+      if (!activeQuiz || !code || submittingRef.current) return;
+      postKeepalive("/quiz/session/save-progress", {
+        code,
+        studentName: studentInfoRef.current.name,
+        studentSurname: studentInfoRef.current.surname,
+        studentClass: studentInfoRef.current.className,
+        answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+      });
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
   }, [step, code, maxTabSwitches]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ----- Countdown (based on a fixed end time, so it survives throttled/background tabs) ----- */
@@ -452,6 +490,7 @@ export default function TakeQuiz() {
 
       setQuizData(data);
       setMaxTabSwitches(data.maxTabSwitches);
+      setHasSavedProgress(Boolean(data.hasActiveSession));
       setTimeLeft(getTotalSeconds(data));
 
       // Answers saved on this device that never reached the server (page closed / data was off)
@@ -500,8 +539,20 @@ export default function TakeQuiz() {
           className: data.savedStudentInfo.className || "",
         });
       }
+      let localDraft = null;
+      try { localDraft = JSON.parse(localStorage.getItem(draftKey) || "null"); } catch { /* ignore invalid local draft */ }
+      const serverSavedAt = Date.parse(data.progressSavedAt || "") || 0;
+      const useLocalDraft = Boolean(localDraft && localDraft.savedAt > serverSavedAt);
+      const savedAnswers = useLocalDraft ? localDraft.answers || [] : data.savedAnswers || [];
+      if (useLocalDraft && localDraft?.studentName) {
+        setStudentInfo({
+          name: localDraft.studentName,
+          surname: localDraft.studentSurname || "",
+          className: localDraft.studentClass || "",
+        });
+      }
       const restored = {};
-      (data.savedAnswers || []).forEach((a) => { if (a.selectedAnswer) restored[a.questionId] = a.selectedAnswer; });
+      savedAnswers.forEach((a) => { if (a.selectedAnswer) restored[a.questionId] = a.selectedAnswer; });
       setAnswers(restored);
 
       const endTime = new Date(data.startTime).getTime() + getTotalSeconds(data) * 1000;
@@ -664,8 +715,15 @@ export default function TakeQuiz() {
             </div>
           </div>
 
+          {hasSavedProgress && (
+            <p role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-brand/20 bg-brand-soft px-3 py-2 text-sm text-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+              <span>Saved progress found for this code. Starting will continue your existing quiz and restore your saved answers.</span>
+            </p>
+          )}
+
           <ul className="mb-5 space-y-2 rounded-2xl border border-border bg-background p-3 text-sm text-muted-foreground">
-            <li className="flex items-start gap-2"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> The timer starts when you tap Start and can't be paused.</li>
+            <li className="flex items-start gap-2"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> The timer starts when you tap Start and continues if you leave the quiz.</li>
             {maxTabSwitches ? (
               <li className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" /> Leaving this page counts as a tab switch — even if your internet is off. After {maxTabSwitches}, your quiz is submitted automatically.</li>
             ) : null}
@@ -687,7 +745,7 @@ export default function TakeQuiz() {
             </div>
             <ErrorNote>{error}</ErrorNote>
             <button type="submit" disabled={isStarting} className={primaryBtn}>
-              {isStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Start quiz <ArrowRight className="h-4 w-4" /></>}
+              {isStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{hasSavedProgress ? "Continue quiz" : "Start quiz"} <ArrowRight className="h-4 w-4" /></>}
             </button>
             <button type="button" onClick={() => { setError(""); setStep("validate"); }} className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
               Use a different code

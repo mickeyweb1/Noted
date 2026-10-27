@@ -10,12 +10,14 @@ const sessionSchema = new mongoose.Schema({
   studentName: { type: String },
   studentSurname: { type: String },
   studentClass: { type: String },
+  progressSavedAt: { type: Date },
   answers: [{
     questionId: mongoose.Schema.Types.ObjectId,
     selectedAnswer: String
   }],
   
-  createdAt: { type: Date, default: Date.now, expires: 86400 } // Auto-delete after 24 hours
+  // Keep an unfinished attempt resumable for as long as its access code is valid.
+  createdAt: { type: Date, default: Date.now, expires: 30 * 24 * 60 * 60 }
 });
 
 export const QuizSession = mongoose.model('QuizSession', sessionSchema);

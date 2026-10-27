@@ -256,6 +256,7 @@ router.post('/session/start', async (req, res, next) => {
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
 
     let session = await QuizSession.findOne({ code });
+    const resumed = Boolean(session);
     // A brand-new start on an expired code is refused; a student already mid-quiz may continue
     if (!session && isCodeExpired(quiz, code)) {
       return res.status(400).json({ success: false, message: `This access code has expired (older than ${CODE_LIFETIME_DAYS} days).` });
@@ -271,6 +272,10 @@ router.post('/session/start', async (req, res, next) => {
         if (err.code === 11000) session = await QuizSession.findOne({ code });
         else throw err;
       }
+    } else {
+      // Refresh the retention window when a student reopens the attempt.
+      session.createdAt = new Date();
+      await session.save();
     }
 
     res.json({
@@ -287,7 +292,9 @@ router.post('/session/start', async (req, res, next) => {
         layoutMode: quiz.layoutMode || 'scroll',
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
         savedAnswers: session.answers || [],
+        progressSavedAt: session.progressSavedAt || null,
         savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null,
+        resumed,
       },
     });
   } catch (error) { next(error); }
@@ -304,6 +311,7 @@ router.post('/session/save-progress', async (req, res, next) => {
         studentSurname: typeof studentSurname === 'string' ? studentSurname.slice(0, 100) : undefined,
         studentClass: typeof studentClass === 'string' ? studentClass.slice(0, 100) : undefined,
         $set: { answers: answers.slice(0, 500).map((a) => ({ questionId: a?.questionId, selectedAnswer: typeof a?.selectedAnswer === 'string' ? a.selectedAnswer : null })) },
+        $currentDate: { createdAt: true, progressSavedAt: true },
       }
     );
     res.json({ success: true });
@@ -313,7 +321,11 @@ router.post('/session/save-progress', async (req, res, next) => {
 router.post('/session/update-tab', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
-    const session = await QuizSession.findOneAndUpdate({ code }, { $inc: { tabSwitchCount: 1 } }, { returnDocument: 'after' });
+    const session = await QuizSession.findOneAndUpdate(
+      { code },
+      { $inc: { tabSwitchCount: 1 }, $currentDate: { createdAt: true } },
+      { returnDocument: 'after' },
+    );
     if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
     const quiz = await Quiz.findById(session.quizId).select('maxTabSwitches');
     const shouldAutoSubmit = Boolean(quiz?.maxTabSwitches) && session.tabSwitchCount >= quiz.maxTabSwitches;
@@ -471,6 +483,8 @@ router.post('/validate-code', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'This access code has already been used' });
     }
 
+    const hasActiveSession = Boolean(await QuizSession.exists({ code }));
+
     res.json({
       success: true,
       data: {
@@ -484,6 +498,7 @@ router.post('/validate-code', async (req, res, next) => {
         maxTabSwitches: quiz.maxTabSwitches,
         bonusMarks: quiz.bonusMarks,
         layoutMode: quiz.layoutMode || 'scroll',
+        hasActiveSession,
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
       },
     });
