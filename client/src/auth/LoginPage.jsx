@@ -5,7 +5,7 @@ import { ThemeToggle } from '../components/themeToggle';
 import api from '../utils/api';
 import { useUserContext } from '../context/userContext';
 import { Button, Card, Input, Label } from '../components/ui/primitives';
-import { toast } from '../components/ui/toast';
+import { toast } from '../components/ui/toastApi';
 
 const features = [
   { icon: NotebookPen, label: 'AI-generated study notes' },

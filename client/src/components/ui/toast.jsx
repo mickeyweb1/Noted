@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Info, X } from 'lucide-react';
 
-export const toast = {
-  success: (message) => window.dispatchEvent(new CustomEvent('noted:toast', { detail: { message, type: 'success' } })),
-  info: (message) => window.dispatchEvent(new CustomEvent('noted:toast', { detail: { message, type: 'info' } })),
-};
-
 export function ToastViewport() {
   const [notice, setNotice] = useState(null);
   useEffect(() => {
