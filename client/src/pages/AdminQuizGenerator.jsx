@@ -38,6 +38,7 @@ const INITIAL_METADATA = {
   maxTabSwitches: "",
   layoutMode: "scroll",
   showAnswersAfterSubmission: true,
+  passMark: "50",
 };
 
 const emptyQuestion = () => ({
@@ -109,7 +110,8 @@ export default function AdminQuizGenerator() {
       : { value: 0 };
     const numStudents = readInt(metadata.numStudents, "Number of students", 1, MAX_STUDENTS);
     const timeLimit = readInt(metadata.timeLimit, "Time limit", minTime, maxTime);
-    const bad = [numQuestions, numStudents, timeLimit].find((r) => r.error);
+    const passMark = readInt(metadata.passMark, "Pass mark", 0, 100);
+    const bad = [numQuestions, numStudents, timeLimit, passMark].find((r) => r.error);
     if (bad) return { error: bad.error };
 
     let maxTabSwitches = null;
@@ -131,6 +133,7 @@ export default function AdminQuizGenerator() {
         maxTabSwitches,
         layoutMode: metadata.layoutMode,
         showAnswersAfterSubmission: metadata.showAnswersAfterSubmission,
+        passMark: passMark.value,
       },
     };
   };
@@ -244,6 +247,7 @@ export default function AdminQuizGenerator() {
         maxTabSwitches: settings.maxTabSwitches,
         layoutMode: settings.layoutMode,
         showAnswersAfterSubmission: settings.showAnswersAfterSubmission,
+        passMark: settings.passMark,
         questions,
         useAIAutocomplete: false,
       });
@@ -438,6 +442,10 @@ export default function AdminQuizGenerator() {
                     <option value="total">total</option><option value="perQuestion">per question</option>
                   </SelectField>
                 </div>
+              </Field>
+
+              <Field label="Pass mark (%)" htmlFor="quiz-pass-mark" hint="Students meet the pass mark when their score reaches this percentage.">
+                <NumberInput id="quiz-pass-mark" aria-describedby="quiz-pass-mark-hint" value={metadata.passMark} onChange={setField("passMark")} placeholder="e.g., 50" />
               </Field>
 
               <label htmlFor="quiz-show-answers" className="md:col-span-2 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background p-4 transition-colors hover:bg-accent/40">

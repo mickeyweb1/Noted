@@ -702,7 +702,8 @@ export default function TakeQuiz() {
   const answeredCount = quizData ? quizData.questions.filter((q) => answers[q._id]).length : 0;
   const progress = totalQuestions ? (answeredCount / totalQuestions) * 100 : 0;
   const percentage = result && result.totalQuestions > 0 ? Math.round((result.score / result.totalQuestions) * 100) : 0;
-  const isPassing = percentage >= 50;
+  const passMark = result?.passMark ?? quizData?.passMark ?? 50;
+  const isPassing = percentage >= passMark;
   const showAnswerReview = result?.showAnswersAfterSubmission !== false;
   const resultReview = showAnswerReview ? result?.review || [] : [];
   const incorrectCount = resultReview.length
@@ -1040,7 +1041,10 @@ export default function TakeQuiz() {
             <h1 id="quiz-result-title" className="mb-1 flex items-center justify-center gap-2 text-2xl font-bold text-foreground">
               {isPassing ? <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" /> : <XCircle className="h-6 w-6 text-destructive" />} Quiz submitted
             </h1>
-            <p className="text-muted-foreground">Great effort, {studentInfo.name}.</p>
+            <p className={`font-semibold ${isPassing ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+              {isPassing ? `Passed · ${passMark}% pass mark` : `Below the ${passMark}% pass mark`}
+            </p>
+            <p className="mt-1 text-muted-foreground">Great effort, {studentInfo.name}.</p>
             {quizData?.title && <p className="mt-1 text-sm font-medium text-foreground">{quizData.title}</p>}
 
             <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

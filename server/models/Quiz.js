@@ -19,6 +19,7 @@ const quizSchema = new mongoose.Schema({
     default: 'scroll' 
   },
   showAnswersAfterSubmission: { type: Boolean, default: true },
+  passMark: { type: Number, min: 0, max: 100, default: 50 },
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   questions: [{
