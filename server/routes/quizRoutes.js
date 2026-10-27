@@ -403,7 +403,25 @@ router.post('/submit', async (req, res, next) => {
     }
 
     await QuizSession.deleteOne({ _id: session._id });
-    res.json({ success: true, message: 'Quiz submitted successfully!', score, totalQuestions: quiz.questions.length, tabSwitchCount: finalTabs });
+    const review = quiz.questions.map((question, index) => ({
+      questionId: question._id,
+      question: question.question,
+      imageUrl: question.imageUrl || null,
+      selectedAnswer: submissionAnswers[index].selectedAnswer || null,
+      correctAnswer: question.correctAnswer,
+      isCorrect: submissionAnswers[index].isCorrect,
+      explanation: question.explanation || '',
+    }));
+
+    res.json({
+      success: true,
+      message: 'Quiz submitted successfully!',
+      score,
+      totalQuestions: quiz.questions.length,
+      timeTaken: timeTakenSeconds,
+      tabSwitchCount: finalTabs,
+      review,
+    });
   } catch (error) { next(error); }
 });
 
