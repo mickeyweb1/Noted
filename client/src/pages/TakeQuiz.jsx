@@ -703,7 +703,9 @@ export default function TakeQuiz() {
   const percentage = result && result.totalQuestions > 0 ? Math.round((result.score / result.totalQuestions) * 100) : 0;
   const isPassing = percentage >= 50;
   const resultReview = result?.review || [];
-  const incorrectCount = resultReview.filter((item) => item.selectedAnswer && !item.isCorrect).length;
+  const incorrectCount = resultReview.length
+    ? resultReview.filter((item) => item.selectedAnswer && !item.isCorrect).length
+    : Math.max(0, (result?.totalQuestions || 0) - (result?.score || 0));
   const unansweredResultCount = resultReview.filter((item) => !item.selectedAnswer).length;
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
@@ -1015,20 +1017,20 @@ export default function TakeQuiz() {
 
             <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-2xl bg-muted p-3">
-                <dd className="text-2xl font-bold text-green-600 dark:text-green-400">{result.score}</dd>
                 <dt className="text-xs text-muted-foreground">Correct</dt>
+                <dd className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{result.score}</dd>
               </div>
               <div className="rounded-2xl bg-muted p-3">
-                <dd className="text-2xl font-bold text-destructive">{incorrectCount || Math.max(0, result.totalQuestions - result.score - unansweredResultCount)}</dd>
                 <dt className="text-xs text-muted-foreground">Incorrect</dt>
+                <dd className="mt-1 text-2xl font-bold text-destructive">{incorrectCount}</dd>
               </div>
               <div className="rounded-2xl bg-muted p-3">
-                <dd className="text-2xl font-bold text-foreground">{unansweredResultCount}</dd>
                 <dt className="text-xs text-muted-foreground">Unanswered</dt>
+                <dd className="mt-1 text-2xl font-bold text-foreground">{unansweredResultCount}</dd>
               </div>
               <div className="rounded-2xl bg-muted p-3">
-                <dd className="text-2xl font-bold text-foreground">{formatTime(result.timeTaken || 0)}</dd>
                 <dt className="text-xs text-muted-foreground">Time taken</dt>
+                <dd className="mt-1 text-2xl font-bold text-foreground">{formatTime(result.timeTaken || 0)}</dd>
               </div>
             </dl>
 
@@ -1060,7 +1062,7 @@ export default function TakeQuiz() {
                         </div>
                         <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${item.isCorrect ? "bg-green-500/10 text-green-700 dark:text-green-400" : isUnanswered ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>
                           {item.isCorrect ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                          <span className="hidden xs:inline">{statusLabel}</span>
+                          <span className="hidden sm:inline">{statusLabel}</span>
                         </span>
                       </div>
                       <div className="space-y-3 p-4 sm:p-5">
