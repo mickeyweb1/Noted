@@ -200,22 +200,11 @@ export default function LandingPage() {
               <p className="mt-4 max-w-sm leading-7 text-white/75">
                 Enter the code shared by your teacher and go straight to your assessment.
               </p>
-              <div aria-hidden="true" className="mt-7 flex max-w-[272px] gap-1.5">
-                {Array.from({ length: 10 }, (_, index) => (
-                  <span
-                    key={index}
-                    className="h-6 w-6 shrink-0 rounded-md border border-white/25 bg-white/5"
-                  />
-                ))}
-              </div>
             </div>
-            <div className="relative z-10 mt-9 flex flex-wrap gap-2 text-sm">
+            <div className="relative z-10 mt-8 flex flex-wrap gap-2 text-sm">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-white/85">
                 <CheckCircle2 className="h-4 w-4 text-emerald-300" />
                 No login needed
-              </span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-white/85">
-                10-character code
               </span>
             </div>
           </div>
