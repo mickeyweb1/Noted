@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRight, AudioLines, Eye, EyeOff, LockKeyhole, Mail, Lo
 import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from './authLayout';
 import { ThemeToggle } from '../components/themeToggle';
+import UnsplashCredit from '../components/UnsplashCredit';
 import api from '../utils/api';
 import { useUserContext } from '../context/userContext';
 import { Button, Card, Input, Label } from '../components/ui/primitives';
@@ -97,7 +98,26 @@ export default function LoginPage() {
         </div>
 
         <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center py-4">
-        <Card className="login-fade-in w-full rounded-3xl border-border/80 p-6 shadow-soft sm:p-9">
+        <Card className="login-fade-in w-full overflow-hidden rounded-3xl border-border/80 p-0 shadow-soft">
+          <div className="relative h-32 overflow-hidden bg-muted sm:h-36">
+            <img
+              src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1000&q=80"
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover object-center"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/75 via-slate-950/35 to-slate-950/10" aria-hidden="true" />
+            <div className="absolute inset-0 flex items-center justify-between gap-3 px-5 sm:px-7">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/75">Noted</p>
+                <p className="mt-1 font-display text-xl font-semibold tracking-tight text-white sm:text-2xl">study.butlouder</p>
+              </div>
+              <span className="hidden rounded-full border border-white/25 bg-black/20 px-3 py-1.5 text-xs font-medium text-white/90 min-[400px]:inline-flex">Your study space</span>
+            </div>
+            <UnsplashCredit className="absolute bottom-2 right-3 z-10 text-[10px] text-white/80 hover:text-white" />
+          </div>
+
+          <div className="p-6 sm:p-9">
           <div className="mb-8 text-center">
             <Link to="/" className="mx-auto mb-6 inline-flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="Noted home">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-brand-foreground"><AudioLines className="h-5 w-5" aria-hidden="true" /></span>
@@ -151,6 +171,7 @@ export default function LoginPage() {
           </Button>
 
           <p className="mt-7 text-center text-sm text-muted-foreground">Don’t have an account? <Link to="/register" className="font-semibold text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Sign up</Link></p>
+          </div>
         </Card>
         </div>
       </div>
