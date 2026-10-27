@@ -245,83 +245,107 @@ export default function StudentPage() {
                 The National Impact
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Building a generation of collaborative, confident learners.
+                Make learning feel less like a solo effort.
               </h2>
               <p className="mt-5 text-lg leading-8 text-muted-foreground">
-                The traditional education system often isolates students,
-                leading to immense stress and burnout during exam seasons. Noted
-                changes the culture of studying from a lonely, stressful chore
-                into a collaborative, engaging experience.
+                Studying can feel like a lot to manage on your own. Noted brings
+                together tools for reviewing class material, practicing what you
+                have learned, and studying alongside classmates.
               </p>
               <p className="mt-4 text-lg leading-8 text-muted-foreground">
-                By introducing friendly competition, shared focus rooms, and
-                AI-assisted learning, we are nurturing a generation of students
-                who are not just academically brilliant, but also mentally
-                resilient and tech-fluent.
+                Whether you are preparing for an exam or catching up on a lesson,
+                choose the format that helps you stay engaged: notes, audio,
+                quizzes, or a shared focus session.
               </p>
             </div>
-            <div className="rounded-[30px] border border-border bg-card p-8 shadow-soft">
-              <h3 className="text-xl font-bold text-foreground mb-4">
-                Why students love Noted:
-              </h3>
-              <ul className="space-y-4">
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-brand mt-0.5 flex-shrink-0" />
-                  <span className="text-foreground">
-                    <strong>Less Exam Anxiety:</strong> AI quizzes and audio
-                    summaries make revision feel manageable and even fun.
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-brand mt-0.5 flex-shrink-0" />
-                  <span className="text-foreground">
-                    <strong>Peer Motivation:</strong> School leaderboards and
-                    study squads turn isolation into a team sport.
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-brand mt-0.5 flex-shrink-0" />
-                  <span className="text-foreground">
-                    <strong>Digital Fluency:</strong> Learn how to leverage AI
-                    ethically and effectively, a crucial skill for the future
-                    workforce.
-                  </span>
-                </li>
-              </ul>
+            <div className="group relative isolate min-h-[420px] overflow-hidden rounded-[30px] bg-slate-950 shadow-soft">
+              <img
+                src="https://images.unsplash.com/photo-1529390079861-591de354faf5?auto=format&fit=crop&w=1400&q=85"
+                alt="Students collaborating on a study assignment"
+                loading="lazy"
+                className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+              />
+              <div className="absolute inset-0 z-0 bg-gradient-to-t from-slate-950/95 via-slate-950/45 to-slate-950/10" />
+              <div className="absolute bottom-0 left-0 right-0 z-10 p-7 text-white sm:p-9">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
+                  Find your way to learn
+                </p>
+                <h3 className="mt-3 text-2xl font-bold sm:text-3xl">
+                  One study space, different ways to make progress.
+                </h3>
+                <ul className="mt-5 space-y-3 text-sm leading-6 text-white/85 sm:text-base">
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-300" />
+                    Review class notes as clear summaries.
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-300" />
+                    Listen to audio and practice with quizzes.
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-300" />
+                    Study with classmates in shared focus rooms.
+                  </li>
+                </ul>
+              </div>
+              <a
+                href="https://unsplash.com/license"
+                target="_blank"
+                rel="noreferrer"
+                className="absolute right-4 top-4 z-10 text-xs text-white/75 underline underline-offset-2"
+              >
+                Photo via Unsplash
+              </a>
             </div>
           </div>
         </div>
       </section>
 
       {/* ================= FINAL CTA SECTION ================= */}
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-[30px] bg-gradient-to-br from-brand to-electric p-10 text-center shadow-glow lg:p-16">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIi8+PC9zdmc+')] opacity-30"></div>
-          <div className="relative z-10 max-w-2xl mx-auto">
-            <School className="h-10 w-10 text-white/80 mx-auto mb-4" />
-            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Ready to upgrade your study game?
-            </h2>
-            <p className="mt-4 text-lg text-white/80">
-              Ask your school admin for your invite code, or start your personal
-              journey today. Your future self will thank you.
+      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <div className="landing-interactive group relative isolate overflow-hidden rounded-[30px] bg-slate-950 px-6 py-14 text-center shadow-2xl sm:px-10 sm:py-16">
+          <img
+            src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1800&q=85"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+          />
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-950/60" />
+          <div className="relative z-10 mx-auto max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">
+              Make your next study session count
             </p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Ready to find a better way to study?
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg leading-7 text-white/80">
+              Join through your school or start independently with study tools built around your class material.
+            </p>
+            <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
               <Link
                 to="/signup/school-student"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-sm font-bold text-brand shadow-lg transition hover:bg-white/90"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-slate-950 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90"
               >
                 I have a school code
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to="/signup/personal"
-                className="inline-flex items-center justify-center rounded-full border-2 border-white/30 bg-white/10 px-8 py-4 text-sm font-bold text-white transition hover:bg-white/20"
+                className="inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-8 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/20"
               >
                 Start independently
               </Link>
             </div>
           </div>
+          <a
+            href="https://unsplash.com/license"
+            target="_blank"
+            rel="noreferrer"
+            className="absolute bottom-4 right-5 z-10 text-xs text-white/75 underline underline-offset-2"
+          >
+            Photo via Unsplash
+          </a>
         </div>
       </section>
     </MarketingLayout>
