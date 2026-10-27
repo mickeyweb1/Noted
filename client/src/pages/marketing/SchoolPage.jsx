@@ -5,9 +5,7 @@ import {
   ShieldCheck,
   KeyRound,
   BrainCircuit,
-  Users,
   CheckCircle2,
-  Sparkles,
   Trophy,
   WifiOff,
 } from "lucide-react";
