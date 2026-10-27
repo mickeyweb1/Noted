@@ -24,21 +24,29 @@ const features = [
     icon: BrainCircuit,
     title: "AI study notes",
     description: "Turn messy class recordings, slides, and summaries into crisp, easy-to-understand learning material in minutes.",
+    image: "photo-1434030216411-0b793f4b4173",
+    imageAlt: "Student's notes and books arranged on a desk",
   },
   {
     icon: Clock3,
     title: "Focus-first workflows",
     description: "Build smart study blocks, reminders, and revision plans that match your real academic rhythm and reduce burnout.",
+    image: "photo-1503676260728-1c00da094a0b",
+    imageAlt: "Student concentrating on schoolwork at a desk",
   },
   {
     icon: Library,
     title: "Organized library",
     description: "Keep lessons, notes, flashcards, and readings in one clean, searchable workspace accessible from any device.",
+    image: "photo-1521587760476-6c12a4b040da",
+    imageAlt: "Shelves of books in a library",
   },
   {
     icon: Users,
     title: "Student progress tracking",
     description: "Empower students with clear insights into their study habits, revision patterns, and daily activity to boost confidence.",
+    image: "photo-1529390079861-591de354faf5",
+    imageAlt: "Students studying and reviewing classwork together",
   },
 ];
 
@@ -256,24 +264,49 @@ export default function LandingPage() {
 
       {/* ================= FEATURES SECTION ================= */}
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="mb-10 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Core Features</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Everything students need to study with less stress.
-          </h2>
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Core features</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              A more useful way to study.
+            </h2>
+          </div>
+          <p className="max-w-md leading-7 text-muted-foreground sm:text-right">
+            Bring your learning materials, study sessions, and progress into one place.
+          </p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {features.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="landing-interactive rounded-3xl border border-border bg-card p-6 shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
-                <Icon className="h-5 w-5" />
+          {features.map(({ icon: Icon, title, description, image, imageAlt }) => (
+            <div
+              key={title}
+              className="landing-interactive group overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lg"
+            >
+              <div className="relative h-44 overflow-hidden bg-muted">
+                <img
+                  src={`https://images.unsplash.com/${image}?auto=format&fit=crop&w=900&q=80`}
+                  alt={imageAlt}
+                  loading="lazy"
+                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent" />
+                <div className="absolute bottom-4 left-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/90 text-brand shadow-soft">
+                  <Icon className="h-5 w-5" />
+                </div>
               </div>
-              <h3 className="mb-2 text-xl font-semibold text-foreground">{title}</h3>
-              <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+              <div className="p-6">
+                <h3 className="mb-2 text-lg font-semibold text-foreground">{title}</h3>
+                <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+              </div>
             </div>
           ))}
         </div>
+        <p className="mt-5 text-right text-xs text-muted-foreground">
+          Photos via{" "}
+          <a href="https://unsplash.com/license" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+            Unsplash
+          </a>
+        </p>
       </section>
 
       {/* ================= NATION BUILDER MISSION SECTION ================= */}
