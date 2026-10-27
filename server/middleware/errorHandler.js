@@ -22,7 +22,8 @@ export const errorHandler = (err, req, res, next) => {
   }
 
   // Log the full error on the server for YOU to debug
-  console.error(`[ERROR] ${statusCode} - ${err.message}`);
+  const isAuthRequest = req.originalUrl?.startsWith('/api/auth/');
+  console.error(`${isAuthRequest ? '[Auth]' : '[ERROR]'} ${statusCode} ${req.method} ${req.originalUrl} - ${err.message}`);
   if (process.env.NODE_ENV !== 'production') console.error(err.stack);
 
   res.status(statusCode).json({

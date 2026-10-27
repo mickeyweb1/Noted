@@ -28,12 +28,13 @@ export const protect = async (req, res, next) => {
 
       next();
     } catch (error) {
-      console.error("❌ Token verification failed:", error.message);
+      console.error("[Auth] Token verification failed:", error.message);
       const authError = new Error("Not authorized, token failed or expired");
       authError.status = 401;
       next(authError);
     }
   } else {
+    console.warn("[Auth] Protected request rejected: no bearer token provided.");
     const authError = new Error("Not authorized, no token provided");
     authError.status = 401;
     next(authError);

@@ -25,8 +25,11 @@ export function UserContextProvider({ children }) {
   useEffect(() => {
     const expireSession = (event) => {
       const currentToken = localStorage.getItem("userToken");
+      const currentSession = localStorage.getItem("userSessionVersion");
       const expiredToken = event.detail?.token;
+      const expiredSession = event.detail?.session;
       if (currentToken && currentToken !== expiredToken) return;
+      if (currentSession && currentSession !== expiredSession) return;
       setToken(null);
       setUser(null);
       setIsAuthenticated(false);
@@ -36,6 +39,7 @@ export function UserContextProvider({ children }) {
 
     const fetchUserData = async () => {
       const storedToken = localStorage.getItem("userToken");
+      const storedSession = localStorage.getItem("userSessionVersion");
       if (!storedToken) {
         setIsAuthLoading(false);
         return;
@@ -45,7 +49,7 @@ export function UserContextProvider({ children }) {
         const response = await api.get("/auth/me", { headers: { Authorization: `Bearer ${storedToken}` } });
         const userData = response.data.data || response.data;
         // Ignore late responses from a session that has already been replaced.
-        if (localStorage.getItem("userToken") !== storedToken) return;
+        if (localStorage.getItem("userToken") !== storedToken || localStorage.getItem("userSessionVersion") !== storedSession) return;
         
         // ✅ Clean the role field here too
         const cleanUserData = {
@@ -60,16 +64,17 @@ export function UserContextProvider({ children }) {
         console.error("[Auth] Session verification failed:", error.message);
         // Only a confirmed 401 expires the same token. Network/5xx failures should
         // leave a cached session intact so a temporary outage doesn't log users out.
-        if (error.response?.status === 401 && localStorage.getItem("userToken") === storedToken) {
+        if (error.response?.status === 401 && localStorage.getItem("userToken") === storedToken && localStorage.getItem("userSessionVersion") === storedSession) {
           localStorage.removeItem("userToken");
           localStorage.removeItem("userInfo");
+          localStorage.removeItem("userSessionVersion");
           delete api.defaults.headers.common.Authorization;
           setToken(null);
           setUser(null);
           setIsAuthenticated(false);
         }
       } finally {
-        if (!localStorage.getItem("userToken") || localStorage.getItem("userToken") === storedToken) setIsAuthLoading(false);
+        if (!localStorage.getItem("userToken") || (localStorage.getItem("userToken") === storedToken && localStorage.getItem("userSessionVersion") === storedSession)) setIsAuthLoading(false);
       }
     };
 
@@ -87,6 +92,7 @@ export function UserContextProvider({ children }) {
     // Persist and expose the session synchronously before the caller navigates.
     localStorage.setItem("userToken", authToken);
     localStorage.setItem("userInfo", JSON.stringify(normalizedUser));
+    localStorage.setItem("userSessionVersion", globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     api.defaults.headers.common.Authorization = `Bearer ${authToken}`;
     setToken(authToken);
     setUser(normalizedUser);
@@ -98,6 +104,7 @@ export function UserContextProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("userToken");
     localStorage.removeItem("userInfo");
+    localStorage.removeItem("userSessionVersion");
     delete api.defaults.headers.common.Authorization;
     // Optional: Clear AI tutor chat history on logout for privacy
     localStorage.removeItem("noted_ai_tutor_messages"); 
@@ -108,7 +115,11 @@ export function UserContextProvider({ children }) {
   };
 
   const updateUser = (updatedFields) => {
-    setUser((prevUser) => ({ ...prevUser, ...updatedFields }));
+    setUser((prevUser) => {
+      const nextUser = { ...prevUser, ...updatedFields };
+      localStorage.setItem("userInfo", JSON.stringify(nextUser));
+      return nextUser;
+    });
   };
 
   const setPage = (page) => setFormState((prev) => ({ ...prev, page }));
