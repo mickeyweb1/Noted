@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   CheckCircle2,
-  Sparkles,
   Users,
   Trophy,
   BookOpen,
@@ -56,9 +55,9 @@ const studentFeatures = [
   },
   {
     icon: Zap,
-    title: "Zero burnout focus timers",
+    title: "Focus timers",
     description:
-      "Use our built-in Pomodoro focus blocks designed specifically for student attention spans, keeping you sharp without the stress.",
+      "Use Pomodoro-style focus blocks to structure study sessions and make time for regular breaks.",
     image: "photo-1503676260728-1c00da094a0b",
     imageAlt: "Student focused on schoolwork at a desk",
   },
@@ -77,15 +76,15 @@ const howItWorks = [
     step: "02",
     title: "Connect with your classes",
     description:
-      "Select your grade and subjects. Instantly sync with your classmates and see your school's study leaderboard.",
+      "Choose your grade and subjects to connect your account with your school's portal.",
     image: "photo-1523240795612-9a054b0db644",
     imageAlt: "University students studying together",
   },
   {
     step: "03",
-    title: "Study smarter & top your class",
+    title: "Study in a way that works for you",
     description:
-      "Paste your notes, generate AI audio/visuals, take quizzes, and build an unbreakable study streak.",
+      "Use your notes to create audio, visual aids, and quizzes, then build a study routine that works for you.",
     image: "photo-1434030216411-0b793f4b4173",
     imageAlt: "Open notebook and study materials on a desk",
   },
@@ -205,7 +204,7 @@ export default function StudentPage() {
             The Ultimate Student Toolkit
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Everything you need to top your class without the burnout.
+            Useful tools for your everyday study routine.
           </h2>
         </div>
 
