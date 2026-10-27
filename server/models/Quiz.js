@@ -28,7 +28,13 @@ const quizSchema = new mongoose.Schema({
     options: [{ type: String, required: true }],
     correctAnswer: { type: String, required: true },
     explanation: { type: String },
-    imageUrl: { type: String }
+    imageUrl: { type: String },
+    revisionQueued: { type: Boolean, default: false },
+    nextReviewDate: { type: Date, default: Date.now },
+    interval: { type: Number, default: 0 },
+    ease: { type: Number, default: 2.5 },
+    repetitions: { type: Number, default: 0 },
+    lastResult: { type: String, enum: ['correct', 'incorrect', null], default: null },
   }],
   accessCodes: [{
     code: { type: String, required: true },

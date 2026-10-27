@@ -22,6 +22,7 @@ const userSchema = new mongoose.Schema({
     lastFocusDate: { type: Date, default: null },
     parentInfo: { name: { type: String, default: '' }, phone: { type: String, default: '' } },
     studyStreak: { type: Number, default: 0 },
+    revisionActivityDates: { type: [String], default: [] },
     totalFocusHours: { type: Number, default: 0 },
     dailyFocusLog: { type: Map, of: Number, default: {} },
     

@@ -9,8 +9,37 @@ import { generateWithGroq } from '../config/grok.js';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { protect } from '../middleware/protect.js';
+import { Content } from '../models/Content.js';
+import { applyReview } from '../utils/sm2.js';
 
 const router = express.Router();
+
+// Update a queued teacher quiz question or generated library quiz question.
+router.post('/:id/review', protect, async (req, res, next) => {
+  try {
+    const { questionIndex, correct } = req.body || {};
+    if (!Number.isInteger(questionIndex) || typeof correct !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'questionIndex and boolean correct are required.' });
+    }
+    const quiz = await Quiz.findOne({ _id: req.params.id, createdBy: req.user._id });
+    let target;
+    if (quiz) {
+      target = quiz.questions[questionIndex];
+      if (!target || !target.revisionQueued) return res.status(404).json({ success: false, message: 'Queued question not found.' });
+      Object.assign(target, applyReview(target.toObject(), correct));
+      await quiz.save();
+    } else {
+      const content = await Content.findOne({ _id: req.params.id, userId: req.user._id, type: 'quiz' });
+      target = content?.revisionQuestions.find((q) => q.questionIndex === questionIndex);
+      if (!target) return res.status(404).json({ success: false, message: 'Queued question not found.' });
+      Object.assign(target, applyReview(target.toObject(), correct));
+      await content.save();
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    await User.updateOne({ _id: req.user._id }, { $addToSet: { revisionActivityDates: today } });
+    return res.json({ success: true, data: { nextReviewDate: target.nextReviewDate, interval: target.interval, ease: target.ease, repetitions: target.repetitions, lastResult: target.lastResult } });
+  } catch (error) { next(error); }
+});
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

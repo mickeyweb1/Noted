@@ -21,6 +21,7 @@ import feedbackRoutes from './routes/feedbackRoutes.js';
 import { submitContactForm } from './controllers/contactController.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import quizRoutes from './routes/quizRoutes.js';
+import revisionRoutes from './routes/revisionRoutes.js';
 
 dotenv.config();
 
@@ -59,6 +60,7 @@ app.use('/api/quiz/generate-ai-preview', aiLimiter);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/quiz', quizRoutes);
+app.use('/api/revision', revisionRoutes);
 app.use('/api/support', supportRoutes); 
 
 app.get('/', (req, res) => res.json({ success: true, message: '✅ Noted Backend API is running!' }));
