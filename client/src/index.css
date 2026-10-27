@@ -196,3 +196,25 @@
 .animate-ken-burns {
   animation: ken-burns 10s ease-in-out infinite;
 }
+
+@keyframes landing-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-enter {
+  animation: landing-enter 700ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ken-burns,
+  .landing-enter {
+    animation: none;
+  }
+}
