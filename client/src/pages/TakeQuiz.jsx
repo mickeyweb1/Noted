@@ -1060,7 +1060,7 @@ export default function TakeQuiz() {
                         <div className="min-w-0 flex-1">
                           <p className="break-words font-semibold leading-6 text-foreground"><MathRenderer>{item.question}</MathRenderer></p>
                         </div>
-                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${item.isCorrect ? "bg-green-500/10 text-green-700 dark:text-green-400" : isUnanswered ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>
+                        <span aria-label={statusLabel} className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${item.isCorrect ? "bg-green-500/10 text-green-700 dark:text-green-400" : isUnanswered ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>
                           {item.isCorrect ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                           <span className="hidden sm:inline">{statusLabel}</span>
                         </span>
