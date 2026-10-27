@@ -104,8 +104,9 @@ export default function PersonalUserRegisterPage() {
 
           <div className="mt-8 rounded-2xl overflow-hidden border border-border/50 shadow-xl bg-card">
             <img
-              src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1000&auto=format&fit=crop"
+              src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1000&q=85"
               alt="Student studying with laptop"
+              loading="lazy"
               className="w-full h-40 sm:h-64 object-cover"
             />
             <div className="p-4 bg-card">

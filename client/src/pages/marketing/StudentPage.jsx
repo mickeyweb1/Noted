@@ -186,6 +186,7 @@ export default function StudentPage() {
               <img src={photo("photo-1529390079861-591de354faf5", 1400)} alt="Classmates collaborating on a classroom assignment" loading="lazy" className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03] motion-reduce:transition-none" />
               <div className="absolute inset-0 z-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
               <div className="absolute bottom-0 left-0 right-0 z-10 p-7 text-white sm:p-9"><p className="text-lg font-medium leading-7">Your notes. Your pace. Your way to learn.</p></div>
+              <UnsplashCredit className="absolute right-4 top-4 z-10 text-white/80 hover:text-white" />
             </div>
           </div>
         </div>

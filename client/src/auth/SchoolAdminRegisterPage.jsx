@@ -89,8 +89,9 @@ export default function SchoolAdminRegisterPage() {
 
           <div className="mt-8 rounded-2xl overflow-hidden border border-border/50 shadow-xl bg-card">
             <img
-              src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=1000&auto=format&fit=crop"
+              src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1000&q=85"
               alt="Teacher leading a classroom lesson"
+              loading="lazy"
               className="w-full h-40 sm:h-64 object-cover" 
             />
             <div className="p-4 bg-card">
