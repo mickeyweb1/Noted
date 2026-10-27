@@ -454,9 +454,9 @@ export default function LandingPage() {
             alt=""
             aria-hidden="true"
             loading="lazy"
-            className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+            className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
           />
-          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-brand/90 via-slate-950/75 to-electric/80" />
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-brand/75 via-slate-950/65 to-electric/70" />
           <div className="relative z-10">
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Ready to build the future of learning?
