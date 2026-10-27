@@ -95,121 +95,65 @@ export default function StudentPage() {
   return (
     <MarketingLayout>
       {/* ================= HERO SECTION ================= */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-sm font-medium text-brand mb-6">
+      <section className="relative isolate flex min-h-[min(700px,calc(100svh-4rem))] overflow-hidden bg-slate-950">
+        <img
+          src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=2000&q=85"
+          alt=""
+          aria-hidden="true"
+          fetchPriority="high"
+          className="absolute inset-0 h-full w-full object-cover object-center motion-safe:animate-ken-burns"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/70 to-slate-950/30" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-slate-950/10" />
+
+        <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+          <div className="max-w-3xl landing-enter">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
               <GraduationCap className="h-4 w-4" />
               For High School & University Students
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-              Survive exam season. <br /> Actually enjoy learning.
+            <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-7xl">
+              Make study time work better for you.
             </h1>
-            <p className="mt-5 text-lg leading-8 text-muted-foreground">
-              School is hard enough without staring at boring textbooks for
-              hours. Noted turns your class notes into engaging audio, visual
-              summaries, and instant quizzes—so you can study less, remember
-              more, and still have time for your friends.
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/85 sm:text-xl">
+              Turn class notes into audio, visual summaries, and practice quizzes.
+              Find a more engaging way to review your subjects and make space for
+              the rest of your day.
             </p>
-            <div className="mt-8 flex flex-wrap gap-4">
+            <div className="mt-8 flex flex-col gap-4 sm:flex-row">
               <Link
                 to="/signup/school-student"
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-soft transition hover:opacity-90"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90"
               >
                 Join my school
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to="/signup/personal"
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3.5 text-sm font-medium text-foreground transition hover:bg-accent"
+                className="inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-6 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/20"
               >
                 Use it independently
               </Link>
             </div>
 
-            {/* Trust badges */}
-            <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
-              {[
-                "Syncs with your syllabus",
-                "Offline audio mode",
-                "No data used in focus rooms",
-              ].map((item) => (
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-white/90">
+              {["AI study summaries", "Audio learning", "Practice quizzes"].map((item) => (
                 <div key={item} className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-brand" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
                   {item}
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Student Dashboard Mockup */}
-          <div className="rounded-[30px] border border-border bg-card p-6 shadow-soft lg:p-8">
-            <div className="rounded-[24px] border border-border bg-gradient-to-br from-brand-soft via-background to-electric-soft p-5">
-              <div className="rounded-2xl border border-border bg-background/90 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Your Dashboard
-                  </p>
-                  <div className="flex items-center gap-1 text-xs font-bold text-flame">
-                    <Flame className="h-4 w-4 fill-current" /> 12 Day Streak
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Current Subject AI Card */}
-                  <div className="rounded-xl bg-muted p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-bold text-foreground">
-                        Physics 101: Kinematics
-                      </span>
-                      <Sparkles className="h-4 w-4 text-electric" />
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-brand/10 py-2 text-xs font-medium text-brand">
-                        <Headphones className="h-3 w-3" /> Listen (12m)
-                      </div>
-                      <div className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-background py-2 text-xs font-medium text-muted-foreground">
-                        <BookOpen className="h-3 w-3" /> Quiz
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Mini Leaderboard */}
-                  <div className="rounded-xl bg-background border border-border p-3">
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
-                      <Trophy className="h-3 w-3 text-electric" /> WEEKLY SCHOOL
-                      LEADERBOARD
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-foreground font-medium">
-                          1. Sarah M.
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          14h 20m
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm bg-brand/5 rounded-lg px-2 py-1 border border-brand/20">
-                        <span className="text-brand font-bold">2. You</span>
-                        <span className="text-xs text-brand font-medium">
-                          12h 45m
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-foreground font-medium">
-                          3. David K.
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          11h 10m
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
+        <a
+          href="https://unsplash.com/license"
+          target="_blank"
+          rel="noreferrer"
+          className="absolute bottom-4 right-5 z-10 text-xs text-white/75 underline underline-offset-2"
+        >
+          Photo via Unsplash
+        </a>
       </section>
 
       {/* ================= HOW IT WORKS (STUDENT JOURNEY) ================= */}
