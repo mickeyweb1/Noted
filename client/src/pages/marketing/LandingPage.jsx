@@ -47,7 +47,6 @@ const audienceCards = [
     title: "For schools",
     text: "Track student performance and support learning with data-backed insights for classes and administrative teams.",
     link: "/school",
-    accent: "from-brand/15 to-electric/10",
     image: "photo-1509062522246-3755977927d7",
     imageAlt: "Teacher supporting students in a classroom",
   },
@@ -55,7 +54,6 @@ const audienceCards = [
     title: "For students",
     text: "Master any subject with AI-generated summaries, audio podcasts, and interactive quizzes tailored to your unique learning style.",
     link: "/student",
-    accent: "from-flame/15 to-brand/10",
     image: "photo-1523240795612-9a054b0db644",
     imageAlt: "University students studying together outdoors",
   },
@@ -63,16 +61,15 @@ const audienceCards = [
     title: "For personal use",
     text: "Turn your own notes into personalized revision questions, summaries, and study routines that actually stick.",
     link: "/personal",
-    accent: "from-electric/15 to-brand/10",
     image: "photo-1434030216411-0b793f4b4173",
     imageAlt: "Student writing study notes beside an open book",
   },
 ];
 
 const stats = [
-  { value: "3x", label: "more active study time" },
-  { value: "90%", label: "less manual note cleanup" },
-  { value: "24/7", label: "access to your revision engine" },
+  { value: "Summaries", label: "Make class notes easier to review" },
+  { value: "Audio", label: "Listen to lessons while on the go" },
+  { value: "Quizzes", label: "Practice what you have learned" },
 ];
 
 const howItWorks = [
@@ -97,8 +94,8 @@ const howItWorks = [
     icon: Headphones,
     title: "Learn your way",
     description: "Listen to it like a podcast, watch the visual summary, or test yourself with AI quizzes.",
-    image: "photo-1503676260728-1c00da094a0b",
-    imageAlt: "Student reading and studying at a desk",
+    image: "photo-1427504494785-3a9ca7044f45",
+    imageAlt: "Students learning together in a classroom",
   },
 ];
 
@@ -345,7 +342,14 @@ export default function LandingPage() {
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 to-transparent" />
-                  <span className="absolute bottom-2 right-3 text-xs text-white/85">Photo via Unsplash</span>
+                  <a
+                    href="https://unsplash.com/license"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute bottom-2 right-3 text-xs text-white/85 underline underline-offset-2"
+                  >
+                    Photo via Unsplash
+                  </a>
                 </div>
                 <div className="p-6">
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-primary-foreground shadow-md">
@@ -371,8 +375,8 @@ export default function LandingPage() {
             </h2>
           </div>
           <div className="grid gap-8 lg:grid-cols-3">
-            {audienceCards.map(({ title, text, link, accent, image, imageAlt }) => (
-              <Link key={title} to={link} className={`landing-interactive group overflow-hidden rounded-[26px] border border-border bg-gradient-to-br ${accent} shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow`}>
+            {audienceCards.map(({ title, text, link, image, imageAlt }) => (
+              <Link key={title} to={link} className="landing-interactive group overflow-hidden rounded-[26px] border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-glow">
                 <div className="relative h-48 overflow-hidden">
                   <img
                     src={`https://images.unsplash.com/${image}?auto=format&fit=crop&w=900&q=80`}
@@ -407,19 +411,34 @@ export default function LandingPage() {
 
       {/* ================= STATS SECTION ================= */}
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="rounded-[30px] border border-border bg-card p-8 shadow-soft lg:p-12">
-          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Proven Results</p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                A calmer, smarter study flow for every learner.
-              </h2>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-3">
+        <div className="grid overflow-hidden rounded-[30px] border border-border bg-card shadow-soft lg:grid-cols-2">
+          <div className="landing-interactive group relative min-h-72 overflow-hidden sm:min-h-96">
+            <img
+              src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1200&q=85"
+              alt="A student reading at a desk in a bright study space"
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 to-transparent" />
+            <a
+              href="https://unsplash.com/license"
+              target="_blank"
+              rel="noreferrer"
+              className="absolute bottom-4 right-5 text-xs text-white/85 underline underline-offset-2"
+            >
+              Photo via Unsplash
+            </a>
+          </div>
+          <div className="flex flex-col justify-center p-8 lg:p-12">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Made for everyday study</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              A little help at every step.
+            </h2>
+            <div className="mt-8 space-y-4">
               {stats.map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-border bg-muted/30 p-5 text-center">
-                  <div className="font-display text-3xl font-bold text-foreground">{stat.value}</div>
-                  <div className="mt-2 text-sm text-muted-foreground">{stat.label}</div>
+                <div key={stat.value} className="flex items-start gap-4 border-b border-border pb-4 last:border-0 last:pb-0">
+                  <div className="min-w-24 font-display text-lg font-bold text-brand">{stat.value}</div>
+                  <div className="text-sm leading-6 text-muted-foreground">{stat.label}</div>
                 </div>
               ))}
             </div>
@@ -436,8 +455,8 @@ export default function LandingPage() {
               Ready to build the future of learning?
             </h2>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-white/80">
-              Join thousands of students and schools already using Noted to turn 
-              academic challenges into confident achievements.
+              Turn class notes into clear summaries, audio lessons, and practice
+              quizzes with Noted.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
               <Link
