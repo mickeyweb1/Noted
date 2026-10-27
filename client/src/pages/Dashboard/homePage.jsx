@@ -21,6 +21,8 @@ import {
 import api from "../../utils/api";
 import FeedbackModal from "../../components/FeedbackModal";
 
+const WEEKLY_STUDY_GOAL = 3;
+
 export default function StudentHome() {
   const { user } = useUserContext();
   const navigate = useNavigate();
@@ -39,7 +41,7 @@ export default function StudentHome() {
   const isPersonalUser = currentUser?.role === "personal_user";
 
   const [libraryData, setLibraryData] = useState([]);
-  const [stats, setStats] = useState({ streak: 0, totalNotes: 0, totalQuizzes: 0 });
+  const [stats, setStats] = useState({ streak: 0, weeklyStudyDays: 0, totalNotes: 0, totalQuizzes: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [topStudents, setTopStudents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
@@ -74,44 +76,55 @@ export default function StudentHome() {
     const fetchDashboardData = async () => {
       try {
         const response = await api.get("/ai/library");
+        const allItems = response.data.success && Array.isArray(response.data.data) ? response.data.data : [];
         if (response.data.success) {
-          const allItems = response.data.data;
           setLibraryData(allItems);
-          let streak = 0;
-          if (allItems.length > 0) {
-            const uniqueDates = [...new Set(allItems.map((item) => new Date(item.createdAt).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
-            const today = new Date().toDateString();
-            const yesterday = new Date(Date.now() - 86400000).toDateString();
-            if (uniqueDates[0] === today || uniqueDates[0] === yesterday) {
-              streak = 1;
-              let currentDate = new Date(uniqueDates[0]);
-              for (let i = 1; i < uniqueDates.length; i++) {
-                const expectedDate = new Date(currentDate);
-                expectedDate.setDate(expectedDate.getDate() - 1);
-                if (uniqueDates[i] === expectedDate.toDateString()) {
-                  streak++;
-                  currentDate = expectedDate;
-                } else {
-                  break;
-                }
-              }
-            }
-          }
-          setStats({
-            streak,
-            totalNotes: allItems.filter((item) => item.type !== "quiz").length,
-            totalQuizzes: allItems.filter((item) => item.type === "quiz").length,
-          });
         }
 
         const focusRes = await api.get("/auth/me");
+        let focusLog = {};
         if (focusRes.data.success) {
           const userData = focusRes.data.data;
+          focusLog = userData.dailyFocusLog || {};
           setFocusData({
             dailyMinutes: userData.dailyFocusLog?.[selectedDate] || 0,
             totalHours: userData.totalFocusHours || 0,
           });
         }
+
+        const activeDays = new Set();
+        allItems.forEach((item) => {
+          const timestamp = new Date(item.createdAt);
+          if (!Number.isNaN(timestamp.getTime())) activeDays.add(timestamp.toISOString().slice(0, 10));
+        });
+        Object.entries(focusLog).forEach(([day, minutes]) => {
+          if (Number(minutes) > 0) activeDays.add(day);
+        });
+
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const shiftDay = (dayKey, amount) => {
+          const shifted = new Date(`${dayKey}T00:00:00.000Z`);
+          shifted.setUTCDate(shifted.getUTCDate() + amount);
+          return shifted.toISOString().slice(0, 10);
+        };
+        let streakCursor = activeDays.has(todayKey) ? todayKey : shiftDay(todayKey, -1);
+        let streak = 0;
+        while (activeDays.has(streakCursor)) {
+          streak++;
+          streakCursor = shiftDay(streakCursor, -1);
+        }
+
+        const today = new Date();
+        const weekStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+        weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
+        const weekStartKey = weekStart.toISOString().slice(0, 10);
+        const weeklyStudyDays = [...activeDays].filter((day) => day >= weekStartKey && day <= todayKey).length;
+        setStats({
+          streak,
+          weeklyStudyDays,
+          totalNotes: allItems.filter((item) => item.type !== "quiz").length,
+          totalQuizzes: allItems.filter((item) => item.type === "quiz").length,
+        });
 
         const lbRes = await api.get("/auth/leaderboard?scope=class");
         if (lbRes.data.success) setTopStudents(lbRes.data.data.topUsers.slice(0, 3));
@@ -260,11 +273,23 @@ export default function StudentHome() {
         {/* Left Column: Stats & Recent Notes */}
         <div className="min-w-0 space-y-5 lg:col-span-2 lg:space-y-6">
           <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4 sm:gap-4">
-            <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
-                <Trophy className="w-4 h-4 text-flame" /> Study Streak
+            <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Trophy className="h-4 w-4 text-flame" /> Study Streak
               </div>
-              <span className="text-2xl font-display font-bold text-foreground">{isLoading ? "..." : `${stats.streak} Days`}</span>
+              <span className="text-2xl font-display font-bold text-foreground">{isLoading ? "..." : `${stats.streak} ${stats.streak === 1 ? "Day" : "Days"}`}</span>
+              <div className="mt-1 space-y-2" aria-label={`${Math.min(stats.weeklyStudyDays, WEEKLY_STUDY_GOAL)} of ${WEEKLY_STUDY_GOAL} study days toward this week's gentle goal`}>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-medium text-foreground">Weekly goal</span>
+                  <span className="tabular-nums text-muted-foreground">{isLoading ? "..." : `${Math.min(stats.weeklyStudyDays, WEEKLY_STUDY_GOAL)}/${WEEKLY_STUDY_GOAL} days`}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${Math.min(100, (stats.weeklyStudyDays / WEEKLY_STUDY_GOAL) * 100)}%` }} />
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {isLoading ? "Loading your study activity…" : stats.weeklyStudyDays >= WEEKLY_STUDY_GOAL ? "Goal reached. Anything extra is a bonus." : "Any 3 days this week counts. No pressure to study every day."}
+                </p>
+              </div>
             </div>
             <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
               <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
