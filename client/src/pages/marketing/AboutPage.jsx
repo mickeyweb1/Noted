@@ -1,11 +1,6 @@
 import {
   ArrowRight,
-  BookOpenText,
-  Sparkles,
   Globe2,
-  Rocket,
-  Users,
-  GraduationCap,
   Quote,
   Brain,
   Music,
@@ -226,7 +221,7 @@ export default function AboutPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {coreFeatures.map(({ icon: Icon, title, description }) => (
+          {coreFeatures.map(({ icon: Icon, title, description, image, imageAlt }) => (
             <div
               key={title}
               className="landing-interactive group overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
@@ -269,9 +264,9 @@ export default function AboutPage() {
                 or extra lessons. 
               </p>
               <p className="mt-4 text-lg leading-8 text-muted-foreground">
-                Noted bridges this gap. By providing an AI-powered study companion that 
-                translates dense academic jargon into clear, engaging audio and visual summaries, 
-                we are leveling the playing field for every student.
+                We want to help make learning support more approachable. Noted brings study
+                tools like summaries, audio, and practice quizzes together to help students
+                work through complex material in ways that suit them.
               </p>
             </div>
             <div className="group relative isolate min-h-[420px] overflow-hidden rounded-[30px] bg-slate-950 shadow-soft">
@@ -279,10 +274,10 @@ export default function AboutPage() {
                 src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=1400&q=85"
                 alt="Students learning together in a classroom"
                 loading="lazy"
-                className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
               />
-              <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950/95 via-slate-950/35 to-slate-950/10" />
-              <div className="absolute bottom-0 left-0 right-0 p-7 text-white sm:p-9">
+              <div className="absolute inset-0 z-0 bg-gradient-to-t from-slate-950/95 via-slate-950/35 to-slate-950/10" />
+              <div className="absolute bottom-0 left-0 right-0 z-10 p-7 text-white sm:p-9">
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
                   Learning without barriers
                 </p>
@@ -356,9 +351,9 @@ export default function AboutPage() {
             alt=""
             aria-hidden="true"
             loading="lazy"
-            className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+            className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
           />
-          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-950/60" />
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-950/60" />
           <div className="relative z-10 mx-auto max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Start learning differently</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
