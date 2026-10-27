@@ -21,8 +21,8 @@ const roles = [
     title: "Teacher with an invite code",
     description: "Join your school with the code from your school owner to create quizzes, run game shows and track your classes.",
     badge: "Educators",
-    image: "photo-1517486808906-6ca8b3f04846",
-    imageAlt: "Students collaborating around a table",
+    image: "photo-1529390079861-591de354faf5",
+    imageAlt: "Students studying and reviewing classwork together",
   },
   {
     to: "/signup/personal",
