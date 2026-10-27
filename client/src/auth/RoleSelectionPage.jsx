@@ -38,7 +38,7 @@ const roles = [
 export default function RoleSelectionPage() {
   return (
     <AuthLayout>
-      <div className="flex flex-1 flex-col p-5 sm:p-6 md:p-12">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden p-4 sm:p-6 md:p-8 xl:p-12">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand md:hidden" aria-label="Noted home">
@@ -50,22 +50,22 @@ export default function RoleSelectionPage() {
           <ThemeToggle />
         </div>
 
-        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center">
-          <div className="mb-8 text-center md:mb-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center">
+          <div className="mx-auto mb-8 max-w-2xl text-center md:mb-10">
             <h1 className="mb-3 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">Choose how you'll use Noted</h1>
             <p className="mx-auto max-w-lg text-base text-muted-foreground">
               Select the path that fits you. You can get started in just a few steps.
             </p>
           </div>
 
-          <ul className="grid gap-4 md:grid-cols-3 md:gap-5">
+          <ul className="grid auto-rows-fr grid-cols-1 gap-5 md:grid-cols-2 md:[&>li:last-child]:col-span-2 lg:grid-cols-3 lg:[&>li:last-child]:col-span-1 lg:gap-5">
             {roles.map(({ to, icon: Icon, title, description, badge, image, imageAlt }) => (
               <li key={to} className="flex min-w-0">
                 <Link
                   to={to}
-                  className="landing-interactive group flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:border-brand/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
+                  className="landing-interactive group flex min-h-[420px] w-full min-w-0 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:border-brand/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
                 >
-                  <div className="relative h-36 overflow-hidden bg-muted sm:h-40">
+                  <div className="relative h-44 shrink-0 overflow-hidden bg-muted sm:h-48">
                     <img
                       src={`https://images.unsplash.com/${image}?auto=format&fit=crop&w=800&q=80`}
                       alt={imageAlt}
@@ -74,16 +74,16 @@ export default function RoleSelectionPage() {
                     />
                   </div>
 
-                  <div className="flex flex-1 flex-col p-5 sm:p-5">
-                    <div className="mb-4 flex items-center gap-2">
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-soft text-brand">
+                  <div className="flex flex-1 flex-col p-5 sm:p-6">
+                    <div className="mb-4 flex min-w-0 items-center gap-2">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
                         <Icon className="h-4 w-4" aria-hidden="true" />
                       </span>
-                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{badge}</span>
+                      <span className="min-w-0 text-[11px] font-semibold uppercase leading-tight tracking-[0.08em] text-muted-foreground sm:text-xs sm:tracking-[0.1em]">{badge}</span>
                     </div>
-                    <h2 className="text-lg font-bold text-foreground transition-colors group-hover:text-brand">{title}</h2>
+                    <h2 className="text-xl font-bold leading-tight text-foreground transition-colors group-hover:text-brand">{title}</h2>
                     <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
-                    <span className="mt-5 inline-flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-brand">
+                    <span className="mt-auto inline-flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-brand">
                       Continue
                       <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true" />
                     </span>
