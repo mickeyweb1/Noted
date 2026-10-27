@@ -456,16 +456,16 @@ export default function LandingPage() {
             loading="lazy"
             className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
           />
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-brand/75 via-slate-950/65 to-electric/70" />
-          <div className="relative z-10">
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/80 via-slate-950/45 to-slate-950/15" />
+          <div className="relative z-10 max-w-2xl text-left">
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Ready to build the future of learning?
             </h2>
-            <p className="mt-4 max-w-2xl mx-auto text-lg text-white/80">
+            <p className="mt-4 max-w-xl text-lg text-white/90">
               Turn class notes into clear summaries, audio lessons, and practice
               quizzes with Noted.
             </p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="mt-8 flex flex-col sm:flex-row gap-4">
               <Link
                 to="/signup"
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-sm font-bold text-brand shadow-lg transition hover:bg-white/90"
