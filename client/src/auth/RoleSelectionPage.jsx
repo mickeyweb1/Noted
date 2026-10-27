@@ -41,7 +41,7 @@ export default function RoleSelectionPage() {
       <div className="flex flex-1 flex-col p-5 sm:p-6 md:p-12">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" aria-label="Noted home">
+          <Link to="/" className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand md:hidden" aria-label="Noted home">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-brand-foreground shadow-sm">
               <AudioLines className="h-5 w-5" aria-hidden="true" />
             </div>
