@@ -125,7 +125,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-950/40 to-slate-950/10" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/20 via-transparent to-slate-950/10" />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+        <div className="relative z-10 mx-auto flex w-full max-w-[1600px] items-center px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
           <div className="max-w-3xl landing-enter">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
               <Globe2 className="h-4 w-4" />
