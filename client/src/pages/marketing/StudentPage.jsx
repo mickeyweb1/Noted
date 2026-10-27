@@ -174,16 +174,23 @@ export default function StudentPage() {
                 {index < howItWorks.length - 1 && (
                   <div className="hidden md:block absolute top-10 left-full w-full h-0.5 bg-gradient-to-r from-brand/30 to-transparent -translate-x-1/2 z-0"></div>
                 )}
-                <div className="relative z-10 flex flex-col items-center text-center p-6 rounded-3xl border border-border bg-card shadow-soft">
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-primary-foreground shadow-md font-display text-xl font-bold">
-                    {item.step}
+                <div className="landing-interactive group relative z-10 overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lg">
+                  <div className="relative h-48 overflow-hidden bg-muted">
+                    <img
+                      src={`https://images.unsplash.com/${item.image}?auto=format&fit=crop&w=900&q=80`}
+                      alt={item.imageAlt}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/55 to-transparent" />
+                    <span className="absolute bottom-4 left-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/90 font-display text-sm font-bold text-brand shadow-soft">
+                      {item.step}
+                    </span>
                   </div>
-                  <h3 className="mb-2 text-xl font-semibold text-foreground">
-                    {item.title}
-                  </h3>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {item.description}
-                  </p>
+                  <div className="p-6 text-center">
+                    <h3 className="mb-2 text-xl font-semibold text-foreground">{item.title}</h3>
+                    <p className="text-sm leading-6 text-muted-foreground">{item.description}</p>
+                  </div>
                 </div>
               </div>
             ))}
@@ -203,20 +210,27 @@ export default function StudentPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {studentFeatures.map(({ icon: Icon, title, description }) => (
+          {studentFeatures.map(({ icon: Icon, title, description, image, imageAlt }) => (
             <div
               key={title}
-              className="rounded-3xl border border-border bg-card p-6 shadow-soft transition hover:-translate-y-1 hover:shadow-glow"
+              className="landing-interactive group overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lg"
             >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
-                <Icon className="h-5 w-5" />
+              <div className="relative h-44 overflow-hidden bg-muted">
+                <img
+                  src={`https://images.unsplash.com/${image}?auto=format&fit=crop&w=900&q=80`}
+                  alt={imageAlt}
+                  loading="lazy"
+                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/35 to-transparent" />
+                <div className="absolute bottom-4 left-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/90 text-brand shadow-soft">
+                  <Icon className="h-5 w-5" />
+                </div>
               </div>
-              <h3 className="mb-2 text-xl font-semibold text-foreground">
-                {title}
-              </h3>
-              <p className="text-sm leading-6 text-muted-foreground">
-                {description}
-              </p>
+              <div className="p-6">
+                <h3 className="mb-2 text-xl font-semibold text-foreground">{title}</h3>
+                <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+              </div>
             </div>
           ))}
         </div>
