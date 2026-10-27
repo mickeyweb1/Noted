@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
+import UnsplashCredit from "../../components/UnsplashCredit";
 
 const photo = (id, width = 900) =>
   `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${width}&q=85`;
@@ -144,6 +145,9 @@ export default function StudentPage() {
               </article>
             ))}
           </div>
+          <p className="mt-5 text-right text-xs text-muted-foreground">
+            <UnsplashCredit plural />
+          </p>
         </div>
       </section>
 
@@ -164,6 +168,9 @@ export default function StudentPage() {
             </article>
           ))}
         </div>
+        <p className="mt-5 text-right text-xs text-muted-foreground">
+          <UnsplashCredit plural />
+        </p>
       </section>
 
       <section className="border-y border-border bg-muted/30">

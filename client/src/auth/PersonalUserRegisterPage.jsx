@@ -10,6 +10,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useUserContext } from "../context/userContext";
 import api from "../utils/api";
+import UnsplashCredit from "../components/UnsplashCredit";
 
 export default function PersonalUserRegisterPage() {
   const { formState = {}, updateUserField, login } = useUserContext();
@@ -111,6 +112,7 @@ export default function PersonalUserRegisterPage() {
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Study smarter, not harder
               </p>
+              <UnsplashCredit className="mt-2 inline-block text-muted-foreground" />
             </div>
           </div>
         </div>

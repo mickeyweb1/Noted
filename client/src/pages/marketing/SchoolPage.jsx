@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
+import UnsplashCredit from "../../components/UnsplashCredit";
 
 const schoolFeatures = [
   {
@@ -190,6 +191,9 @@ export default function SchoolPage() {
               </div>
             ))}
           </div>
+          <p className="mt-5 text-right text-xs text-muted-foreground">
+            <UnsplashCredit plural />
+          </p>
         </div>
       </section>
 
@@ -229,6 +233,9 @@ export default function SchoolPage() {
             </div>
           ))}
         </div>
+        <p className="mt-5 text-right text-xs text-muted-foreground">
+          <UnsplashCredit plural />
+        </p>
       </section>
 
       {/* ================= NATION BUILDER IMPACT FOR SCHOOLS ================= */}

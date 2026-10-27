@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
+import UnsplashCredit from "../../components/UnsplashCredit";
 
 // ==========================================
 // THE NATION BUILDER TEAM
@@ -245,6 +246,9 @@ export default function AboutPage() {
             </div>
           ))}
         </div>
+        <p className="mt-5 text-right text-xs text-muted-foreground">
+          <UnsplashCredit plural />
+        </p>
       </section>
 
       {/* ================= NATIONAL VISION ================= */}

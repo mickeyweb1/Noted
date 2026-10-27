@@ -9,6 +9,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useUserContext } from "../context/userContext";
 import api from "../utils/api"; // Adjust path if needed
+import UnsplashCredit from "../components/UnsplashCredit";
 
 export default function SchoolAdminRegisterPage() {
   const { formState = {}, updateUserField, login } = useUserContext();
@@ -89,13 +90,14 @@ export default function SchoolAdminRegisterPage() {
           <div className="mt-8 rounded-2xl overflow-hidden border border-border/50 shadow-xl bg-card">
             <img
               src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=1000&auto=format&fit=crop"
-              alt="School administration dashboard"
+              alt="Teacher leading a classroom lesson"
               className="w-full h-40 sm:h-64 object-cover" 
             />
             <div className="p-4 bg-card">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Trusted by forward-thinking schools
               </p>
+              <UnsplashCredit className="mt-2 inline-block text-muted-foreground" />
             </div>
           </div>
         </div>
