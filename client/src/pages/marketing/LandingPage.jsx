@@ -448,8 +448,15 @@ export default function LandingPage() {
 
       {/* ================= FINAL CTA SECTION ================= */}
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-[30px] bg-gradient-to-br from-brand to-electric p-10 text-center shadow-glow lg:p-16">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjEpIi8+PC9zdmc+')] opacity-30"></div>
+        <div className="landing-interactive group relative isolate overflow-hidden rounded-[30px] bg-slate-950 px-6 py-16 text-center shadow-glow sm:px-10 lg:px-16 lg:py-20">
+          <img
+            src="https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?auto=format&fit=crop&w=1800&q=85"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+          />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-brand/90 via-slate-950/75 to-electric/80" />
           <div className="relative z-10">
             <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Ready to build the future of learning?
@@ -474,6 +481,14 @@ export default function LandingPage() {
               </Link>
             </div>
           </div>
+          <a
+            href="https://unsplash.com/license"
+            target="_blank"
+            rel="noreferrer"
+            className="absolute bottom-3 right-4 text-xs text-white/75 underline underline-offset-2"
+          >
+            Photo via Unsplash
+          </a>
         </div>
       </section>
     </MarketingLayout>
