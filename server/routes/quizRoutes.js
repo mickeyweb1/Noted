@@ -8,7 +8,6 @@ import { Organization } from '../models/Organization.js';
 import { generateWithGroq } from '../config/grok.js';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { protect } from '../middleware/protect.js';
 
 const router = express.Router();
@@ -19,10 +18,25 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: { folder: 'noted_quizzes', allowed_formats: ['jpeg', 'jpg', 'png', 'gif', 'webp'] },
-});
+const storage = {
+  _handleFile(req, file, callback) {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: 'noted_quizzes', allowed_formats: ['jpeg', 'jpg', 'png', 'gif', 'webp'] },
+      (error, result) => {
+        if (error) return callback(error);
+        callback(null, {
+          path: result.secure_url,
+          size: result.bytes,
+          filename: result.public_id,
+        });
+      },
+    );
+    file.stream.pipe(uploadStream);
+  },
+  _removeFile(req, file, callback) {
+    cloudinary.uploader.destroy(file.filename, { invalidate: true }, callback);
+  },
+};
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
 /* ------------------------------------------------------------------ */
