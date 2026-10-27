@@ -106,133 +106,73 @@ export default function LandingPage() {
   return (
     <MarketingLayout>
       {/* ================= HERO SECTION ================= */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.20),transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.18),transparent_25%)]" />
+      <section className="relative isolate flex min-h-[min(760px,calc(100svh-4rem))] overflow-hidden bg-slate-950">
+        <img
+          src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=2000&q=85"
+          alt=""
+          aria-hidden="true"
+          fetchPriority="high"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/70 to-slate-950/30" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-slate-950/10" />
 
-        <div className="mx-auto max-w-7xl px-4 pb-16 pt-16 sm:px-6 lg:px-8 lg:pb-20 lg:pt-20">
-          <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-sm font-medium text-brand">
-                <Globe2 className="h-4 w-4" />
-                Official Nation Builder Project
-              </div>
-
-              <h1 className="max-w-xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                Transforming how our nation learns, one note at a time.
-              </h1>
-
-              <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
-                Noted empowers students, schools, and families to turn complex 
-                textbooks into engaging, accessible learning experiences. 
-                Building the nation's brightest minds starts here.
-              </p>
-
-              <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-                <Link
-                  to="/signup"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 text-sm font-medium text-primary-foreground shadow-soft transition hover:opacity-95"
-                >
-                  Start for free
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  to="/about"
-                  className="inline-flex items-center justify-center rounded-full border border-border bg-background px-6 py-3.5 text-sm font-medium text-foreground transition hover:bg-accent"
-                >
-                  View our mission
-                </Link>
-              </div>
-
-              <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
-                {[
-                  "AI summaries",
-                  "audio learning",
-                  "focus plans",
-                  "progress tracking",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-brand" />
-                    {item}
-                  </div>
-                ))}
-              </div>
+        <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+          <div className="max-w-3xl">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
+              <Globe2 className="h-4 w-4" />
+              Official Nation Builder Project
             </div>
 
-            {/* Hero Right Side (Dashboard Mockup) */}
-            <div className="relative">
-              <div className="absolute -left-10 top-8 h-40 w-40 rounded-full bg-brand/15 blur-3xl" />
-              <div className="absolute -right-8 bottom-4 h-40 w-40 rounded-full bg-electric/15 blur-3xl" />
+            <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-7xl">
+              Transforming how our nation learns, one note at a time.
+            </h1>
 
-              <div className="relative rounded-[28px] border border-border bg-card p-5 shadow-glow">
-                <div className="rounded-[22px] border border-border bg-gradient-to-br from-brand-soft via-background to-electric-soft p-5">
-                  <div className="relative mb-5 overflow-hidden rounded-2xl">
-                    <img
-                      src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=85"
-                      alt="Students collaborating around a laptop while studying"
-                      fetchPriority="high"
-                      className="h-40 w-full object-cover sm:h-48"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
-                    <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3 text-white">
-                      <p className="font-display text-lg font-semibold">Learning, together</p>
-                      <a
-                        href="https://unsplash.com/license"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-white/80 underline underline-offset-2"
-                      >
-                        Photo via Unsplash
-                      </a>
-                    </div>
-                  </div>
-                  <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-background/80 p-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Today</p>
-                      <p className="mt-1 font-display text-xl font-bold">Study sprint</p>
-                    </div>
-                    <div className="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand">45 min</div>
-                  </div>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/85 sm:text-xl">
+              Noted empowers students, schools, and families to turn complex
+              textbooks into engaging, accessible learning experiences.
+              Building the nation's brightest minds starts here.
+            </p>
 
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-border bg-background p-4 shadow-soft">
-                      <div className="mb-2 flex items-center justify-between text-sm text-muted-foreground">
-                        <span>Progress</span>
-                        <span className="font-semibold text-foreground">84%</span>
-                      </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-brand/10">
-                        <div className="h-full w-[84%] rounded-full bg-gradient-to-r from-brand to-electric" />
-                      </div>
-                    </div>
+            <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+              <Link
+                to="/signup"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 shadow-soft transition hover:bg-white/90"
+              >
+                Start for free
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/about"
+                className="inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-6 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/20"
+              >
+                View our mission
+              </Link>
+            </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-border bg-background p-4">
-                        <p className="text-sm text-muted-foreground">Summary</p>
-                        <p className="mt-2 font-display text-2xl font-bold text-foreground">12</p>
-                        <p className="text-xs text-muted-foreground">topic notes ready</p>
-                      </div>
-                      <div className="rounded-2xl border border-border bg-background p-4">
-                        <p className="text-sm text-muted-foreground">Quiz score</p>
-                        <p className="mt-2 font-display text-2xl font-bold text-foreground">91%</p>
-                        <p className="text-xs text-muted-foreground">up 14% this week</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border bg-background p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-foreground">Next focus block</p>
-                        <p className="text-xs text-brand">AI suggested</p>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between rounded-xl bg-muted p-3 text-sm">
-                        <span>Biology revision</span>
-                        <span className="font-medium text-foreground">18:30</span>
-                      </div>
-                    </div>
-                  </div>
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-white/90">
+              {[
+                "AI summaries",
+                "audio learning",
+                "focus plans",
+                "progress tracking",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                  {item}
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
+        <a
+          href="https://unsplash.com/license"
+          target="_blank"
+          rel="noreferrer"
+          className="absolute bottom-4 right-5 z-10 text-xs text-white/75 underline underline-offset-2"
+        >
+          Photo via Unsplash
+        </a>
       </section>
 
       {/* ================= QUICK QUIZ ACCESS SECTION ================= */}
