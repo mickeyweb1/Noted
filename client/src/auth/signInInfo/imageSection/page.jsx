@@ -1,52 +1,45 @@
-import { AudioLines, StarsIcon } from 'lucide-react'
+import { AudioLines } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function SiginFirstSection() {
-    return (
-        // Removed background and border. It is now 100% transparent.
-        <div className="w-full md:w-1/2 flex flex-col justify-center gap-8 p-6 md:p-12">
-            
-            {/* Header / Logo Area */}
-            <div className="flex items-center gap-3">
-                <h2 className="m-0 flex items-center justify-center w-10 h-10 rounded-lg bg-brand text-brand-foreground shadow-sm">
-                    <AudioLines className="w-5 h-5" />
-                </h2>
-                <div className="flex flex-col">
-                    <h3 className="m-0 text-lg font-display font-bold text-foreground leading-none">Noted</h3>
-                    <h4 className="m-0 text-sm text-muted-foreground mt-1">study.butlouder</h4>
-                </div>
-            </div>
+  return (
+    <section className="group relative isolate flex min-h-[400px] w-full flex-col justify-between overflow-hidden bg-slate-950 p-6 text-white sm:p-8 md:min-h-screen md:w-2/5 md:p-10 lg:p-14">
+      <img
+        src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1400&q=85"
+        alt=""
+        aria-hidden="true"
+        fetchPriority="high"
+        className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+      />
+      <div className="absolute inset-0 -z-10 bg-slate-950/65" />
 
-            {/* Audio / Image Card */}
-            <div className="rounded-2xl bg-card/80 backdrop-blur-sm text-card-foreground p-4 shadow-soft border border-border/50 flex flex-col gap-4">
-                <h2 className="m-0 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <AudioLines className="w-4 h-4 text-brand" /> 4:12 of audio
-                </h2>
-                <div className="rounded-xl overflow-hidden bg-muted aspect-video">
-                    <img 
-                        src="../../../../../images/registerPics.png" 
-                        alt="A child using this website to read" 
-                        className="w-full h-full object-cover" 
-                    />
-                </div>
-                <h2 className="m-0 flex items-center gap-2 text-sm font-bold text-flame font-display">
-                    🔥 9-day streak
-                </h2>
-            </div>
+      <Link to="/" className="relative z-10 inline-flex w-fit items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-brand shadow-soft">
+          <AudioLines className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="font-display text-xl font-bold tracking-tight">Noted</span>
+      </Link>
 
-            {/* Main Heading */}
-            <h2 className="m-0 text-3xl md:text-4xl font-display font-bold tracking-tight text-foreground leading-tight">
-                Your messy notes, <br /> narrated back to you.
-            </h2>
-            
-            {/* Subtext */}
-            <p className="m-0 text-base text-muted-foreground leading-relaxed max-w-md">
-                Paste a wall of lecture text and Noted turns it into a summary you can listen to, cartoon visuals you actually remember, and a focus session that keeps you going.
-            </p>
+      <div className="relative z-10 my-10 max-w-xl md:my-auto">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/75">
+          Learn at your pace
+        </p>
+        <h2 className="mt-4 font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+          Make learning make sense.
+        </h2>
+        <p className="mt-5 max-w-lg text-base leading-7 text-white/80 sm:text-lg">
+          Turn class notes into clear summaries, audio lessons, and practice tools that fit the way you study.
+        </p>
+      </div>
 
-            {/* Social Proof */}
-            <h3 className="m-0 flex items-center gap-2 text-sm font-semibold text-brand">
-                <StarsIcon className="w-4 h-4 fill-current" /> Loved by 40,000+ student
-            </h3>
-        </div>
-    )
+      <a
+        href="https://unsplash.com/license"
+        target="_blank"
+        rel="noreferrer"
+        className="relative z-10 w-fit text-xs text-white/75 underline underline-offset-2 transition-colors hover:text-white"
+      >
+        Photo via Unsplash
+      </a>
+    </section>
+  );
 }
