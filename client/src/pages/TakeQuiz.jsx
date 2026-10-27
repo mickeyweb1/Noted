@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, ArrowLeft, AlertTriangle, Check, ListChecks, WifiOff, Info, BookOpen, RotateCcw } from "lucide-react";
 import api from "../utils/api";
 import MathRenderer from "../components/MathRenderer";
+import { scheduleReviewItems } from "../utils/spacedReview";
 
 /* ---------- Shared styles ---------- */
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -234,6 +235,7 @@ export default function TakeQuiz() {
   const [studyPracticeChecked, setStudyPracticeChecked] = useState(false);
   const [studyPracticeCorrect, setStudyPracticeCorrect] = useState(0);
   const [studyPracticeComplete, setStudyPracticeComplete] = useState(false);
+  const [spacedReviewSaved, setSpacedReviewSaved] = useState(false);
   const [error, setError] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [maxTabSwitches, setMaxTabSwitches] = useState(null);
@@ -807,6 +809,17 @@ export default function TakeQuiz() {
     setStudyPracticeChecked(false);
   };
 
+  const scheduleMissedQuestions = () => {
+    const saved = scheduleReviewItems(studyPracticeQuestions.map((item) => ({
+      id: `quiz-${code}-${item.questionId}`,
+      type: "quiz-question",
+      front: item.question,
+      back: `Correct answer: ${item.correctAnswer}${item.explanation ? `\n\nExplanation: ${item.explanation}` : ""}`,
+      sourceTitle: quizData?.title || "Quiz review",
+    })));
+    setSpacedReviewSaved(saved);
+  };
+
   useEffect(() => {
     if (step !== "result" || !result) return undefined;
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -1199,10 +1212,16 @@ export default function TakeQuiz() {
               </ol>
 
               {!studyPracticeStarted && (
-                <button type="button" onClick={startStudyPractice} className={`${primaryBtnInline} mt-5 w-full sm:w-auto`}>
-                  <RotateCcw className="h-4 w-4" aria-hidden="true" /> Start a short practice round
-                </button>
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <button type="button" onClick={startStudyPractice} className={`${primaryBtnInline} w-full sm:w-auto`}>
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" /> Start a short practice round
+                  </button>
+                  <button type="button" onClick={scheduleMissedQuestions} className={`${secondaryBtn} w-full sm:w-auto`}>
+                    <Clock className="h-4 w-4" aria-hidden="true" /> {spacedReviewSaved ? "Added to spaced review" : "Review these over time"}
+                  </button>
+                </div>
               )}
+              {spacedReviewSaved && <p role="status" className="mt-2 text-xs text-muted-foreground">These questions will be due tomorrow, then at wider intervals as you remember them.</p>}
 
               {studyPracticeStarted && studyPracticeComplete && (
                 <div role="status" className="mt-5 rounded-2xl border border-green-500/20 bg-green-500/5 p-4">

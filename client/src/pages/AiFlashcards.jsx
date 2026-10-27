@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Sparkles, RotateCw, Loader2, Copy, Check, FileText, MessageCircle, Trash2,
-  ChevronLeft, ChevronRight, Shuffle, Download, ThumbsUp, RefreshCcw, Trophy,
+  ChevronLeft, ChevronRight, Shuffle, Download, ThumbsUp, RefreshCcw, Trophy, Clock,
 } from "lucide-react";
 import api from "../utils/api";
 import MathRenderer from "../components/MathRenderer";
+import { scheduleReviewItems } from "../utils/spacedReview";
 
 /* ---------- Styles ---------- */
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -66,6 +67,7 @@ export default function AiFlashcards() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [statuses, setStatuses] = useState({}); // card index -> "known" | "learning"
   const [copied, setCopied] = useState(false);
+  const [reviewScheduled, setReviewScheduled] = useState(false);
 
   const resultsRef = useRef(null);
   const flipTimerRef = useRef(null);
@@ -181,6 +183,7 @@ const handleGenerate = async () => {
     setPos(0);  
   setIsFlipped(false);
   setCopied(false);
+  setReviewScheduled(false);
 
   try {
     const smartTitle = notesText.split("\n")[0].substring(0, 40).trim() || "Study Flashcards";
@@ -213,6 +216,18 @@ const handleGenerate = async () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleScheduleReview = () => {
+    const sourceKey = selectedNoteId || `${notesText.slice(0, 48)}-${flashcards.length}`;
+    const saved = scheduleReviewItems(flashcards.map((flashcard, index) => ({
+      id: `flashcard-${sourceKey}-${index}`,
+      type: "flashcard",
+      front: flashcard.front,
+      back: flashcard.back,
+      sourceTitle: selectedNote?.title || "AI flashcards",
+    })));
+    setReviewScheduled(saved);
   };
 
   const handleExport = () => {
@@ -365,10 +380,12 @@ const handleGenerate = async () => {
                   <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={handleScheduleReview} className={toolBtn}><Clock className="h-3.5 w-3.5" /> {reviewScheduled ? "Added to spaced review" : "Review over time"}</button>
                   <button type="button" onClick={shuffleDeck} className={toolBtn}><Shuffle className="h-3.5 w-3.5" /> Shuffle</button>
                   <button type="button" onClick={handleCopy} className={toolBtn}>{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy all"}</button>
                   <button type="button" onClick={handleExport} className={toolBtn}><Download className="h-3.5 w-3.5" /> Export CSV</button>
                 </div>
+                {reviewScheduled && <p role="status" className="text-xs text-muted-foreground">These cards will come back tomorrow, then at wider intervals as you remember them.</p>}
               </div>
 
               {isDone ? (
