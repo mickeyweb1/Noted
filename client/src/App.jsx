@@ -1,72 +1,72 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 // Marketing Pages
-import LandingPage from "./pages/marketing/LandingPage";
-import AboutPage from "./pages/marketing/AboutPage";
-import SchoolPage from "./pages/marketing/SchoolPage";
-import StudentPage from "./pages/marketing/StudentPage";
-import PersonalPage from "./pages/marketing/PersonalPage";
-import ContactPage from "./pages/marketing/ContactPage";
-import GameShowLobby from "./pages/GameShowLobby";
-import StudioHub from "./pages/StudioHub";
-import SupportPage from "./pages/SupportPage";
-import SuperAdminSupportInbox from "./pages/schoolAdmin/SuperAdminSupportInbox";
-import GameShowBoard from "./pages/GameShowBoard";
-import AdminHelp from "./pages/AdminHelp";
-import StudentHelp from "./pages/StudentHelp";
-import PricingPage from "./pages/PricingPage";
-import AiFlashcards from "./pages/AiFlashcards"; 
-import AddTeacher from "./pages/schoolAdmin/AddTeacher"; 
+const LandingPage = lazy(() => import("./pages/marketing/LandingPage"));
+const AboutPage = lazy(() => import("./pages/marketing/AboutPage"));
+const SchoolPage = lazy(() => import("./pages/marketing/SchoolPage"));
+const StudentPage = lazy(() => import("./pages/marketing/StudentPage"));
+const PersonalPage = lazy(() => import("./pages/marketing/PersonalPage"));
+const ContactPage = lazy(() => import("./pages/marketing/ContactPage"));
+const GameShowLobby = lazy(() => import("./pages/GameShowLobby"));
+const StudioHub = lazy(() => import("./pages/StudioHub"));
+const SupportPage = lazy(() => import("./pages/SupportPage"));
+const SuperAdminSupportInbox = lazy(() => import("./pages/schoolAdmin/SuperAdminSupportInbox"));
+const GameShowBoard = lazy(() => import("./pages/GameShowBoard"));
+const AdminHelp = lazy(() => import("./pages/AdminHelp"));
+const StudentHelp = lazy(() => import("./pages/StudentHelp"));
+const PricingPage = lazy(() => import("./pages/PricingPage"));
+const AiFlashcards = lazy(() => import("./pages/AiFlashcards"));
+const AddTeacher = lazy(() => import("./pages/schoolAdmin/AddTeacher"));
 
 // Auth Pages
-import LoginPage from "./auth/LoginPage";
-import RoleSelectionPage from "./auth/RoleSelectionPage";
-import SchoolStudentRegisterPage from "./auth/SchoolStudentRegisterPage";
-import SchoolAdminRegisterPage from "./auth/SchoolAdminRegisterPage";
-import PersonalUserRegisterPage from "./auth/PersonalUserRegisterPage";
-import AdminGameShowCreator from "./pages/AdminGameShowCreator";
+const LoginPage = lazy(() => import("./auth/LoginPage"));
+const RoleSelectionPage = lazy(() => import("./auth/RoleSelectionPage"));
+const SchoolStudentRegisterPage = lazy(() => import("./auth/SchoolStudentRegisterPage"));
+const SchoolAdminRegisterPage = lazy(() => import("./auth/SchoolAdminRegisterPage"));
+const PersonalUserRegisterPage = lazy(() => import("./auth/PersonalUserRegisterPage"));
+const AdminGameShowCreator = lazy(() => import("./pages/AdminGameShowCreator"));
 
 import StudentDashboardLayout from "./components/layouts/StudentDashboardLayout";
-import StudentHome from "./pages/Dashboard/homePage";
-import StudentAiGenerator from "./pages/Dashboard/aiGenerator";
-import AiTeacher from "./pages/Dashboard/AiTeacher";
-import StudentLibrary from "./pages/Dashboard/libirary";
-import StudentQuiz from "./pages/Dashboard/StudentQuiz";
-import FocusTime from "./pages/Dashboard/focusTime";
-import StudentSchedule from "./pages/Dashboard/reminder";
-import StudentSetting from "./pages/Dashboard/setting";
-import MusicGenerator from "./pages/MusicGenerator";
-import StudentDirectorys from "./pages/Dashboard/StudentDirectory";
-import BattleArena from "./pages/Dashboard/BattleArena";
-import VideoGenerator from "./pages/VideoGenerator";
-import PodcastGenerator from "./pages/PodcastGenerator";
+const StudentHome = lazy(() => import("./pages/Dashboard/homePage"));
+const StudentAiGenerator = lazy(() => import("./pages/Dashboard/aiGenerator"));
+const AiTeacher = lazy(() => import("./pages/Dashboard/AiTeacher"));
+const StudentLibrary = lazy(() => import("./pages/Dashboard/libirary"));
+const StudentQuiz = lazy(() => import("./pages/Dashboard/StudentQuiz"));
+const FocusTime = lazy(() => import("./pages/Dashboard/focusTime"));
+const StudentSchedule = lazy(() => import("./pages/Dashboard/reminder"));
+const StudentSetting = lazy(() => import("./pages/Dashboard/setting"));
+const MusicGenerator = lazy(() => import("./pages/MusicGenerator"));
+const StudentDirectorys = lazy(() => import("./pages/Dashboard/StudentDirectory"));
+const BattleArena = lazy(() => import("./pages/Dashboard/BattleArena"));
+const VideoGenerator = lazy(() => import("./pages/VideoGenerator"));
+const PodcastGenerator = lazy(() => import("./pages/PodcastGenerator"));
 
 // Admin Dashboard Pages
 import AdminDashboardLayout from "./components/layouts/AdminDashboardLayout";
-import AdminDashboard from "./pages/schoolAdmin/AdminDashboard";
-import AddStudent from "./pages/schoolAdmin/AddStudentPage";
-import StudentDirectory from "./pages/schoolAdmin/StudentManagementPage";
-import AdminBillingPage from "./pages/schoolAdmin/AdminBillingPage";
-import AdminQuizGenerator from "./pages/AdminQuizGenerator";
-// Add this import at the top with the other Admin pages:
-import MyTeachers from "./pages/schoolAdmin/MyTeachers";
-import {QuizResultsDashboard} from "./pages/QuizResultsPage";
-import QuizResultsPage from "./pages/QuizResultsPage";
-
-// ... inside your Admin Dashboard Routes, add these two:
-
-import SuperAdminFeedback from "./pages/schoolAdmin/SuperAdminFeedback";
+const AdminDashboard = lazy(() => import("./pages/schoolAdmin/AdminDashboard"));
+const AddStudent = lazy(() => import("./pages/schoolAdmin/AddStudentPage"));
+const StudentDirectory = lazy(() => import("./pages/schoolAdmin/StudentManagementPage"));
+const AdminBillingPage = lazy(() => import("./pages/schoolAdmin/AdminBillingPage"));
+const AdminQuizGenerator = lazy(() => import("./pages/AdminQuizGenerator"));
+const MyTeachers = lazy(() => import("./pages/schoolAdmin/MyTeachers"));
+const QuizResultsDashboard = lazy(() =>
+  import("./pages/QuizResultsPage").then(({ QuizResultsDashboard }) => ({ default: QuizResultsDashboard })),
+);
+const QuizResultsPage = lazy(() => import("./pages/QuizResultsPage"));
+const SuperAdminFeedback = lazy(() => import("./pages/schoolAdmin/SuperAdminFeedback"));
 
 // Shared Pages
-import CheckoutPage from "./components/CheckoutPage";
-import SettingsPage from "./pages/SettingsPage";
-import Leaderboard from "./pages/Dashboard/Leaderboard";
-import TakeQuiz from "./pages/TakeQuiz";
+const CheckoutPage = lazy(() => import("./components/CheckoutPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const Leaderboard = lazy(() => import("./pages/Dashboard/Leaderboard"));
+const TakeQuiz = lazy(() => import("./pages/TakeQuiz"));
 
 function App() {
   return (
-    <Routes>
+    <Suspense fallback={<div role="status" aria-label="Loading page" className="min-h-screen" />}>
+      <Routes>
       {/* ================= PUBLIC MARKETING ROUTES ================= */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
@@ -154,7 +154,8 @@ function App() {
 
       {/* ================= CATCH-ALL (404) ================= */}
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 
