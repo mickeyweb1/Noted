@@ -218,6 +218,7 @@ export default function TakeQuiz() {
   const [isStarting, setIsStarting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hasUnsyncedProgress, setHasUnsyncedProgress] = useState(false);
 
   const timerRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -225,6 +226,9 @@ export default function TakeQuiz() {
   const answersRef = useRef({});
   const studentInfoRef = useRef(studentInfo);
   const quizDataRef = useRef(null);
+  const currentIndexRef = useRef(currentIndex);
+  const progressSyncingRef = useRef(false);
+  const progressSaveQueueRef = useRef(Promise.resolve());
   const endTimeRef = useRef(null);
   const tabCountRef = useRef(0);          // client-side tab-switch count: keeps counting even while offline
   const autoSubmitRef = useRef(false);    // the tab limit was hit — only trigger once
@@ -240,6 +244,7 @@ export default function TakeQuiz() {
   useEffect(() => { answersRef.current = answers; }, [answers]);
   useEffect(() => { studentInfoRef.current = studentInfo; }, [studentInfo]);
   useEffect(() => { quizDataRef.current = quizData; }, [quizData]);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
 
   // Preserve a local fallback as well as the server copy for interrupted sessions.
   const stashPending = () => {
@@ -286,6 +291,36 @@ export default function TakeQuiz() {
     };
   }, [step]);
 
+  const syncProgress = useCallback(async () => {
+    if (step !== "quiz" || !navigator.onLine || progressSyncingRef.current) return;
+    const activeQuiz = quizDataRef.current;
+    if (!activeQuiz || !code) return;
+
+    progressSyncingRef.current = true;
+    setHasUnsyncedProgress(true);
+    const progress = {
+      code,
+      studentName: studentInfoRef.current.name,
+      studentSurname: studentInfoRef.current.surname,
+      studentClass: studentInfoRef.current.className,
+      answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+      currentQuestionIndex: currentIndexRef.current,
+      savedAt: Date.now(),
+    };
+
+    try {
+      const savePromise = progressSaveQueueRef.current.catch(() => {}).then(() => api.post("/quiz/session/save-progress", progress));
+      progressSaveQueueRef.current = savePromise;
+      await savePromise;
+      const savedDraft = JSON.parse(localStorage.getItem(draftKey) || "null");
+      if (!savedDraft || savedDraft.savedAt <= progress.savedAt) setHasUnsyncedProgress(false);
+    } catch (err) {
+      console.error("Failed to sync quiz progress", err);
+    } finally {
+      progressSyncingRef.current = false;
+    }
+  }, [code, draftKey, step]);
+
   /* ----- Keep a local draft immediately and sync progress to the server ----- */
   useEffect(() => {
     if (step !== "quiz" || !code || !quizData) return;
@@ -296,20 +331,26 @@ export default function TakeQuiz() {
       studentSurname: studentInfo.surname,
       studentClass: studentInfo.className,
       answers: formatted,
+      currentQuestionIndex: currentIndex,
       savedAt: Date.now(),
     };
     try { localStorage.setItem(draftKey, JSON.stringify(progress)); } catch { /* storage full/unavailable */ }
+    setHasUnsyncedProgress(true);
 
     const saveTimer = setTimeout(async () => {
       if (!navigator.onLine) return;
       try {
-        await api.post("/quiz/session/save-progress", progress);
+        const savePromise = progressSaveQueueRef.current.catch(() => {}).then(() => api.post("/quiz/session/save-progress", progress));
+        progressSaveQueueRef.current = savePromise;
+        await savePromise;
+        const savedDraft = JSON.parse(localStorage.getItem(draftKey) || "null");
+        if (!savedDraft || savedDraft.savedAt <= progress.savedAt) setHasUnsyncedProgress(false);
       } catch (err) {
         console.error("Failed to save progress", err);
       }
     }, 400);
     return () => clearTimeout(saveTimer);
-  }, [answers, studentInfo, step, code, quizData, draftKey]);
+  }, [answers, studentInfo, currentIndex, step, code, quizData, draftKey]);
 
   /* ----- Offline submission recovery ----- */
   const attemptSync = useCallback(async () => {

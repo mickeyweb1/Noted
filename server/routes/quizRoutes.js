@@ -293,6 +293,7 @@ router.post('/session/start', async (req, res, next) => {
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
         savedAnswers: session.answers || [],
         progressSavedAt: session.progressSavedAt || null,
+        currentQuestionIndex: session.currentQuestionIndex || 0,
         savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null,
         resumed,
       },
@@ -302,7 +303,7 @@ router.post('/session/start', async (req, res, next) => {
 
 router.post('/session/save-progress', async (req, res, next) => {
   try {
-    const { code, studentName, studentSurname, studentClass, answers } = req.body || {};
+    const { code, studentName, studentSurname, studentClass, answers, currentQuestionIndex } = req.body || {};
     if (!Array.isArray(answers)) return res.status(400).json({ success: false, message: 'Answers must be a list.' });
     await QuizSession.findOneAndUpdate(
       { code: normalizeCode(code) },
@@ -310,7 +311,10 @@ router.post('/session/save-progress', async (req, res, next) => {
         studentName: typeof studentName === 'string' ? studentName.slice(0, 100) : undefined,
         studentSurname: typeof studentSurname === 'string' ? studentSurname.slice(0, 100) : undefined,
         studentClass: typeof studentClass === 'string' ? studentClass.slice(0, 100) : undefined,
-        $set: { answers: answers.slice(0, 500).map((a) => ({ questionId: a?.questionId, selectedAnswer: typeof a?.selectedAnswer === 'string' ? a.selectedAnswer : null })) },
+        $set: {
+          answers: answers.slice(0, 500).map((a) => ({ questionId: a?.questionId, selectedAnswer: typeof a?.selectedAnswer === 'string' ? a.selectedAnswer : null })),
+          ...(Number.isInteger(currentQuestionIndex) ? { currentQuestionIndex: Math.max(0, Math.min(currentQuestionIndex, 500)) } : {}),
+        },
         $currentDate: { createdAt: true, progressSavedAt: true },
       }
     );

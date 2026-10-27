@@ -11,6 +11,7 @@ const sessionSchema = new mongoose.Schema({
   studentSurname: { type: String },
   studentClass: { type: String },
   progressSavedAt: { type: Date },
+  currentQuestionIndex: { type: Number, default: 0 },
   answers: [{
     questionId: mongoose.Schema.Types.ObjectId,
     selectedAnswer: String
