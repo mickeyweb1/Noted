@@ -125,33 +125,49 @@ export default function MarketingLayout({ children }) {
       <main id="main">{children}</main>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-muted/30">
-        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <footer className="relative isolate overflow-hidden border-t border-white/10 bg-slate-950 text-white">
+        <img
+          src="https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1800&q=80"
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          className="absolute inset-0 z-0 h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/85 via-slate-950/75 to-slate-950/65" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-xl">
               <div className="mb-4 flex items-center gap-3">
                 <img src="/favicon.svg" alt="" aria-hidden="true" className="h-10 w-10 rounded-xl" />
                 <span className="font-display text-2xl font-bold">Noted</span>
               </div>
-              <p className="text-muted-foreground">Study smarter with AI-powered notes, lightning-fast summaries, and tools built for better focus.</p>
+              <p className="text-white/80">Study smarter with AI-powered notes, lightning-fast summaries, and tools built for better focus.</p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link to="/signup" className={`inline-flex items-center justify-center rounded-full bg-brand px-5 py-3 text-sm font-medium text-brand-foreground shadow-soft transition hover:bg-brand/90 ${focusRing}`}>Start learning</Link>
-              <Link to="/contact" className={`inline-flex items-center justify-center rounded-full border border-border px-5 py-3 text-sm font-medium text-foreground transition hover:bg-accent ${focusRing}`}>Talk to us</Link>
+              <Link to="/signup" className={`inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-brand shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90 ${focusRing}`}>Start learning</Link>
+              <Link to="/contact" className={`inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-5 py-3 text-sm font-medium text-white transition duration-300 hover:-translate-y-0.5 hover:bg-white/20 ${focusRing}`}>Talk to us</Link>
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col gap-4 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-10 flex flex-col gap-4 border-t border-white/20 pt-6 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between">
             <p>© {new Date().getFullYear()} Noted. Built for better learning.</p>
             <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              <Link to="/about" className="transition hover:text-foreground">About</Link>
-              <Link to="/school" className="transition hover:text-foreground">Schools</Link>
-              <Link to="/pricing" className="transition hover:text-foreground">Pricing</Link>
-              <Link to="/contact" className="transition hover:text-foreground">Contact</Link>
-              <Link to="/login" className="transition hover:text-foreground">Login</Link>
+              <Link to="/about" className="transition-colors hover:text-white">About</Link>
+              <Link to="/school" className="transition-colors hover:text-white">Schools</Link>
+              <Link to="/pricing" className="transition-colors hover:text-white">Pricing</Link>
+              <Link to="/contact" className="transition-colors hover:text-white">Contact</Link>
+              <Link to="/login" className="transition-colors hover:text-white">Login</Link>
             </nav>
           </div>
+          <a
+            href="https://unsplash.com/license"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-block text-xs text-white/60 underline underline-offset-2 transition-colors hover:text-white"
+          >
+            Photo via Unsplash
+          </a>
         </div>
       </footer>
     </div>
