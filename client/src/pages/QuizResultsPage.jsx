@@ -542,7 +542,7 @@ export default function QuizResultsPage() {
   if (loading) return <PageSpinner />;
   if (error) return <ErrorState message={error} onRetry={() => fetchResults()} />;
 
-  const { count, avgScore, passRate, avgTime, flagged, buckets, perQuestion, qualityFlags } = analysis;
+  const { count, avgScore, passRate, avgTime, flagged, buckets, perQuestion, qualityFlags, topicMastery } = analysis;
   const codes = quizData?.accessCodes ?? [];
   const questions = quizData?.questions ?? [];
   const isTie = standings.length === 2 && standings[0].rank === standings[1].rank;
@@ -648,6 +648,45 @@ export default function QuizResultsPage() {
             <button type="button" onClick={() => { setShowAnalysis(true); document.getElementById("question-analysis")?.scrollIntoView({ behavior: "smooth" }); }} className={`${secondaryBtn} mt-4 w-full sm:w-auto`}>
               See response rates by question <ArrowRight className="h-4 w-4" />
             </button>
+          </section>
+        )}
+
+        {!isGameShow && count > 0 && (
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby="class-mastery-title">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Users className="h-5 w-5" aria-hidden="true" /></div>
+              <div>
+                <h2 id="class-mastery-title" className="text-lg font-bold text-foreground">Class mastery map</h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">Anonymous correct-answer rates grouped by the topic labels on your questions. Topic groups appear after at least 3 submissions.</p>
+              </div>
+            </div>
+            {topicMastery.filter((topic) => topic.studentCount >= 3).length === 0 ? (
+              <p className="mt-4 rounded-xl bg-muted p-4 text-sm leading-6 text-muted-foreground">
+                No topic groups to show yet. Add topic labels to questions when creating a quiz, then collect at least 3 submissions to see class-level patterns here.
+              </p>
+            ) : (
+              <ul className="mt-5 space-y-4">
+                {topicMastery.filter((topic) => topic.studentCount >= 3).map((topic) => {
+                  const barColor = topic.pct >= 80 ? "bg-green-500" : topic.pct >= 50 ? "bg-yellow-500" : "bg-destructive";
+                  const masteryLabel = topic.pct >= 80 ? "Strong" : topic.pct >= 50 ? "Developing" : "Needs review";
+                  return (
+                    <li key={topic.topic} className="rounded-xl border border-border bg-background p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-foreground">{topic.topic}</p>
+                          <p className="text-xs text-muted-foreground">{topic.questionCount} question{topic.questionCount === 1 ? "" : "s"} · {topic.studentCount} submissions</p>
+                        </div>
+                        <span className="text-right"><span className="block text-lg font-bold tabular-nums text-foreground">{topic.pct}%</span><span className="text-xs text-muted-foreground">{masteryLabel}</span></span>
+                      </div>
+                      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${topic.topic}: ${topic.pct}% correct`}>
+                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${topic.pct}%` }} />
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">{topic.correct} correct · {topic.skipped} unanswered across the topic questions</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
         )}
 
