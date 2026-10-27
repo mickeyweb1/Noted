@@ -122,6 +122,8 @@ export default function StudentLibrary() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [queueBusy, setQueueBusy] = useState(false);
+  const [queueMessage, setQueueMessage] = useState("");
 
   const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat, resumeBeat } = useMusic();
 
@@ -141,6 +143,8 @@ export default function StudentLibrary() {
             date: new Date(item.createdAt).toLocaleDateString(),
             categoryLabel: item.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1) : "Note",
             generatedText: item.generatedText,
+            revisionQuestions: item.revisionQuestions || [],
+            revisionQueued: (item.revisionQuestions || []).length > 0,
             mediaUrl: item.mediaUrl,
             icon,
             colorClass,
@@ -160,6 +164,19 @@ export default function StudentLibrary() {
   const closeModal = () => {
     if (selectedItem?.type === "music" && isBeatPlaying) pauseBeat(); // don't leave a beat playing with no controls
     setSelectedItem(null);
+  };
+
+  const addToRevisionQueue = async (item) => {
+    setQueueBusy(true); setQueueMessage("");
+    try {
+      const response = await api.post('/revision/queue', { contentId: item.id });
+      const count = response.data?.data?.queued || 0;
+      setQueueMessage(count ? `${count} questions added to your revision queue.` : 'This quiz has no questions to revise.');
+      setMyGenerations((items) => items.map((entry) => entry.id === item.id ? { ...entry, revisionQueued: count > 0 } : entry));
+      setSelectedItem((entry) => entry?.id === item.id ? { ...entry, revisionQueued: count > 0 } : entry);
+      window.dispatchEvent(new Event('revision-updated'));
+    } catch { setQueueMessage('Could not add this quiz to your revision queue. Please try again.'); }
+    finally { setQueueBusy(false); }
   };
 
   // Escape closes the top-most dialog; page behind doesn't scroll while a dialog is open
@@ -340,6 +357,13 @@ export default function StudentLibrary() {
       if (!quizData || !Array.isArray(quizData.questions)) return <p className="text-sm text-destructive">Could not load quiz data.</p>;
       return (
         <div className="space-y-4">
+          <div className="rounded-xl border border-brand/20 bg-brand/5 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><h3 className="font-semibold text-foreground">Keep these questions fresh</h3><p className="mt-1 text-sm text-muted-foreground">Add this quiz to your spaced revision queue.</p></div>
+              <button type="button" disabled={queueBusy || item.revisionQueued} onClick={() => addToRevisionQueue(item)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-60">{item.revisionQueued ? <><CheckCircle2 className="h-4 w-4" /> In revision queue</> : queueBusy ? 'Adding…' : 'Add to Revision Queue'}</button>
+            </div>
+            {queueMessage && <p className="mt-2 text-sm text-muted-foreground" role="status">{queueMessage}</p>}
+          </div>
           <p className="text-sm text-muted-foreground">Review the questions and correct answers below:</p>
           {quizData.questions.map((q, idx) => {
             const correct = q.answer || q.correctAnswer;

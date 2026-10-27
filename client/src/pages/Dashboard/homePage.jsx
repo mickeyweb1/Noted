@@ -44,6 +44,7 @@ export default function StudentHome() {
   const [libraryData, setLibraryData] = useState([]);
   const [stats, setStats] = useState({ streak: 0, weeklyStudyDays: 0, totalNotes: 0, totalQuizzes: 0 });
   const [dueReviewCount, setDueReviewCount] = useState(() => getDueReviewItems().length);
+  const [revisionDue, setRevisionDue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [topStudents, setTopStudents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
@@ -71,6 +72,13 @@ export default function StudentHome() {
       window.removeEventListener("noted-spaced-review-updated", refreshDueReviews);
       window.removeEventListener("storage", refreshDueReviews);
     };
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => api.get('/revision/stats').then((response) => setRevisionDue(response.data?.data?.dueCount || 0)).catch(() => {});
+    refresh();
+    window.addEventListener('revision-updated', refresh);
+    return () => window.removeEventListener('revision-updated', refresh);
   }, []);
 
   const formatTime = (minutes) => {
@@ -295,6 +303,11 @@ export default function StudentHome() {
           </NavLink>
         </section>
       )}
+
+      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Revision due">
+        <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Brain className="h-5 w-5" /></span><div><h2 className="font-semibold text-foreground">Revision Due</h2><p className="mt-0.5 text-sm text-muted-foreground">{revisionDue ? `${revisionDue} question${revisionDue === 1 ? '' : 's'} ready to review.` : 'Your spaced revision queue is clear for now.'}</p></div></div>
+        <NavLink to="/revision" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground hover:bg-brand/90">{revisionDue ? 'Review now' : 'Open revision'} <ArrowRight className="h-4 w-4" /></NavLink>
+      </section>
 
       {/* BOTTOM SECTION: Stats & Recent Activity */}
       <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">

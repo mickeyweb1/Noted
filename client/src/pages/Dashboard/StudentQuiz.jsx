@@ -29,6 +29,8 @@ export default function StudentQuiz() {
     const [viewModalData, setViewModalData] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [revisionQueued, setRevisionQueued] = useState(false);
+    const [queueLoading, setQueueLoading] = useState(false);
 
     const fetchLibraryData = async () => {
         try {
@@ -116,7 +118,8 @@ export default function StudentQuiz() {
                 aiData = mockGeneratedQuiz;
             }
 
-            setGeneratedQuiz(aiData);
+            setGeneratedQuiz({ ...aiData, id: response.data.data._id, revisionQueued: false });
+            setRevisionQueued(false);
             setQuizState('active');
             setCurrentQuestionIndex(0); 
             setScore(0); 
@@ -190,6 +193,18 @@ export default function StudentQuiz() {
             });
             await fetchLibraryData(); 
         } catch (e) { console.error("Failed to save attempt", e); }
+    };
+
+    const handleAddToRevision = async () => {
+        if (!generatedQuiz?.id || queueLoading || revisionQueued) return;
+        setQueueLoading(true);
+        try {
+            await api.post('/revision/queue', { contentId: generatedQuiz.id });
+            setRevisionQueued(true);
+            window.dispatchEvent(new Event('revision-updated'));
+        } catch (error) {
+            alert(error.response?.data?.message || 'Could not add this quiz to your revision queue.');
+        } finally { setQueueLoading(false); }
     };
 
     const handleViewPastQuiz = async (quizId) => {
@@ -359,6 +374,7 @@ export default function StudentQuiz() {
                                 <Award className="w-16 h-16 text-brand mx-auto" />
                                 <h2 className="text-3xl font-display font-bold text-foreground">Quiz Completed!</h2>
                                 <p className="text-muted-foreground">You scored <span className="font-bold text-foreground text-lg">{Math.round((score / totalQuestions) * 100)}%</span> on {activeQuizData.title}</p>
+                                {generatedQuiz?.id && <button type="button" disabled={revisionQueued || queueLoading} onClick={handleAddToRevision} className="mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-5 font-semibold text-brand hover:bg-brand/10 disabled:opacity-70">{revisionQueued ? <><CheckCircle2 className="h-4 w-4" /> Added to Revision Queue</> : queueLoading ? 'Adding…' : 'Add to Revision Queue'}</button>}
                                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
                                     <button onClick={handleRestart} className="w-full sm:w-auto px-6 py-2.5 rounded-lg border border-border bg-background text-foreground font-medium hover:bg-accent hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">Back to Dashboard</button>
                                     <button onClick={() => { handleFinishAndSave(); setViewModalData({ title: activeQuizData.title, score, totalQuestions, percentage: Math.round((score / totalQuestions) * 100), answers: userAnswers }); }} className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-brand text-brand-foreground font-medium shadow-md hover:bg-brand/90 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300">

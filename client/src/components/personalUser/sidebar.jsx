@@ -9,6 +9,7 @@ import {
   Video,
   Mic,
   Clock,
+  Repeat,
   Trophy,
   Sparkles,
   RotateCw,
@@ -18,11 +19,20 @@ import {
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
+import { useEffect, useState } from "react";
+import api from "../../utils/api";
 
 export default function StudentSideBar({ isOpen, onClose }) {
   const navigate = useNavigate();
   const context = useUserContext() || {};
   const { user, logout } = context;
+  const [dueCount, setDueCount] = useState(0);
+  useEffect(() => {
+    const refresh = () => api.get('/revision/stats').then((r) => setDueCount(r.data?.data?.dueCount || 0)).catch(() => {});
+    refresh();
+    window.addEventListener('revision-updated', refresh);
+    return () => window.removeEventListener('revision-updated', refresh);
+  }, []);
 
   const handleLogout = () => {
     if (typeof logout === "function") {
@@ -39,6 +49,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
     { to: "/quiz", label: "Quizzes", icon: Brain },
         { to: "/ai-flashcards", label: "AI Flashcards", icon: RotateCw },
     { to: "/study-review", label: "Spaced Review", icon: Clock },
+    { to: "/revision", label: "Revision", icon: Repeat, badge: dueCount },
     { to: "/music-studio", label: "Music Studio", icon: Music },
     { to: "/video-studio", label: "Video Studio", icon: Video },
         { to: "/myLibrary", label: "My Library", icon: Library },
@@ -76,7 +87,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
 
       {/* Navigation */}
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
-        {navItems.map(({ to, label, icon: Icon }) => (
+        {navItems.map(({ to, label, icon: Icon, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -90,7 +101,8 @@ export default function StudentSideBar({ isOpen, onClose }) {
             }
           >
             <Icon className="h-5 w-5" />
-            <span>{label}</span>
+            <span className="flex-1">{label}</span>
+            {badge > 0 && <span className="min-w-5 rounded-full bg-brand px-1.5 py-0.5 text-center text-[10px] font-bold text-brand-foreground">{badge > 99 ? "99+" : badge}</span>}
           </NavLink>
         ))}
       </nav>

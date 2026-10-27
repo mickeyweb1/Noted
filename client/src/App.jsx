@@ -30,6 +30,7 @@ const AdminGameShowCreator = lazy(() => import("./pages/AdminGameShowCreator"));
 
 import StudentDashboardLayout from "./components/layouts/StudentDashboardLayout";
 const StudentHome = lazy(() => import("./pages/Dashboard/homePage"));
+const Revision = lazy(() => import("./pages/Dashboard/Revision"));
 const StudentAiGenerator = lazy(() => import("./pages/Dashboard/aiGenerator"));
 const AiTeacher = lazy(() => import("./pages/Dashboard/AiTeacher"));
 const StudentLibrary = lazy(() => import("./pages/Dashboard/libirary"));
@@ -106,6 +107,7 @@ function App() {
         }
       >
         <Route path="/dashboard" element={<StudentHome />} />
+        <Route path="/revision" element={<Revision />} />
         <Route path="/battle-arena" element={<BattleArena />} />
         <Route path="/ai-teacher" element={<AiTeacher />} />
         <Route path="/aiGenerator" element={<StudentAiGenerator />} />
