@@ -164,7 +164,7 @@ export default function MarketingLayout({ children }) {
             href="https://unsplash.com/license"
             target="_blank"
             rel="noreferrer"
-            className="mt-5 inline-block text-xs text-white/60 underline underline-offset-2 transition-colors hover:text-white"
+            className="mt-5 block text-right text-xs text-white/60 underline underline-offset-2 transition-colors hover:text-white"
           >
             Photo via Unsplash
           </a>
