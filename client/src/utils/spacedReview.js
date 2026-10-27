@@ -63,3 +63,9 @@ export function getDueReviewItems(now = Date.now()) {
   return getReviewItems().filter((item) => Number(item.dueAt) <= now);
 }
 
+export function getNextReviewItem(now = Date.now()) {
+  return getReviewItems()
+    .filter((item) => Number(item.dueAt) > now)
+    .sort((a, b) => Number(a.dueAt) - Number(b.dueAt))[0] || null;
+}
+

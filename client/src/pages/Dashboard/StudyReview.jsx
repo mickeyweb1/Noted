@@ -2,17 +2,21 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, BookOpen, Check, Clock3, RotateCcw } from "lucide-react";
 import MathRenderer from "../../components/MathRenderer";
-import { getDueReviewItems, getReviewItems, updateReviewSchedule } from "../../utils/spacedReview";
+import { getDueReviewItems, getNextReviewItem, updateReviewSchedule } from "../../utils/spacedReview";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2";
 
 export default function StudyReview() {
   const [items, setItems] = useState(() => getDueReviewItems());
+  const [upcoming, setUpcoming] = useState(() => getNextReviewItem());
   const [showAnswer, setShowAnswer] = useState(false);
   const current = items[0];
 
   useEffect(() => {
-    const refresh = () => setItems(getDueReviewItems());
+    const refresh = () => {
+      setItems(getDueReviewItems());
+      setUpcoming(getNextReviewItem());
+    };
     window.addEventListener("noted-spaced-review-updated", refresh);
     window.addEventListener("storage", refresh);
     return () => {
@@ -27,10 +31,6 @@ export default function StudyReview() {
     setItems(getDueReviewItems());
     setShowAnswer(false);
   };
-
-  const upcoming = getReviewItems()
-    .filter((item) => Number(item.dueAt) > Date.now())
-    .sort((a, b) => Number(a.dueAt) - Number(b.dueAt))[0];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
