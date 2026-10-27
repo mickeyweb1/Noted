@@ -55,7 +55,7 @@ const audienceCards = [
     text: "Master any subject with AI-generated summaries, audio podcasts, and interactive quizzes tailored to your unique learning style.",
     link: "/student",
     image: "photo-1523240795612-9a054b0db644",
-    imageAlt: "University students studying together outdoors",
+    imageAlt: "University students studying together in a library",
   },
   {
     title: "For personal use",
