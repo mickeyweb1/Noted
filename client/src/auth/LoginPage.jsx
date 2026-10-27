@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, AudioLines, Eye, EyeOff, FolderOpen, Globe2, LockKeyhole, Mail, NotebookPen, Repeat, LoaderCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '../components/themeToggle';
@@ -31,6 +31,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({ email: '', password: '' });
   const [rememberMe, setRememberMe] = useState(Boolean(getRememberedEmail()));
+  const submissionLock = useRef(false);
 
   useEffect(() => {
     document.title = 'Login - Noted';
@@ -43,7 +44,7 @@ export default function LoginPage() {
 
   const handleLogin = async (event) => {
     event.preventDefault();
-    if (loading) return;
+    if (loading || submissionLock.current) return;
 
     const normalizedEmail = email.toLowerCase().trim();
     const trimmedPassword = password.trim();
@@ -55,6 +56,7 @@ export default function LoginPage() {
     setError('');
     if (nextValidationErrors.email || nextValidationErrors.password) return;
 
+    submissionLock.current = true;
     setLoading(true);
     try {
       const res = await api.post('/auth/login', { email: normalizedEmail, password: trimmedPassword });
@@ -81,6 +83,7 @@ export default function LoginPage() {
         ? 'Invalid email or password. Please try again.'
         : message);
     } finally {
+      submissionLock.current = false;
       setLoading(false);
     }
   };
