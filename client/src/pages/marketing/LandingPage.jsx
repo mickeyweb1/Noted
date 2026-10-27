@@ -184,46 +184,67 @@ export default function LandingPage() {
       </section>
 
       {/* ================= QUICK QUIZ ACCESS SECTION ================= */}
-      <section className="border-y border-border bg-muted/30">
-        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-sm font-medium text-brand mb-6">
-            <KeyRound className="h-4 w-4" />
-            Quick Access
-          </div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Have a quiz code?
-          </h2>
-          <p className="mt-3 text-lg text-muted-foreground">
-            Jump straight into your assessment. No account or login required.
-          </p>
-
-                  <form onSubmit={handleJoinQuiz} className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-lg mx-auto">
-            <div className="relative w-full">
-              <input
-                type="text"
-                value={quizCode}
-                // ✅ FIXED: Now allows letters, numbers, AND hyphens (-)
-                onChange={(e) => setQuizCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase().slice(0, 10))}
-                placeholder="Enter code (e.g., T-8X92A1B3)"
-                className="w-full rounded-full border border-border bg-background px-6 py-4 text-center text-lg font-mono tracking-widest text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
-              />
+      <section className="relative isolate overflow-hidden border-y border-border bg-muted/30">
+        <div aria-hidden="true" className="pointer-events-none absolute -left-24 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-brand/10 blur-3xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute -right-24 top-0 h-72 w-72 rounded-full bg-electric/10 blur-3xl" />
+        <div className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-18 lg:px-8 lg:py-20">
+          <div className="mx-auto grid max-w-5xl gap-8 rounded-[28px] border border-border bg-card p-5 shadow-soft sm:p-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-12 lg:p-10">
+            <div>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/8 px-3 py-1.5 text-sm font-medium text-brand">
+                <KeyRound className="h-4 w-4" />
+                Quick access
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                Have a quiz code?
+              </h2>
+              <p className="mt-3 max-w-md text-base leading-7 text-muted-foreground sm:text-lg">
+                Pick up where your class left off. Enter the code from your teacher to join your assessment.
+              </p>
+              <p className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
+                <CheckCircle2 className="h-4 w-4 text-brand" />
+                No account or login required
+              </p>
             </div>
-            <button
-              type="submit"
-              disabled={quizCode.length !== 10}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 text-sm font-medium text-primary-foreground shadow-soft transition hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Join Quiz
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
 
-          
-          {quizCode.length > 0 && quizCode.length < 10 && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              {10 - quizCode.length} character{10 - quizCode.length !== 1 ? 's' : ''} remaining
-            </p>
-          )}
+            <form
+              onSubmit={handleJoinQuiz}
+              className="rounded-2xl border border-border bg-muted/40 p-4 sm:p-5"
+            >
+              <label htmlFor="quiz-code" className="mb-2 block text-sm font-semibold text-foreground">
+                Quiz access code
+              </label>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative min-w-0 flex-1">
+                  <KeyRound aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    id="quiz-code"
+                    type="text"
+                    value={quizCode}
+                    onChange={(e) => setQuizCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, "").toUpperCase().slice(0, 10))}
+                    placeholder="e.g. T-8X92A1B3"
+                    maxLength={10}
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    aria-describedby="quiz-code-hint"
+                    className="h-12 w-full rounded-xl border border-border bg-background pl-11 pr-4 font-mono text-base tracking-wider text-foreground placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={quizCode.length !== 10}
+                  className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-32"
+                >
+                  Join quiz
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+              <p id="quiz-code-hint" className="mt-3 min-h-5 text-sm text-muted-foreground" aria-live="polite">
+                {quizCode.length > 0 && quizCode.length < 10
+                  ? `${10 - quizCode.length} character${quizCode.length !== 9 ? "s" : ""} remaining`
+                  : "Enter the 10-character code provided by your teacher."}
+              </p>
+            </form>
+          </div>
         </div>
       </section>
 
