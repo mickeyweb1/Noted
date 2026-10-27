@@ -47,18 +47,24 @@ const steps = [
     title: "Bring what you’re learning",
     description: "Start with your notes and the subjects you want to work on.",
     icon: BookOpen,
+    image: "photo-1434030216411-0b793f4b4173",
+    imageAlt: "A student arranging handwritten study notes",
   },
   {
     number: "02",
     title: "Choose how to review",
     description: "Use summaries, flashcards, quizzes, or audio to revisit the material.",
     icon: Layers3,
+    image: "photo-1521587760476-6c12a4b040da",
+    imageAlt: "Bookshelves in a quiet library",
   },
   {
     number: "03",
     title: "Make time to focus",
     description: "Use focus sessions and reminders to keep your study routine moving.",
     icon: Clock3,
+    image: "photo-1503676260728-1c00da094a0b",
+    imageAlt: "A student working through study material at a desk",
   },
 ];
 
@@ -115,7 +121,7 @@ export default function PersonalPage() {
 
       <section id="personal-tools" className="border-b border-border bg-background">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-          <div className="mb-10 max-w-2xl">
+          <div className="mx-auto mb-10 max-w-2xl text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand">
               Personal features
             </p>
@@ -166,24 +172,34 @@ export default function PersonalPage() {
               From your notes to a routine that works for you.
             </h2>
           </div>
-          <ol className="grid gap-5 md:grid-cols-3">
-            {steps.map(({ number, title, description, icon: Icon }) => (
+          <ol className="grid gap-6 md:grid-cols-3">
+            {steps.map(({ number, title, description, icon: Icon, image, imageAlt }) => (
               <li
                 key={number}
-                className="flex min-w-0 flex-col rounded-2xl border border-border bg-card p-6 shadow-soft"
+                className="landing-interactive group flex min-w-0 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lg"
               >
-                <div className="mb-6 flex items-center justify-between">
-                  <span className="font-display text-sm font-bold tracking-[0.16em] text-brand">
+                <div className="relative h-44 overflow-hidden bg-muted sm:h-48">
+                  <img
+                    src={photo(image)}
+                    alt={imageAlt}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-slate-950/25" />
+                  <span className="absolute bottom-4 left-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/90 font-display text-sm font-bold text-brand shadow-soft">
                     {number}
                   </span>
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+                  <UnsplashCredit className="absolute bottom-4 right-4 z-10 text-white/90 hover:text-white" />
+                </div>
+                <div className="flex flex-1 flex-col p-6">
+                  <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
+                  <h3 className="text-xl font-semibold text-foreground">{title}</h3>
+                  <p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">
+                    {description}
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold text-foreground">{title}</h3>
-                <p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">
-                  {description}
-                </p>
               </li>
             ))}
           </ol>
