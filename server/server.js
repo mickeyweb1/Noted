@@ -411,6 +411,16 @@ socket.on('pick_card', ({ quizId, cardIndex }) => {
 });
 
 const MONGO_URI = process.env.MONGO_URI;
+if (!process.env.JWT_SECRET) {
+  console.error('❌ Missing required environment variable: JWT_SECRET');
+  process.exit(1);
+}
+
+if (!MONGO_URI) {
+  console.error('❌ Missing required environment variable: MONGO_URI');
+  process.exit(1);
+}
+
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 })
   .then(() => {
     console.log('✅ Connected to MongoDB Atlas!');

@@ -55,7 +55,7 @@ Noted is a modern, full-stack AI-powered study dashboard designed to transform m
 Follow these instructions to get a local copy of the project up and running.
 
 ### Prerequisites
-- **Node.js** (v18 or higher)
+- **Node.js** (^20.19.0 or >=22.12.0)
 - **npm**, **yarn**, or **pnpm**
 - A **MongoDB** database URI (local or Atlas)
 
@@ -75,25 +75,10 @@ Follow these instructions to get a local copy of the project up and running.
    npm install
 
 4. **Set Up Environment Variables:**
-**Create a .env file in both the server and client directories.**
-**server/.env**
-   PORT=5000
-   MONGO_URI=your_mongodb_connection_string
-   JWT_SECRET=your_super_secret_jwt_key
-   CLIENT_URL=http://localhost:5173
-   
-   # AI & External Services
-   GROQ_API_KEY=your_groq_key
-   ELEVENLABS_API_KEY=your_elevenlabs_key
-   PEXELS_API_KEY=your_pexels_key
-   REPLICATE_API_TOKEN=your_replicate_token
-   OCR_SPACE_API_KEY=your_ocr_key
-   
-   # Email Notifications
-   EMAIL_USER=your_gmail_address@gmail.com
-   EMAIL_PASS=your_16_char_gmail_app_password
+   Copy `server/.env.example` to `server/.env` and set a valid `MONGO_URI` and a private, long random `JWT_SECRET`. Add credentials for optional services as needed.
+   Copy `client/.env.example` to `client/.env`. Set `VITE_API_URL` to the backend API URL, including `/api`.
 
-**client/.env**
+   For production, configure these values in the hosting providers' environment settings. `VITE_API_URL` is embedded during the frontend build and must point to the deployed backend.
 
 5. **Start the Development Servers:**
 **Terminal 1 (Backend):**
@@ -150,7 +135,6 @@ Noted AI Team
 4. **Full-Stack Accuracy**: Includes the backend, database, and environment variable setup, which is crucial for anyone (or you, on a new machine) trying to run the app.
 5. **Project Structure**: Gives a quick mental map of how the codebase is organized.
 6. **Polished Formatting**: Uses tables, code blocks, and blockquotes to make it highly readable and visually appealing on GitHub. 
-
 
 
 

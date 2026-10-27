@@ -6,8 +6,6 @@ dotenv.config();
 
 // This middleware protects routes by verifying the JWT token
 export const protect = async (req, res, next) => {
-  console.log("protect headers:", req.headers);
-
   const authorizationHeader = Object.entries(req.headers).find(
     ([name]) => name.toLowerCase() === "authorization",
   )?.[1];
