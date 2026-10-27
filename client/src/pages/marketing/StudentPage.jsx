@@ -6,9 +6,7 @@ import {
   Trophy,
   BookOpen,
   Headphones,
-  School,
   Zap,
-  Flame,
   GraduationCap,
   Target,
 } from "lucide-react";
@@ -21,36 +19,48 @@ const studentFeatures = [
     title: "Class-specific AI summaries",
     description:
       "Turn your specific teacher's lecture notes and slides into catchy audio summaries and visual guides tailored to your syllabus.",
+    image: "photo-1434030216411-0b793f4b4173",
+    imageAlt: "Student's notes and books arranged on a desk",
   },
   {
     icon: Trophy,
     title: "Friendly school leaderboards",
     description:
-      "Compete with your classmates in a healthy way. Track your study hours, maintain your streak, and climb the school rankings.",
+      "Take part in friendly academic challenges and see how your study progress compares with your classmates.",
+    image: "photo-1517486808906-6ca8b3f04846",
+    imageAlt: "Students sharing ideas while studying together",
   },
   {
     icon: Users,
     title: "Virtual study squads",
     description:
       "Join shared focus rooms with your friends. Study together in real-time, even when you aren't in the same room.",
+    image: "photo-1529390079861-591de354faf5",
+    imageAlt: "Students working together on a class assignment",
   },
   {
     icon: Headphones,
     title: "Learn on the go",
     description:
       "Download your AI-generated audio summaries and listen to them on the bus, before a game, or right before bed.",
+    image: "photo-1516280440614-37939bbacd81",
+    imageAlt: "A student listening to audio with headphones",
   },
   {
     icon: Target,
     title: "Smart exam prep",
     description:
       "Don't just read—test yourself. The AI automatically generates practice quizzes based on your class notes to ensure you're ready.",
+    image: "photo-1427504494785-3a9ca7044f45",
+    imageAlt: "Students studying and reviewing material together",
   },
   {
     icon: Zap,
     title: "Zero burnout focus timers",
     description:
       "Use our built-in Pomodoro focus blocks designed specifically for student attention spans, keeping you sharp without the stress.",
+    image: "photo-1503676260728-1c00da094a0b",
+    imageAlt: "Student focused on schoolwork at a desk",
   },
 ];
 
@@ -60,18 +70,24 @@ const howItWorks = [
     title: "Get your school invite code",
     description:
       "Your school admin or teacher will give you a unique, one-time code to securely link your account to your school's portal.",
+    image: "photo-1509062522246-3755977927d7",
+    imageAlt: "Teacher helping students in a classroom",
   },
   {
     step: "02",
     title: "Connect with your classes",
     description:
       "Select your grade and subjects. Instantly sync with your classmates and see your school's study leaderboard.",
+    image: "photo-1523240795612-9a054b0db644",
+    imageAlt: "University students studying together",
   },
   {
     step: "03",
     title: "Study smarter & top your class",
     description:
       "Paste your notes, generate AI audio/visuals, take quizzes, and build an unbreakable study streak.",
+    image: "photo-1434030216411-0b793f4b4173",
+    imageAlt: "Open notebook and study materials on a desk",
   },
 ];
 
