@@ -52,7 +52,7 @@ const getLimits = (user) => {
   }
   if (active && user.subscriptionTier === 'pro') return { maxQuestions: 60, maxStudents: 40, maxGameShows: 12, isUnlimited: false };
   if (user.role === 'teacher' && user.schoolOwnerId) return { maxQuestions: 50, maxStudents: 30, maxGameShows: 8, isUnlimited: false };
-  return { maxQuestions: 40, maxStudents: 20, maxGameShows: 0, isUnlimited: false };
+  return { maxQuestions: 40, maxStudents: 25, maxGameShows: 0, isUnlimited: false };
 };
 
 const generateAccessCode = (mode = 'test') => {
