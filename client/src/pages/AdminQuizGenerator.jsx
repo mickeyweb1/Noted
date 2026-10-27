@@ -37,6 +37,7 @@ const INITIAL_METADATA = {
   timeType: "total",
   maxTabSwitches: "",
   layoutMode: "scroll",
+  showAnswersAfterSubmission: true,
 };
 
 const emptyQuestion = () => ({
@@ -129,6 +130,7 @@ export default function AdminQuizGenerator() {
         timeType: metadata.timeType,
         maxTabSwitches,
         layoutMode: metadata.layoutMode,
+        showAnswersAfterSubmission: metadata.showAnswersAfterSubmission,
       },
     };
   };
@@ -241,6 +243,7 @@ export default function AdminQuizGenerator() {
         numQuestions: questions.length,
         maxTabSwitches: settings.maxTabSwitches,
         layoutMode: settings.layoutMode,
+        showAnswersAfterSubmission: settings.showAnswersAfterSubmission,
         questions,
         useAIAutocomplete: false,
       });
@@ -436,6 +439,20 @@ export default function AdminQuizGenerator() {
                   </SelectField>
                 </div>
               </Field>
+
+              <label htmlFor="quiz-show-answers" className="md:col-span-2 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background p-4 transition-colors hover:bg-accent/40">
+                <input
+                  id="quiz-show-answers"
+                  type="checkbox"
+                  checked={metadata.showAnswersAfterSubmission}
+                  onChange={(e) => setField("showAnswersAfterSubmission")(e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">Show answer review after submission</span>
+                  <span className="mt-1 block text-sm leading-5 text-muted-foreground">When enabled, students can see their answers, correct responses, and any explanations after submitting.</span>
+                </span>
+              </label>
             </div>
           </fieldset>
         </div>

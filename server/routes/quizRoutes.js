@@ -192,7 +192,7 @@ Required JSON format:
 /* ------------------------------------------------------------------ */
 router.post('/create-manual', protect, async (req, res, next) => {
   try {
-    const { title, difficulty, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, layoutMode = 'scroll', questions, gameMode = 'test', baseMarks = 10, bonusMarks = 5 } = req.body || {};
+    const { title, difficulty, numStudents, timeLimit, timeUnit, timeType, maxTabSwitches, layoutMode = 'scroll', showAnswersAfterSubmission = true, questions, gameMode = 'test', baseMarks = 10, bonusMarks = 5 } = req.body || {};
 
     if (typeof title !== 'string' || !title.trim()) return res.status(400).json({ success: false, message: 'A title is required.' });
     if (!(Number(timeLimit) > 0)) return res.status(400).json({ success: false, message: 'Please set a valid time limit.' });
@@ -230,6 +230,7 @@ router.post('/create-manual', protect, async (req, res, next) => {
       difficulty, timeLimit: Number(timeLimit), timeUnit, timeType,
       maxTabSwitches: maxTabSwitches || null,
       layoutMode: layoutMode === 'paginated' ? 'paginated' : 'scroll',
+      showAnswersAfterSubmission: showAnswersAfterSubmission !== false,
       numberOfStudents: studentCount,
       gameMode: mode,
       baseMarks: Number(baseMarks) || 10,
@@ -290,6 +291,7 @@ router.post('/session/start', async (req, res, next) => {
         title: quiz.title,
         difficulty: quiz.difficulty,
         layoutMode: quiz.layoutMode || 'scroll',
+        showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
         savedAnswers: session.answers || [],
         progressSavedAt: session.progressSavedAt || null,
@@ -420,7 +422,8 @@ router.post('/submit', async (req, res, next) => {
       totalQuestions: quiz.questions.length,
       timeTaken: timeTakenSeconds,
       tabSwitchCount: finalTabs,
-      review,
+      showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
+      review: quiz.showAnswersAfterSubmission === false ? [] : review,
     });
   } catch (error) { next(error); }
 });
@@ -520,6 +523,7 @@ router.post('/validate-code', async (req, res, next) => {
         maxTabSwitches: quiz.maxTabSwitches,
         bonusMarks: quiz.bonusMarks,
         layoutMode: quiz.layoutMode || 'scroll',
+        showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
         hasActiveSession,
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
       },

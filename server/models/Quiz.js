@@ -18,6 +18,7 @@ const quizSchema = new mongoose.Schema({
     enum: ['scroll', 'paginated'], 
     default: 'scroll' 
   },
+  showAnswersAfterSubmission: { type: Boolean, default: true },
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   questions: [{

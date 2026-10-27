@@ -206,6 +206,7 @@ export default function TakeQuiz() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [result, setResult] = useState(null);
+  const [resultAnimationProgress, setResultAnimationProgress] = useState(0);
   const [error, setError] = useState("");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [maxTabSwitches, setMaxTabSwitches] = useState(null);
@@ -702,13 +703,40 @@ export default function TakeQuiz() {
   const progress = totalQuestions ? (answeredCount / totalQuestions) * 100 : 0;
   const percentage = result && result.totalQuestions > 0 ? Math.round((result.score / result.totalQuestions) * 100) : 0;
   const isPassing = percentage >= 50;
-  const resultReview = result?.review || [];
+  const showAnswerReview = result?.showAnswersAfterSubmission !== false;
+  const resultReview = showAnswerReview ? result?.review || [] : [];
   const incorrectCount = resultReview.length
     ? resultReview.filter((item) => item.selectedAnswer && !item.isCorrect).length
     : Math.max(0, (result?.totalQuestions || 0) - (result?.score || 0));
   const unansweredResultCount = resultReview.filter((item) => !item.selectedAnswer).length;
+  const animatedPercentage = Math.round(percentage * resultAnimationProgress);
+  const animatedScore = Math.round((result?.score || 0) * resultAnimationProgress);
+  const animatedIncorrectCount = Math.round(incorrectCount * resultAnimationProgress);
+  const animatedUnansweredCount = Math.round(unansweredResultCount * resultAnimationProgress);
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
+
+  useEffect(() => {
+    if (step !== "result" || !result) return undefined;
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      setResultAnimationProgress(1);
+      return undefined;
+    }
+
+    let frameId;
+    const start = performance.now();
+    const duration = 1000;
+    const animate = (now) => {
+      const linearProgress = Math.min(1, (now - start) / duration);
+      const easedProgress = 1 - (1 - linearProgress) ** 3;
+      setResultAnimationProgress(easedProgress);
+      if (linearProgress < 1) frameId = requestAnimationFrame(animate);
+    };
+    setResultAnimationProgress(0);
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, [step, result]);
 
   /* ================= SCREENS ================= */
 
@@ -1002,11 +1030,11 @@ export default function TakeQuiz() {
             <div className="relative mx-auto mb-5 h-36 w-36 sm:h-40 sm:w-40">
               <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
                 <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" className="stroke-muted" />
-                <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - percentage / 100)} className={`transition-all duration-700 ${isPassing ? "stroke-green-500" : "stroke-destructive"}`} />
+                <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - animatedPercentage / 100)} className={isPassing ? "stroke-green-500" : "stroke-destructive"} />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-4xl font-black ${isPassing ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>{percentage}%</span>
-                <span className="text-sm text-muted-foreground">{result.score} of {result.totalQuestions}</span>
+                <span className={`text-4xl font-black tabular-nums ${isPassing ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>{animatedPercentage}%</span>
+                <span className="text-sm tabular-nums text-muted-foreground">{animatedScore} of {result.totalQuestions}</span>
               </div>
             </div>
             <h1 id="quiz-result-title" className="mb-1 flex items-center justify-center gap-2 text-2xl font-bold text-foreground">
@@ -1018,16 +1046,20 @@ export default function TakeQuiz() {
             <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-2xl bg-muted p-3">
                 <dt className="text-xs text-muted-foreground">Correct</dt>
-                <dd className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{result.score}</dd>
+                <dd className="mt-1 text-2xl font-bold tabular-nums text-green-600 dark:text-green-400">{animatedScore}</dd>
               </div>
-              <div className="rounded-2xl bg-muted p-3">
-                <dt className="text-xs text-muted-foreground">Incorrect</dt>
-                <dd className="mt-1 text-2xl font-bold text-destructive">{incorrectCount}</dd>
-              </div>
-              <div className="rounded-2xl bg-muted p-3">
-                <dt className="text-xs text-muted-foreground">Unanswered</dt>
-                <dd className="mt-1 text-2xl font-bold text-foreground">{unansweredResultCount}</dd>
-              </div>
+              {showAnswerReview && (
+                <>
+                  <div className="rounded-2xl bg-muted p-3">
+                    <dt className="text-xs text-muted-foreground">Incorrect</dt>
+                    <dd className="mt-1 text-2xl font-bold tabular-nums text-destructive">{animatedIncorrectCount}</dd>
+                  </div>
+                  <div className="rounded-2xl bg-muted p-3">
+                    <dt className="text-xs text-muted-foreground">Unanswered</dt>
+                    <dd className="mt-1 text-2xl font-bold tabular-nums text-foreground">{animatedUnansweredCount}</dd>
+                  </div>
+                </>
+              )}
               <div className="rounded-2xl bg-muted p-3">
                 <dt className="text-xs text-muted-foreground">Time taken</dt>
                 <dd className="mt-1 text-2xl font-bold text-foreground">{formatTime(result.timeTaken || 0)}</dd>
@@ -1040,6 +1072,12 @@ export default function TakeQuiz() {
               </p>
             )}
           </section>
+
+          {!showAnswerReview && (
+            <p role="status" className="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+              Your teacher has turned off answer details for this quiz.
+            </p>
+          )}
 
           {resultReview.length > 0 && (
             <section className="space-y-4" aria-labelledby="answer-review-title">
