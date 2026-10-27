@@ -12,6 +12,8 @@ const roles = [
     title: "School admin / Teacher",
     description: "Register your school, add and manage teachers, and see school-wide results.",
     badge: "Principals & admins",
+    image: "photo-1509062522246-3755977927d7",
+    imageAlt: "Teacher leading a classroom lesson",
   },
   {
     to: "/signup/school-student",
@@ -19,6 +21,8 @@ const roles = [
     title: "Teacher with an invite code",
     description: "Join your school with the code from your school owner to create quizzes, run game shows and track your classes.",
     badge: "Educators",
+    image: "photo-1517486808906-6ca8b3f04846",
+    imageAlt: "Students collaborating around a table",
   },
   {
     to: "/signup/personal",
@@ -26,6 +30,8 @@ const roles = [
     title: "Student",
     description: "Use AI study tools, flashcards and focus timers to master any subject on your own.",
     badge: "Self-study",
+    image: "photo-1434030216411-0b793f4b4173",
+    imageAlt: "Student's notebook and study materials on a desk",
   },
 ];
 
@@ -46,35 +52,39 @@ export default function RoleSelectionPage() {
 
         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center">
           <div className="mb-8 text-center md:mb-10">
-            <h1 className="mb-3 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">Create your account</h1>
+            <h1 className="mb-3 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">Get started with Noted</h1>
             <p className="mx-auto max-w-lg text-base text-muted-foreground">
-              Choose how you'll use Noted so we can set up the right experience for you.
+              Choose the option that best describes you to continue.
             </p>
           </div>
 
-          <ul className="grid gap-3 md:grid-cols-3 md:gap-5">
-            {roles.map(({ to, icon: Icon, title, description, badge }) => (
-              <li key={to} className="flex">
+          <ul className="grid gap-4 md:grid-cols-3 md:gap-5">
+            {roles.map(({ to, icon: Icon, title, description, badge, image, imageAlt }) => (
+              <li key={to} className="flex min-w-0">
                 <Link
                   to={to}
-                  className="group relative flex w-full flex-row items-start gap-4 overflow-hidden rounded-2xl border border-border bg-card p-4 transition-all duration-300 hover:border-brand/50 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99] motion-safe:md:hover:-translate-y-1 md:flex-col md:gap-0 md:p-6"
+                  className="landing-interactive group flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:border-brand/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
                 >
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-                  <div className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-soft transition-colors duration-300 group-hover:bg-brand md:mb-5 md:h-14 md:w-14">
-                    <Icon className="h-6 w-6 text-brand transition-colors duration-300 group-hover:text-brand-foreground md:h-7 md:w-7" aria-hidden="true" />
-                  </div>
-
-                  <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-                    <span className="mb-2 inline-block w-fit rounded-full bg-muted px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors duration-300 group-hover:bg-brand-soft group-hover:text-brand">
+                  <div className="relative h-32 overflow-hidden bg-muted sm:h-36">
+                    <img
+                      src={`https://images.unsplash.com/${image}?auto=format&fit=crop&w=800&q=80`}
+                      alt={imageAlt}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 to-transparent" />
+                    <span className="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-full border border-white/25 bg-slate-950/45 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                       {badge}
                     </span>
-                    <h2 className="mb-1.5 text-lg font-bold text-foreground transition-colors duration-300 group-hover:text-brand md:mb-2 md:text-xl">{title}</h2>
-                    <p className="flex-1 text-sm leading-relaxed text-muted-foreground md:mb-6">{description}</p>
+                  </div>
 
-                    {/* Always visible on touch screens (there's no hover there); fades in on desktop */}
-                    <span className="mt-3 flex items-center text-sm font-semibold text-brand transition-all duration-300 md:mt-0 md:-translate-x-2 md:opacity-0 md:group-hover:translate-x-0 md:group-hover:opacity-100 md:group-focus-visible:translate-x-0 md:group-focus-visible:opacity-100">
-                      Get started <ArrowRight className="ml-1 h-4 w-4" aria-hidden="true" />
+                  <div className="flex flex-1 flex-col p-5 sm:p-5">
+                    <h2 className="text-lg font-bold text-foreground transition-colors group-hover:text-brand">{title}</h2>
+                    <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+                    <span className="mt-5 inline-flex items-center justify-between border-t border-border pt-4 text-sm font-semibold text-brand">
+                      Continue
+                      <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true" />
                     </span>
                   </div>
                 </Link>
@@ -85,6 +95,12 @@ export default function RoleSelectionPage() {
           <p className="mt-8 text-center text-sm text-muted-foreground md:mt-10">
             Already have an account?{" "}
             <Link to="/login" className="font-semibold text-brand underline-offset-4 transition-all hover:underline">Sign in here</Link>
+          </p>
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Photos via{" "}
+            <a href="https://unsplash.com/license" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+              Unsplash
+            </a>
           </p>
         </div>
       </div>
