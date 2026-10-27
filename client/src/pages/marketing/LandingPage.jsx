@@ -186,11 +186,9 @@ export default function LandingPage() {
       {/* ================= QUICK QUIZ ACCESS SECTION ================= */}
       <section className="border-y border-border bg-muted/30 px-4 py-14 sm:px-6 sm:py-18 lg:px-8 lg:py-20">
         <div className="mx-auto grid max-w-6xl overflow-hidden rounded-[30px] border border-border bg-card shadow-soft lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="relative isolate flex flex-col justify-between overflow-hidden bg-slate-950 p-7 text-white sm:p-9 lg:p-11">
-            <div aria-hidden="true" className="pointer-events-none absolute right-0 top-0 z-0 h-72 w-72 translate-x-1/3 -translate-y-1/3 rounded-full bg-brand/40 blur-3xl" />
-            <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-0 h-64 w-64 -translate-x-1/3 translate-y-1/3 rounded-full bg-electric/25 blur-3xl" />
+          <div className="relative flex flex-col justify-between overflow-hidden border-b border-border bg-[#211b32] p-7 text-white sm:p-9 lg:border-b-0 lg:border-r lg:border-white/10 lg:p-11">
             <div className="relative z-10">
-              <div className="mb-8 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-soft">
+              <div className="mb-8 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-white">
                 <KeyRound className="h-5 w-5" />
               </div>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/65">
@@ -202,6 +200,14 @@ export default function LandingPage() {
               <p className="mt-4 max-w-sm leading-7 text-white/75">
                 Enter the code shared by your teacher and go straight to your assessment.
               </p>
+              <div aria-hidden="true" className="mt-7 flex max-w-[272px] gap-1.5">
+                {Array.from({ length: 10 }, (_, index) => (
+                  <span
+                    key={index}
+                    className="h-6 w-6 shrink-0 rounded-md border border-white/25 bg-white/5"
+                  />
+                ))}
+              </div>
             </div>
             <div className="relative z-10 mt-9 flex flex-wrap gap-2 text-sm">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-white/85">
