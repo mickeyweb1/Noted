@@ -125,34 +125,48 @@ export default function MarketingLayout({ children }) {
       <main id="main">{children}</main>
 
       {/* Footer */}
-      <footer className="relative isolate overflow-hidden border-t border-white/10 bg-slate-950 text-white">
-        <img
-          src="https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1800&q=80"
-          alt=""
-          aria-hidden="true"
-          loading="lazy"
-          className="absolute inset-0 z-0 h-full w-full object-cover object-center"
-        />
-        <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/85 via-slate-950/75 to-slate-950/65" />
-        <div className="relative z-10 mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-xl">
-              <div className="mb-4 flex items-center gap-3">
-                <img src="/favicon.svg" alt="" aria-hidden="true" className="h-10 w-10 rounded-xl" />
-                <span className="font-display text-2xl font-bold">Noted</span>
+      <footer className="border-t border-border bg-slate-950 text-white">
+        <div className="mx-auto max-w-7xl px-4 pb-6 pt-10 sm:px-6 lg:px-8 lg:pt-14">
+          <div className="landing-interactive group relative isolate overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 px-6 py-10 shadow-2xl sm:px-10 lg:px-12 lg:py-12">
+            <img
+              src="https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1800&q=80"
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              className="absolute inset-0 z-0 h-full w-full object-cover object-center transition-transform duration-700 group-hover:scale-[1.02]"
+            />
+            <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-950/55" />
+
+            <div className="relative z-10 flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
+              <div className="max-w-xl">
+                <Link to="/" className={`mb-5 inline-flex items-center gap-3 rounded-lg ${focusRing}`} aria-label="Noted home">
+                  <img src="/favicon.svg" alt="" aria-hidden="true" className="h-10 w-10 rounded-xl shadow-soft" />
+                  <span className="font-display text-2xl font-bold tracking-tight">Noted</span>
+                </Link>
+                <p className="text-sm leading-6 text-white/80 sm:text-base">
+                  Study smarter with clear notes, useful summaries, and tools that help you focus.
+                </p>
               </div>
-              <p className="text-white/80">Study smarter with AI-powered notes, lightning-fast summaries, and tools built for better focus.</p>
+
+              <div className="flex shrink-0 flex-col gap-3 min-[420px]:flex-row">
+                <Link to="/signup" className={`inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-brand shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90 ${focusRing}`}>Start learning</Link>
+                <Link to="/contact" className={`inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-5 py-3 text-sm font-medium text-white backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/20 ${focusRing}`}>Talk to us</Link>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link to="/signup" className={`inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-brand shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90 ${focusRing}`}>Start learning</Link>
-              <Link to="/contact" className={`inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-5 py-3 text-sm font-medium text-white transition duration-300 hover:-translate-y-0.5 hover:bg-white/20 ${focusRing}`}>Talk to us</Link>
-            </div>
+            <a
+              href="https://unsplash.com/license"
+              target="_blank"
+              rel="noreferrer"
+              className="absolute bottom-3 right-4 z-10 text-xs text-white/60 underline underline-offset-2 transition-colors hover:text-white"
+            >
+              Photo via Unsplash
+            </a>
           </div>
 
-          <div className="mt-10 flex flex-col gap-4 border-t border-white/20 pt-6 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-5 pt-7 text-sm text-white/65 sm:flex-row sm:items-center sm:justify-between">
             <p>© {new Date().getFullYear()} Noted. Built for better learning.</p>
-            <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <Link to="/about" className="transition-colors hover:text-white">About</Link>
               <Link to="/school" className="transition-colors hover:text-white">Schools</Link>
               <Link to="/pricing" className="transition-colors hover:text-white">Pricing</Link>
@@ -160,14 +174,6 @@ export default function MarketingLayout({ children }) {
               <Link to="/login" className="transition-colors hover:text-white">Login</Link>
             </nav>
           </div>
-          <a
-            href="https://unsplash.com/license"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-5 block text-right text-xs text-white/60 underline underline-offset-2 transition-colors hover:text-white"
-          >
-            Photo via Unsplash
-          </a>
         </div>
       </footer>
     </div>
