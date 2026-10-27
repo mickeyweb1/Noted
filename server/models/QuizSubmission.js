@@ -9,7 +9,8 @@ const submissionSchema = new mongoose.Schema({
   answers: [{
     questionId: mongoose.Schema.Types.ObjectId,
     selectedAnswer: String,
-    isCorrect: Boolean
+    isCorrect: Boolean,
+    confidence: { type: String, enum: ['low', 'medium', 'high'], default: null }
   }],
   gameMode: { type: String, enum: ['test', 'gameShow'], default: 'test' },
   score: { type: Number, required: true },

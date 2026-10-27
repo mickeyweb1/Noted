@@ -14,7 +14,8 @@ const sessionSchema = new mongoose.Schema({
   currentQuestionIndex: { type: Number, default: 0 },
   answers: [{
     questionId: mongoose.Schema.Types.ObjectId,
-    selectedAnswer: String
+    selectedAnswer: String,
+    confidence: { type: String, enum: ['low', 'medium', 'high'], default: null }
   }],
   
   // Keep an unfinished attempt resumable for as long as its access code is valid.

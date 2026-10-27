@@ -37,6 +37,7 @@ export function normalizeQuestions(raw) {
       ...q,
       cid: newId(),
       question: q.question.trim(),
+      topic: typeof q.topic === "string" ? q.topic.trim() : "",
       options: q.options.map((o) => String(o ?? "").trim()),
       correctAnswer: typeof q.correctAnswer === "string" ? q.correctAnswer.trim() : "",
       explanation: typeof q.explanation === "string" ? q.explanation : "",
@@ -65,6 +66,7 @@ export function toPayloadQuestion(q) {
   return {
     ...rest,
     question: q.question.trim(),
+    topic: typeof q.topic === "string" ? q.topic.trim() : "",
     options: q.options.map((o) => o.trim()),
     correctAnswer: q.correctAnswer.trim(),
     explanation: (q.explanation || "").trim(),
@@ -253,6 +255,15 @@ export function QuestionReviewList({ questions, onChange }) {
 
             {editing ? (
               <div className="space-y-2">
+                <input
+                  type="text"
+                  aria-label={`Question ${idx + 1} topic`}
+                  placeholder="Topic (optional, e.g., Fractions)"
+                  maxLength={80}
+                  value={q.topic || ""}
+                  onChange={(e) => update(q.cid, { topic: e.target.value })}
+                  className={`${inputCls} py-2 text-sm`}
+                />
                 <p className="text-xs text-muted-foreground">Select the circle next to the correct answer.</p>
                 {q.options.map((opt, optIdx) => (
                   <div key={optIdx} className="flex items-center gap-2.5">
@@ -284,6 +295,7 @@ export function QuestionReviewList({ questions, onChange }) {
               </div>
             ) : (
               <>
+                {q.topic && <p className="mb-2 text-xs font-medium text-brand">Topic: {q.topic}</p>}
                 <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                   {q.options.map((opt, optIdx) => {
                     const isCorrect = optIdx === correctIdx;

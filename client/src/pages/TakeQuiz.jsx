@@ -128,7 +128,7 @@ function QuestionChips({ questions, answers, currentIndex, onJump }) {
   );
 }
 
-function QuestionCard({ question, number, selected, onSelect, id }) {
+function QuestionCard({ question, number, selected, onSelect, confidence, onConfidence, id }) {
   const answered = Boolean(selected);
   return (
     <section id={id} className="scroll-mt-24 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6" aria-labelledby={`${id}-title`}>
@@ -163,6 +163,26 @@ function QuestionCard({ question, number, selected, onSelect, id }) {
           );
         })}
       </div>
+      {answered && (
+        <fieldset className="mt-5 border-t border-border pt-4">
+          <legend className="text-sm font-semibold text-foreground">How sure are you? <span className="font-normal text-muted-foreground">(optional)</span></legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {[
+              { value: "low", label: "Just guessing" },
+              { value: "medium", label: "Somewhat sure" },
+              { value: "high", label: "Very sure" },
+            ].map((rating) => (
+              <button
+                key={rating.value}
+                type="button"
+                aria-pressed={confidence === rating.value}
+                onClick={() => onConfidence(question._id, confidence === rating.value ? "" : rating.value)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${focusRing} ${confidence === rating.value ? "border-brand bg-brand-soft text-brand" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}
+              >{rating.label}</button>
+            ))}
+          </div>
+        </fieldset>
+      )}
     </section>
   );
 }
@@ -203,6 +223,7 @@ export default function TakeQuiz() {
   const [quizData, setQuizData] = useState(null);
   const [studentInfo, setStudentInfo] = useState({ name: "", surname: "", className: "" });
   const [answers, setAnswers] = useState({});
+  const [confidenceByQuestion, setConfidenceByQuestion] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [result, setResult] = useState(null);
@@ -232,6 +253,7 @@ export default function TakeQuiz() {
   const toastTimerRef = useRef(null);
   const retryIntervalRef = useRef(null);
   const answersRef = useRef({});
+  const confidenceRef = useRef({});
   const studentInfoRef = useRef(studentInfo);
   const quizDataRef = useRef(null);
   const currentIndexRef = useRef(currentIndex);
@@ -250,6 +272,7 @@ export default function TakeQuiz() {
   const isPaginated = quizData?.layoutMode === "paginated";
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { confidenceRef.current = confidenceByQuestion; }, [confidenceByQuestion]);
   useEffect(() => { studentInfoRef.current = studentInfo; }, [studentInfo]);
   useEffect(() => { quizDataRef.current = quizData; }, [quizData]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
@@ -260,6 +283,7 @@ export default function TakeQuiz() {
       localStorage.setItem(pendingKey, JSON.stringify({
         studentInfo: studentInfoRef.current,
         answers: answersRef.current,
+        confidenceByQuestion: confidenceRef.current,
         tabSwitchCount: tabCountRef.current,
         submittedAt: Date.now(),
       }));
@@ -312,7 +336,7 @@ export default function TakeQuiz() {
       studentName: studentInfoRef.current.name,
       studentSurname: studentInfoRef.current.surname,
       studentClass: studentInfoRef.current.className,
-      answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+      answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
       currentQuestionIndex: currentIndexRef.current,
       savedAt: Date.now(),
     };
@@ -334,7 +358,7 @@ export default function TakeQuiz() {
   /* ----- Keep a local draft immediately and sync progress to the server ----- */
   useEffect(() => {
     if (step !== "quiz" || !code || !quizData) return;
-    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answers[q._id] || null }));
+    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answers[q._id] || null, confidence: confidenceByQuestion[q._id] || null }));
     const progress = {
       code,
       studentName: studentInfo.name,
@@ -359,7 +383,7 @@ export default function TakeQuiz() {
       }
     }, 400);
     return () => clearTimeout(saveTimer);
-  }, [answers, studentInfo, currentIndex, step, code, quizData, draftKey]);
+  }, [answers, confidenceByQuestion, studentInfo, currentIndex, step, code, quizData, draftKey]);
 
   /* ----- Offline submission recovery ----- */
   const attemptSync = useCallback(async () => {
@@ -371,7 +395,7 @@ export default function TakeQuiz() {
     setIsSyncing(true);
     try {
       const saved = JSON.parse(raw);
-      const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: saved.answers?.[q._id] || null }));
+      const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: saved.answers?.[q._id] || null, confidence: saved.confidenceByQuestion?.[q._id] || null }));
       const res = await api.post("/quiz/submit", {
         code,
         studentName: saved.studentInfo.name,
@@ -450,7 +474,7 @@ export default function TakeQuiz() {
           studentName: studentInfoRef.current.name,
           studentSurname: studentInfoRef.current.surname,
           studentClass: studentInfoRef.current.className,
-          answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+          answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
           currentQuestionIndex: currentIndexRef.current,
         });
       }
@@ -476,7 +500,7 @@ export default function TakeQuiz() {
           studentName: info.name,
           studentSurname: info.surname,
           studentClass: info.className,
-          answers: (quizDataRef.current?.questions || []).map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+          answers: (quizDataRef.current?.questions || []).map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
           tabSwitchCount: count,
         });
 
@@ -497,7 +521,7 @@ export default function TakeQuiz() {
         studentName: studentInfoRef.current.name,
         studentSurname: studentInfoRef.current.surname,
         studentClass: studentInfoRef.current.className,
-        answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
+        answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
         currentQuestionIndex: currentIndexRef.current,
       });
     };
@@ -616,8 +640,13 @@ export default function TakeQuiz() {
         });
       }
       const restored = {};
-      savedAnswers.forEach((a) => { if (a.selectedAnswer) restored[a.questionId] = a.selectedAnswer; });
+      const restoredConfidence = {};
+      savedAnswers.forEach((a) => {
+        if (a.selectedAnswer) restored[a.questionId] = a.selectedAnswer;
+        if (["low", "medium", "high"].includes(a.confidence)) restoredConfidence[a.questionId] = a.confidence;
+      });
       setAnswers(restored);
+      setConfidenceByQuestion(restoredConfidence);
 
       const endTime = new Date(data.startTime).getTime() + getTotalSeconds(data) * 1000;
       endTimeRef.current = endTime;
@@ -637,6 +666,21 @@ export default function TakeQuiz() {
 
   const handleSelectAnswer = (questionId, option) => {
     setAnswers((prev) => ({ ...prev, [questionId]: option }));
+    setConfidenceByQuestion((prev) => {
+      if (!prev[questionId]) return prev;
+      const next = { ...prev };
+      delete next[questionId];
+      return next;
+    });
+  };
+
+  const handleSetConfidence = (questionId, value) => {
+    setConfidenceByQuestion((prev) => {
+      const next = { ...prev };
+      if (value) next[questionId] = value;
+      else delete next[questionId];
+      return next;
+    });
   };
 
   const handleSubmitQuiz = async () => {
@@ -657,7 +701,7 @@ export default function TakeQuiz() {
 
     if (!navigator.onLine) return stashAndWait();
 
-    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null }));
+    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null }));
     try {
       const res = await api.post("/quiz/submit", {
         code,
@@ -1025,11 +1069,13 @@ export default function TakeQuiz() {
               number={currentIndex + 1}
               selected={answers[currentQuestion._id]}
               onSelect={handleSelectAnswer}
+              confidence={confidenceByQuestion[currentQuestion._id]}
+              onConfidence={handleSetConfidence}
             />
           ) : (
             <>
               {quizData.questions.map((q, idx) => (
-                <QuestionCard key={q._id} id={`question-${q._id}`} question={q} number={idx + 1} selected={answers[q._id]} onSelect={handleSelectAnswer} />
+                <QuestionCard key={q._id} id={`question-${q._id}`} question={q} number={idx + 1} selected={answers[q._id]} onSelect={handleSelectAnswer} confidence={confidenceByQuestion[q._id]} onConfidence={handleSetConfidence} />
               ))}
               <div className="space-y-4 rounded-2xl border border-border bg-card p-5 text-center shadow-sm sm:p-6">
                 <p className="text-sm text-muted-foreground">

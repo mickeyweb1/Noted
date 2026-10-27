@@ -120,6 +120,7 @@ const normalizeQuestion = (q) => {
   if (idx < 0 || idx >= options.length) return null;
   return {
     question: q.question.trim(),
+    topic: typeof q.topic === 'string' ? q.topic.trim().slice(0, 80) : '',
     options,
     correctAnswer: options[idx],
     explanation: typeof q.explanation === 'string' ? q.explanation.trim() : '',
@@ -319,7 +320,11 @@ router.post('/session/save-progress', async (req, res, next) => {
         studentSurname: typeof studentSurname === 'string' ? studentSurname.slice(0, 100) : undefined,
         studentClass: typeof studentClass === 'string' ? studentClass.slice(0, 100) : undefined,
         $set: {
-          answers: answers.slice(0, 500).map((a) => ({ questionId: a?.questionId, selectedAnswer: typeof a?.selectedAnswer === 'string' ? a.selectedAnswer : null })),
+          answers: answers.slice(0, 500).map((a) => ({
+            questionId: a?.questionId,
+            selectedAnswer: typeof a?.selectedAnswer === 'string' ? a.selectedAnswer : null,
+            confidence: ['low', 'medium', 'high'].includes(a?.confidence) ? a.confidence : null,
+          })),
           ...(Number.isInteger(currentQuestionIndex) ? { currentQuestionIndex: Math.max(0, Math.min(currentQuestionIndex, 500)) } : {}),
         },
         $currentDate: { createdAt: true, progressSavedAt: true },
@@ -385,7 +390,12 @@ router.post('/submit', async (req, res, next) => {
       const selectedAnswer = typeof ans?.selectedAnswer === 'string' ? ans.selectedAnswer : '';
       const isCorrect = selectedAnswer !== '' && selectedAnswer === question.correctAnswer;
       if (isCorrect) score++;
-      return { questionId: question._id, selectedAnswer, isCorrect };
+      return {
+        questionId: question._id,
+        selectedAnswer,
+        isCorrect,
+        confidence: ['low', 'medium', 'high'].includes(ans?.confidence) ? ans.confidence : null,
+      };
     });
 
     try {

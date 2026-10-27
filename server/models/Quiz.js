@@ -24,6 +24,7 @@ const quizSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   questions: [{
     question: { type: String, required: true },
+    topic: { type: String, trim: true, maxlength: 80, default: '' },
     options: [{ type: String, required: true }],
     correctAnswer: { type: String, required: true },
     explanation: { type: String },

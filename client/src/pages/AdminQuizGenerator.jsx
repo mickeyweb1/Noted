@@ -44,6 +44,7 @@ const INITIAL_METADATA = {
 const emptyQuestion = () => ({
   cid: newId(),
   question: "",
+  topic: "",
   options: ["", "", "", ""],
   correctOptionIndex: null,
   explanation: "",
@@ -277,6 +278,7 @@ export default function AdminQuizGenerator() {
       {
         cid: `manual-${Date.now()}`,
         question: "",
+        topic: "",
         options: ["", "", "", ""],
         correctAnswer: "",
         explanation: "",
@@ -634,6 +636,16 @@ export default function AdminQuizGenerator() {
                   value={q.question}
                   onChange={(e) => { setErrorMessage(""); updateManualQuestion(q.cid, { question: e.target.value }); }}
                   className={inputCls}
+                />
+
+                <input
+                  type="text"
+                  aria-label={`Question ${idx + 1} topic`}
+                  placeholder="Topic (optional, e.g., Fractions)"
+                  maxLength={80}
+                  value={q.topic || ""}
+                  onChange={(e) => updateManualQuestion(q.cid, { topic: e.target.value })}
+                  className={`${inputCls} text-sm`}
                 />
 
                 <div>
