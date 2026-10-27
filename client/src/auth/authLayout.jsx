@@ -8,7 +8,7 @@ export default function AuthLayout({ children }) {
       <SiginFirstSection />
       
       {/* Right Side: Changes based on the current route */}
-      <div className="flex min-h-screen w-full flex-col bg-background md:w-3/5">
+      <div className="flex min-h-screen w-full flex-col bg-background md:w-[65%]">
         {children}
       </div>
     </main>
