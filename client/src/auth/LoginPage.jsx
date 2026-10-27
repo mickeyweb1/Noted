@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '../components/themeToggle';
 import api from '../utils/api';
 import { useUserContext } from '../context/userContext';
+import UnsplashCredit from '../components/UnsplashCredit';
 import { Button, Card, Input, Label } from '../components/ui/primitives';
 import { toast } from '../components/ui/toastApi';
 
@@ -94,7 +95,15 @@ export default function LoginPage() {
   return (
     <main className="grid min-h-screen w-full overflow-x-hidden bg-background lg:grid-cols-2">
       <aside className="relative hidden min-h-screen flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0A0A0A] to-[#1A1A1A] p-12 text-white lg:flex xl:p-16">
-        <Link to="/" className="inline-flex w-fit items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Noted home">
+        <img
+          src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1600&q=80"
+          alt="Students studying together around a laptop"
+          fetchPriority="high"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/90 via-[#0A0A0A]/70 to-[#1A1A1A]/85" aria-hidden="true" />
+
+        <Link to="/" className="relative z-10 inline-flex w-fit items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Noted home">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-zinc-950"><AudioLines className="h-6 w-6" aria-hidden="true" /></span>
           <span className="font-display text-2xl font-bold tracking-tight">Noted</span>
         </Link>
@@ -114,7 +123,10 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <p className="text-xs text-white/40">A louder way to learn.</p>
+        <div className="relative z-10 flex items-end justify-between gap-4">
+          <p className="text-xs text-white/60">A louder way to learn.</p>
+          <UnsplashCredit className="text-xs text-white/60 hover:text-white" />
+        </div>
       </aside>
 
       <section className="relative flex min-h-screen items-center justify-center bg-background px-4 py-12 sm:px-8">
