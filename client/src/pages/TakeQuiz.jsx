@@ -702,6 +702,9 @@ export default function TakeQuiz() {
   const progress = totalQuestions ? (answeredCount / totalQuestions) * 100 : 0;
   const percentage = result && result.totalQuestions > 0 ? Math.round((result.score / result.totalQuestions) * 100) : 0;
   const isPassing = percentage >= 50;
+  const resultReview = result?.review || [];
+  const incorrectCount = resultReview.filter((item) => item.selectedAnswer && !item.isCorrect).length;
+  const unansweredResultCount = resultReview.filter((item) => !item.selectedAnswer).length;
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
 
@@ -992,36 +995,100 @@ export default function TakeQuiz() {
   if (step === "result") {
     return (
       <div className={shell}>
-        <div className={`${panel} text-center`}>
-          <div className="relative mx-auto mb-5 h-40 w-40 sm:h-44 sm:w-44">
-            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
-              <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" className="stroke-muted" />
-              <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - percentage / 100)} className={`transition-all duration-700 ${isPassing ? "stroke-green-500" : "stroke-destructive"}`} />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`text-4xl font-black ${isPassing ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>{percentage}%</span>
-              <span className="text-sm text-muted-foreground">{result.score} of {result.totalQuestions}</span>
+        <div className="w-full max-w-4xl space-y-5">
+          <section className="rounded-3xl border border-border bg-card p-5 text-center shadow-xl sm:p-8" aria-labelledby="quiz-result-title">
+            <div className="relative mx-auto mb-5 h-36 w-36 sm:h-40 sm:w-40">
+              <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
+                <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" className="stroke-muted" />
+                <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - percentage / 100)} className={`transition-all duration-700 ${isPassing ? "stroke-green-500" : "stroke-destructive"}`} />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={`text-4xl font-black ${isPassing ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>{percentage}%</span>
+                <span className="text-sm text-muted-foreground">{result.score} of {result.totalQuestions}</span>
+              </div>
             </div>
-          </div>
-          <h1 className="mb-1 flex items-center justify-center gap-2 text-2xl font-bold text-foreground">
-            {isPassing ? <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" /> : <XCircle className="h-6 w-6 text-destructive" />} Quiz submitted
-          </h1>
-          <p className="mb-6 text-muted-foreground">Great effort, {studentInfo.name}.</p>
-          <div className="mb-6 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-muted p-3">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{result.score}</p>
-              <p className="text-xs text-muted-foreground">Correct</p>
-            </div>
-            <div className="rounded-2xl bg-muted p-3">
-              <p className="text-2xl font-bold text-foreground">{Math.max(0, result.totalQuestions - result.score)}</p>
-              <p className="text-xs text-muted-foreground">Missed</p>
-            </div>
-          </div>
-          {result.tabSwitchCount > 0 && (
-            <p className="mb-6 flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5" /> Tab switches detected: {result.tabSwitchCount}
-            </p>
+            <h1 id="quiz-result-title" className="mb-1 flex items-center justify-center gap-2 text-2xl font-bold text-foreground">
+              {isPassing ? <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" /> : <XCircle className="h-6 w-6 text-destructive" />} Quiz submitted
+            </h1>
+            <p className="text-muted-foreground">Great effort, {studentInfo.name}.</p>
+            {quizData?.title && <p className="mt-1 text-sm font-medium text-foreground">{quizData.title}</p>}
+
+            <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl bg-muted p-3">
+                <dd className="text-2xl font-bold text-green-600 dark:text-green-400">{result.score}</dd>
+                <dt className="text-xs text-muted-foreground">Correct</dt>
+              </div>
+              <div className="rounded-2xl bg-muted p-3">
+                <dd className="text-2xl font-bold text-destructive">{incorrectCount || Math.max(0, result.totalQuestions - result.score - unansweredResultCount)}</dd>
+                <dt className="text-xs text-muted-foreground">Incorrect</dt>
+              </div>
+              <div className="rounded-2xl bg-muted p-3">
+                <dd className="text-2xl font-bold text-foreground">{unansweredResultCount}</dd>
+                <dt className="text-xs text-muted-foreground">Unanswered</dt>
+              </div>
+              <div className="rounded-2xl bg-muted p-3">
+                <dd className="text-2xl font-bold text-foreground">{formatTime(result.timeTaken || 0)}</dd>
+                <dt className="text-xs text-muted-foreground">Time taken</dt>
+              </div>
+            </dl>
+
+            {result.tabSwitchCount > 0 && (
+              <p className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <AlertTriangle className="h-3.5 w-3.5" /> Tab switches detected: {result.tabSwitchCount}
+              </p>
+            )}
+          </section>
+
+          {resultReview.length > 0 && (
+            <section className="space-y-4" aria-labelledby="answer-review-title">
+              <div className="px-1">
+                <h2 id="answer-review-title" className="text-xl font-bold text-foreground sm:text-2xl">Review your answers</h2>
+                <p className="mt-1 text-sm text-muted-foreground">See what you answered and revisit the correct responses.</p>
+              </div>
+              <ol className="space-y-3">
+                {resultReview.map((item, index) => {
+                  const isUnanswered = !item.selectedAnswer;
+                  const statusLabel = item.isCorrect ? "Correct" : isUnanswered ? "Unanswered" : "Incorrect";
+                  return (
+                    <li key={item.questionId} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                      <div className="flex items-start gap-3 border-b border-border p-4 sm:p-5">
+                        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${item.isCorrect ? "bg-green-500/10 text-green-700 dark:text-green-400" : isUnanswered ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words font-semibold leading-6 text-foreground"><MathRenderer>{item.question}</MathRenderer></p>
+                        </div>
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${item.isCorrect ? "bg-green-500/10 text-green-700 dark:text-green-400" : isUnanswered ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>
+                          {item.isCorrect ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                          <span className="hidden xs:inline">{statusLabel}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-3 p-4 sm:p-5">
+                        {item.imageUrl && <img src={item.imageUrl} alt="Question visual" loading="lazy" className="max-h-56 w-full rounded-xl border border-border bg-muted object-contain" />}
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          <span className="font-semibold text-foreground">Your answer: </span>
+                          {item.selectedAnswer ? <MathRenderer>{item.selectedAnswer}</MathRenderer> : "No answer selected"}
+                        </p>
+                        {!item.isCorrect && (
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            <span className="font-semibold text-foreground">Correct answer: </span>
+                            <MathRenderer>{item.correctAnswer}</MathRenderer>
+                          </p>
+                        )}
+                        {item.explanation && (
+                          <div className="rounded-xl border border-brand/15 bg-brand-soft/50 p-3 text-sm leading-6 text-foreground">
+                            <span className="font-semibold">Explanation: </span>
+                            <MathRenderer>{item.explanation}</MathRenderer>
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
           )}
+
           <button type="button" onClick={() => navigate("/")} className={primaryBtn}>Return to home</button>
         </div>
       </div>
