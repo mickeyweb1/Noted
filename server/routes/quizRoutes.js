@@ -97,6 +97,17 @@ const normalizeCode = (code) => (typeof code === 'string' ? code.trim().toUpperC
 // Access codes are stored as { code, createdAt }. The frontend wants plain strings.
 const codesOf = (quiz) => (quiz?.accessCodes || []).map((ac) => (typeof ac === 'string' ? ac : ac?.code)).filter(Boolean);
 
+const getAccessCodeHistory = (quiz) => {
+  return (quiz?.accessCodes || [])
+    .map((ac) => {
+      const code = typeof ac === 'string' ? ac : ac.code;
+      const createdAt = typeof ac === 'string' ? quiz.createdAt : ac.createdAt;
+      const expiresAt = new Date(new Date(createdAt).getTime() + 30 * 86400000); // 30 days
+      return { code, createdAt, expiresAt };
+    })
+    .filter((ac) => ac.code);
+};
+
 const findQuizByCode = (code) => Quiz.findOne({ 'accessCodes.code': code });
 
 const isCodeExpired = (quiz, code) => {
@@ -497,7 +508,18 @@ router.get('/:id/results', protect, async (req, res, next) => {
     const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // creator OR the teacher's school owner
     if (!quiz) return;
     const submissions = await QuizSubmission.find({ quiz: quiz._id }).sort({ submittedAt: -1 });
-    res.json({ success: true, data: { quiz: { ...quiz.toObject(), accessCodes: codesOf(quiz) }, submissions } });
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        quiz: { 
+          ...quiz.toObject(), 
+          accessCodes: codesOf(quiz), // Keep for backward compatibility
+          accessCodeHistory: getAccessCodeHistory(quiz) // ✅ NEW: Send full history to frontend
+        }, 
+        submissions 
+      } 
+    });
   } catch (error) { next(error); }
 });
 
