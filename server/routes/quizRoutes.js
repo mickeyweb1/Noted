@@ -514,8 +514,8 @@ router.get('/:id/results', protect, async (req, res, next) => {
       data: { 
         quiz: { 
           ...quiz.toObject(), 
-          accessCodes: codesOf(quiz), // Keep for backward compatibility
-          accessCodeHistory: getAccessCodeHistory(quiz) // ✅ NEW: Send full history to frontend
+          accessCodes: codesOf(quiz), 
+          accessCodeHistory: getAccessCodeHistory(quiz) // ✅ THIS FIXES THE UNDEFINED ERROR
         }, 
         submissions 
       } 
