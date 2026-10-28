@@ -357,6 +357,11 @@ function SubmissionBreakdown({ sub, questionById }) {
   );
 }
 
+  const getDaysRemaining = (expiresAt) => {
+    const days = Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return days > 0 ? `${days} days` : "Expired";
+  };
+
 export default function QuizResultsPage() {
   const { quizId } = useParams();
   const navigate = useNavigate();
@@ -365,6 +370,8 @@ export default function QuizResultsPage() {
   const [quizData, setQuizData] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+    const [showCodeHistory, setShowCodeHistory] = useState(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -581,6 +588,91 @@ export default function QuizResultsPage() {
             ? <StatCard icon={FileText} label="Questions">{questions.length}</StatCard>
             : <StatCard icon={Clock} label="Average time">{avgTime ? formatDuration(avgTime) : "—"}</StatCard>}
         </div>
+
+                {/* ✅ NEW: Access Code History Section */}
+        <section className="rounded-2xl border border-border bg-card shadow-sm">
+          <button 
+            onClick={() => setShowCodeHistory(!showCodeHistory)} 
+            className={`flex w-full items-center justify-between gap-3 rounded-2xl p-5 text-left sm:p-6 ${focusRing}`}
+          >
+            <span className="flex items-center gap-2 text-lg font-bold text-foreground">
+              <Clock className="h-5 w-5 text-brand" /> Manage Access Codes
+            </span>
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              {showCodeHistory ? "Hide" : "Show"} {showCodeHistory ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </span>
+            <span className="ml-auto rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand">
+              {quizData?.accessCodeHistory?.length || 0} Codes
+            </span>
+          </button>
+
+          {showCodeHistory && (
+            <div className="border-t border-border p-5 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Codes automatically expire 30 days after generation. Students cannot use expired codes.
+                </p>
+                <button 
+                  onClick={async () => {
+                    setIsGeneratingCode(true);
+                    try {
+                      await api.post(`/quiz/${quizId}/regenerate-code`);
+                      fetchResults({ silent: true }); // Refresh the list
+                    } catch (err) {
+                      alert(err.response?.data?.message || "Failed to generate code");
+                    } finally {
+                      setIsGeneratingCode(false);
+                    }
+                  }}
+                  disabled={isGeneratingCode}
+                  className={`${primaryBtn} py-2`}
+                >
+                  {isGeneratingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Generate 1 New Code
+                </button>
+              </div>
+
+              <div className="max-h-64 overflow-y-auto rounded-xl border border-border bg-muted/30">
+                {quizData?.accessCodeHistory?.length === 0 ? (
+                  <p className="p-4 text-center text-sm text-muted-foreground">No codes generated yet.</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {quizData.accessCodeHistory.map((ac, idx) => {
+                      const daysLeft = getDaysRemaining(ac.expiresAt);
+                      const isExpired = daysLeft === "Expired";
+                      return (
+                        <li key={idx} className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4">
+                          <div className="min-w-0 flex-1">
+                            <p className={`font-mono text-base font-bold tracking-wider ${isExpired ? "text-destructive line-through" : "text-foreground"}`}>
+                              {ac.code}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Generated: {new Date(ac.createdAt).toLocaleDateString()} 
+                              <span className={`ml-2 font-semibold ${isExpired ? "text-destructive" : "text-green-600 dark:text-green-400"}`}>
+                                • {isExpired ? "Expired" : `Expires in ${daysLeft}`}
+                              </span>
+                            </p>
+                          </div>
+                          {!isExpired && (
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(ac.code);
+                                alert("Code copied!");
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent"
+                            >
+                              <Copy className="h-3.5 w-3.5" /> Copy
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Students who switched tabs */}
         {!isGameShow && flagged > 0 && (
