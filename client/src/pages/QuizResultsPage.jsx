@@ -751,10 +751,7 @@ export default function QuizResultsPage() {
           <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby="class-mastery-title">
             <div className="flex items-start gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Users className="h-5 w-5" aria-hidden="true" /></div>
-              <div>
-                <h2 id="class-mastery-title" className="text-lg font-bold text-foreground">Class mastery map</h2>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">Anonymous correct-answer rates grouped by the topic labels on your questions. Topic groups appear after at least 3 submissions.</p>
-              </div>
+              
             </div>
             {topicMastery.filter((topic) => topic.studentCount >= 3).length === 0 ? (
               <p className="mt-4 rounded-xl bg-muted p-4 text-sm leading-6 text-muted-foreground">
