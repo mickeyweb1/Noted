@@ -37,8 +37,6 @@ const INITIAL_METADATA = {
   timeType: "total",
   maxTabSwitches: "",
   layoutMode: "scroll",
-  showAnswersAfterSubmission: true,
-  passMark: "50",
 };
 
 const emptyQuestion = () => ({
@@ -111,8 +109,7 @@ export default function AdminQuizGenerator() {
       : { value: 0 };
     const numStudents = readInt(metadata.numStudents, "Number of students", 1, MAX_STUDENTS);
     const timeLimit = readInt(metadata.timeLimit, "Time limit", minTime, maxTime);
-    const passMark = readInt(metadata.passMark, "Pass mark", 0, 100);
-    const bad = [numQuestions, numStudents, timeLimit, passMark].find((r) => r.error);
+    const bad = [numQuestions, numStudents, timeLimit].find((r) => r.error);
     if (bad) return { error: bad.error };
 
     let maxTabSwitches = null;
@@ -132,9 +129,7 @@ export default function AdminQuizGenerator() {
         timeUnit: metadata.timeUnit,
         timeType: metadata.timeType,
         maxTabSwitches,
-        layoutMode: metadata.layoutMode,
-        showAnswersAfterSubmission: metadata.showAnswersAfterSubmission,
-        passMark: passMark.value,
+        layoutMode: metadata.layoutMode
       },
     };
   };
@@ -247,8 +242,6 @@ export default function AdminQuizGenerator() {
         numQuestions: questions.length,
         maxTabSwitches: settings.maxTabSwitches,
         layoutMode: settings.layoutMode,
-        showAnswersAfterSubmission: settings.showAnswersAfterSubmission,
-        passMark: settings.passMark,
         questions,
         useAIAutocomplete: false,
       });
