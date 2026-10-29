@@ -370,6 +370,7 @@ export default function QuizResultsPage() {
   const [quizData, setQuizData] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showQualityInsights, setShowQualityInsights] = useState(false);
     const [showCodeHistory, setShowCodeHistory] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -688,24 +689,59 @@ export default function QuizResultsPage() {
           </div>
         )}
 
-        {/* Score spread */}
-        {!isGameShow && count > 0 && (
-          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-foreground"><BarChart3 className="h-5 w-5 text-brand" /> Score spread</h2>
-            <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label="Distribution of student scores">
-              {buckets.map((b) => b.count > 0 && <div key={b.label} className={b.bar} style={{ width: `${(b.count / count) * 100}%` }} title={`${b.label}: ${b.count}`} />)}
-            </div>
-            <ul className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
-              {buckets.map((b) => (
-                <li key={b.label} className="flex items-center gap-2 text-muted-foreground">
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${b.bar}`} aria-hidden="true" />
-                  <span className="truncate">{b.label}</span>
-                  <span className="ml-auto font-semibold tabular-nums text-foreground">{b.count}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
+{/* Question quality insights - NOW COLLAPSIBLE */}
+{!isGameShow && count > 0 && (
+  <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" aria-labelledby="question-quality-title">
+    <button 
+      onClick={() => setShowQualityInsights(!showQualityInsights)} 
+      className={`flex w-full items-center justify-between gap-3 text-left ${focusRing}`}
+      aria-expanded={showQualityInsights}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
+          <Lightbulb className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 id="question-quality-title" className="text-lg font-bold text-foreground">Question quality insights</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">Response patterns can help you spot questions to review. These are prompts, not proof that a question is flawed; patterns appear after at least 3 submissions.</p>
+        </div>
+      </div>
+      <span className="flex items-center gap-1 text-sm text-muted-foreground shrink-0">
+        {showQualityInsights ? "Hide" : "Show"} {showQualityInsights ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </span>
+    </button>
+
+    {showQualityInsights && (
+      <div className="mt-5">
+        {qualityFlags.length === 0 ? (
+          <p className="rounded-xl bg-muted p-4 text-sm leading-6 text-muted-foreground">
+            No questions meet the current review signals yet. As more students submit, this section will highlight high skip rates, low correct rates, or repeated wrong choices.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {qualityFlags.map((question) => (
+              <li key={question.index} className="rounded-xl border border-yellow-500/25 bg-yellow-500/5 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-foreground">Question {question.index + 1} · {question.signal}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{question.correct}/{question.total} correct · {question.skipped} skipped</span>
+                </div>
+                <p className="mt-2 break-words text-sm font-medium leading-6 text-foreground"><MathRenderer>{question.question.question}</MathRenderer></p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{question.message}</p>
+                {question.signal === "Repeated wrong choice" && question.topDistractor && (
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">Most common incorrect answer: <span className="font-semibold text-foreground"><MathRenderer>{question.topDistractor.answer}</MathRenderer></span></p>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
+
+        <button type="button" onClick={() => { setShowAnalysis(true); document.getElementById("question-analysis")?.scrollIntoView({ behavior: "smooth" }); }} className={`${secondaryBtn} mt-4 w-full sm:w-auto`}>
+          See response rates by question <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    )}
+  </section>
+)}
 
         {/* Question quality insights */}
         {!isGameShow && count > 0 && (
