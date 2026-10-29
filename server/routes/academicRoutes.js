@@ -181,7 +181,7 @@ router.get('/summary', async (req, res, next) => {
     next(error);
   }
 });
-  } catch (error) {
+   catch (error) {
     next(error);
   }
 });
