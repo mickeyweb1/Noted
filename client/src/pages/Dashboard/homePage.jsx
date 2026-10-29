@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import api from "../../utils/api";
 import FeedbackModal from "../../components/FeedbackModal";
-import { getDueReviewItems } from "../../utils/spacedReview";
 
 const WEEKLY_STUDY_GOAL = 3;
 
