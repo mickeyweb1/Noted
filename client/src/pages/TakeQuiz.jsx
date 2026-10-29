@@ -31,7 +31,6 @@ const getTotalSeconds = (data) => {
   return total * (data.timeUnit === "minutes" ? 60 : 1);
 };
 
-// Finds a submission that was saved on this device but never reached the server
 const findPendingCode = () => {
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -42,8 +41,6 @@ const findPendingCode = () => {
   return "";
 };
 
-// fetch + keepalive is allowed to finish even while the tab is closing or hidden (axios/XHR is not).
-// Sent as application/json so the server actually parses it — navigator.sendBeacon with a string would arrive as text/plain.
 const postKeepalive = (path, payload) => {
   try {
     const base = (api.defaults.baseURL || "").replace(/\/$/, "");
@@ -88,7 +85,6 @@ function ErrorNote({ children }) {
   );
 }
 
-// Horizontal strip of numbered chips: answered = filled, current = ringed.
 function QuestionChips({ questions, answers, currentIndex, onJump }) {
   const containerRef = useRef(null);
   const chipRefs = useRef([]);
@@ -129,7 +125,8 @@ function QuestionChips({ questions, answers, currentIndex, onJump }) {
   );
 }
 
-function QuestionCard({ question, number, selected, onSelect, confidence, onConfidence, id }) {
+// ✅ CLEANED: Removed confidence props and UI
+function QuestionCard({ question, number, selected, onSelect, id }) {
   const answered = Boolean(selected);
   return (
     <section id={id} className="scroll-mt-24 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6" aria-labelledby={`${id}-title`}>
@@ -164,26 +161,6 @@ function QuestionCard({ question, number, selected, onSelect, confidence, onConf
           );
         })}
       </div>
-      {answered && (
-        <fieldset className="mt-5 border-t border-border pt-4">
-          <legend className="text-sm font-semibold text-foreground">How sure are you? <span className="font-normal text-muted-foreground">(optional)</span></legend>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {[
-              { value: "low", label: "Just guessing" },
-              { value: "medium", label: "Somewhat sure" },
-              { value: "high", label: "Very sure" },
-            ].map((rating) => (
-              <button
-                key={rating.value}
-                type="button"
-                aria-pressed={confidence === rating.value}
-                onClick={() => onConfidence(question._id, confidence === rating.value ? "" : rating.value)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${focusRing} ${confidence === rating.value ? "border-brand bg-brand-soft text-brand" : "border-border bg-background text-muted-foreground hover:bg-accent"}`}
-              >{rating.label}</button>
-            ))}
-          </div>
-        </fieldset>
-      )}
     </section>
   );
 }
@@ -260,11 +237,11 @@ export default function TakeQuiz() {
   const progressSyncingRef = useRef(false);
   const progressSaveQueueRef = useRef(Promise.resolve());
   const endTimeRef = useRef(null);
-  const tabCountRef = useRef(0);          // client-side tab-switch count: keeps counting even while offline
-  const autoSubmitRef = useRef(false);    // the tab limit was hit — only trigger once
-  const submittingRef = useRef(false);    // blocks double-submits (timer + button + tab limit can all fire)
+  const tabCountRef = useRef(0);
+  const autoSubmitRef = useRef(false);
+  const submittingRef = useRef(false);
   const syncingRef = useRef(false);
-  const submitRef = useRef(() => {});     // always points at the latest submit handler (no stale closures)
+  const submitRef = useRef(() => {});
 
   const pendingKey = `${PENDING_PREFIX}${code}`;
   const tabKey = `${TABCOUNT_PREFIX}${code}`;
@@ -276,13 +253,11 @@ export default function TakeQuiz() {
   useEffect(() => { quizDataRef.current = quizData; }, [quizData]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
 
-  // Preserve a local fallback as well as the server copy for interrupted sessions.
   const stashPending = () => {
     try {
       localStorage.setItem(pendingKey, JSON.stringify({
         studentInfo: studentInfoRef.current,
         answers: answersRef.current,
-        confidenceByQuestion: confidenceRef.current,
         tabSwitchCount: tabCountRef.current,
         submittedAt: Date.now(),
       }));
@@ -297,12 +272,10 @@ export default function TakeQuiz() {
     } catch { /* ignore */ }
   };
 
-  // Paginated mode: jump back to the top when the question changes
   useEffect(() => {
     if (step === "quiz" && isPaginated) window.scrollTo({ top: 0, behavior: "smooth" });
   }, [currentIndex, step, isPaginated]);
 
-  /* ----- Quiz-only guards: no right click / text selection, warn before leaving ----- */
   useEffect(() => {
     if (step !== "quiz") return;
     const block = (e) => e.preventDefault();
@@ -322,6 +295,7 @@ export default function TakeQuiz() {
     };
   }, [step]);
 
+  // ✅ FIXED: Restored the proper 'answers' array mapping
   const syncProgress = useCallback(async (force = false) => {
     if (step !== "quiz" || !navigator.onLine || progressSyncingRef.current || (!force && !hasUnsyncedProgress)) return;
     const activeQuiz = quizDataRef.current;
@@ -335,6 +309,10 @@ export default function TakeQuiz() {
       studentName: studentInfoRef.current.name,
       studentSurname: studentInfoRef.current.surname,
       studentClass: studentInfoRef.current.className,
+      answers: activeQuiz.questions.map((q) => ({ 
+        questionId: q._id, 
+        selectedAnswer: answersRef.current[q._id] || null 
+      })),
       currentQuestionIndex: currentIndexRef.current,
       savedAt: Date.now(),
     };
@@ -353,10 +331,9 @@ export default function TakeQuiz() {
     }
   }, [code, draftKey, hasUnsyncedProgress, step]);
 
-  /* ----- Keep a local draft immediately and sync progress to the server ----- */
   useEffect(() => {
     if (step !== "quiz" || !code || !quizData) return;
-    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answers[q._id] || null, confidence: confidenceByQuestion[q._id] || null }));
+    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answers[q._id] || null }));
     const progress = {
       code,
       studentName: studentInfo.name,
@@ -381,9 +358,8 @@ export default function TakeQuiz() {
       }
     }, 400);
     return () => clearTimeout(saveTimer);
-  }, [answers, confidenceByQuestion, studentInfo, currentIndex, step, code, quizData, draftKey]);
+  }, [answers, studentInfo, currentIndex, step, code, quizData, draftKey]);
 
-  /* ----- Offline submission recovery ----- */
   const attemptSync = useCallback(async () => {
     if (syncingRef.current) return;
     const raw = localStorage.getItem(pendingKey);
@@ -393,7 +369,7 @@ export default function TakeQuiz() {
     setIsSyncing(true);
     try {
       const saved = JSON.parse(raw);
-      const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: saved.answers?.[q._id] || null, confidence: saved.confidenceByQuestion?.[q._id] || null }));
+      const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: saved.answers?.[q._id] || null }));
       const res = await api.post("/quiz/submit", {
         code,
         studentName: saved.studentInfo.name,
@@ -409,21 +385,18 @@ export default function TakeQuiz() {
     } catch (err) {
       const status = err.response?.status;
       if (status === 409) {
-        // Already received (e.g. the background send made it through) — nothing left to do
         clearLocalQuizState();
         setStep("already-submitted");
       } else if (status && status < 500) {
-        // The server rejected it — retrying forever would never help
         clearLocalQuizState();
         setError(err.response?.data?.message || "We couldn't submit your quiz.");
         setStep("submit-failed");
       }
-      // Network / 5xx: keep waiting, the retry loop will try again
     } finally {
       syncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [code, quizData, pendingKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [code, quizData, pendingKey]);
 
   useEffect(() => {
     const handleOffline = () => {
@@ -458,7 +431,6 @@ export default function TakeQuiz() {
     return () => clearInterval(retryIntervalRef.current);
   }, [step, attemptSync]);
 
-  /* ----- Tab-switch tracking: counted on the device first, so going offline can't hide it ----- */
   useEffect(() => {
     if (step !== "quiz") return;
 
@@ -472,7 +444,7 @@ export default function TakeQuiz() {
           studentName: studentInfoRef.current.name,
           studentSurname: studentInfoRef.current.surname,
           studentClass: studentInfoRef.current.className,
-          answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
+          answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
           currentQuestionIndex: currentIndexRef.current,
         });
       }
@@ -482,27 +454,20 @@ export default function TakeQuiz() {
       setTabSwitchCount(count);
       try { localStorage.setItem(tabKey, String(count)); } catch { /* ignore */ }
 
-      // Tell the server too (best effort — it keeps its own count when online)
       postKeepalive("/quiz/session/update-tab", { code });
 
       if (maxTabSwitches && count >= maxTabSwitches && !autoSubmitRef.current) {
         autoSubmitRef.current = true;
-
-        // 1) Keep the answers on this device in case the tab is closed or the data is off
         stashPending();
-
-        // 2) Best-effort send that can still complete while the tab is closing
         const info = studentInfoRef.current;
         postKeepalive("/quiz/submit", {
           code,
           studentName: info.name,
           studentSurname: info.surname,
           studentClass: info.className,
-          answers: (quizDataRef.current?.questions || []).map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
+          answers: (quizDataRef.current?.questions || []).map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
           tabSwitchCount: count,
         });
-
-        // 3) Normal submit flow (shows the result, or queues + retries if offline)
         setShowAutoSubmitModal(true);
         setTimeout(() => {
           setShowAutoSubmitModal(false);
@@ -519,7 +484,7 @@ export default function TakeQuiz() {
         studentName: studentInfoRef.current.name,
         studentSurname: studentInfoRef.current.surname,
         studentClass: studentInfoRef.current.className,
-        answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
+        answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null })),
         currentQuestionIndex: currentIndexRef.current,
       });
     };
@@ -530,9 +495,8 @@ export default function TakeQuiz() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [step, code, maxTabSwitches]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, code, maxTabSwitches]);
 
-  /* ----- Countdown (based on a fixed end time, so it survives throttled/background tabs) ----- */
   useEffect(() => {
     if (step !== "quiz" || !endTimeRef.current) return;
     let lastWarned = null;
@@ -558,7 +522,6 @@ export default function TakeQuiz() {
     };
   }, [step]);
 
-  /* ----- Handlers ----- */
   const handleValidateCode = async (e) => {
     e.preventDefault();
     const trimmed = code.trim();
@@ -579,7 +542,6 @@ export default function TakeQuiz() {
       setHasSavedProgress(Boolean(data.hasActiveSession));
       setTimeLeft(getTotalSeconds(data));
 
-      // Answers saved on this device that never reached the server (page closed / data was off)
       const pending = localStorage.getItem(`${PENDING_PREFIX}${trimmed}`);
       if (pending) {
         try { setStudentInfo(JSON.parse(pending).studentInfo); } catch { /* ignore bad data */ }
@@ -589,7 +551,6 @@ export default function TakeQuiz() {
       setStep("info");
     } catch (err) {
       const status = err.response?.status;
-      // A leftover record for a code that's now used/invalid shouldn't keep nagging
       if (trimmed === recoveredCode && (status === 400 || status === 404)) {
         try { localStorage.removeItem(`${PENDING_PREFIX}${trimmed}`); } catch { /* ignore */ }
       }
@@ -611,7 +572,6 @@ export default function TakeQuiz() {
       setQuizData((prev) => ({ ...prev, ...data }));
       setMaxTabSwitches(data.maxTabSwitches);
 
-      // Resume the higher of the server count and what this device recorded (e.g. while offline)
       let localCount = 0;
       try { localCount = Number(localStorage.getItem(tabKey)) || 0; } catch { /* ignore */ }
       tabCountRef.current = Math.max(data.tabSwitchCount || 0, localCount);
@@ -638,20 +598,15 @@ export default function TakeQuiz() {
         });
       }
       const restored = {};
-      const restoredConfidence = {};
       savedAnswers.forEach((a) => {
         if (a.selectedAnswer) restored[a.questionId] = a.selectedAnswer;
-        if (["low", "medium", "high"].includes(a.confidence)) restoredConfidence[a.questionId] = a.confidence;
       });
       setAnswers(restored);
-      setConfidenceByQuestion(restoredConfidence);
 
       const endTime = new Date(data.startTime).getTime() + getTotalSeconds(data) * 1000;
       endTimeRef.current = endTime;
       setTimeLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
-      const restoredIndex = useLocalDraft
-        ? localDraft.currentQuestionIndex || 0
-        : data.currentQuestionIndex || 0;
+      const restoredIndex = useLocalDraft ? localDraft.currentQuestionIndex || 0 : data.currentQuestionIndex || 0;
       setCurrentIndex(restoredIndex);
       submittingRef.current = false;
       setStep("quiz");
@@ -666,7 +621,6 @@ export default function TakeQuiz() {
     setAnswers((prev) => ({ ...prev, [questionId]: option }));
   };
 
-
   const handleSubmitQuiz = async () => {
     if (submittingRef.current) return;
     submittingRef.current = true;
@@ -674,7 +628,6 @@ export default function TakeQuiz() {
     setIsSubmitting(true);
     setError("");
 
-    // Keep the answers safe on this device and let the retry loop send them
     const stashAndWait = () => {
       stashPending();
       clearInterval(timerRef.current);
@@ -685,7 +638,7 @@ export default function TakeQuiz() {
 
     if (!navigator.onLine) return stashAndWait();
 
-    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null }));
+    const formatted = quizData.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null }));
     try {
       const res = await api.post("/quiz/submit", {
         code,
@@ -702,13 +655,11 @@ export default function TakeQuiz() {
     } catch (err) {
       const status = err.response?.status;
       if (status === 409) {
-        // The background send already went through
         clearInterval(timerRef.current);
         clearLocalQuizState();
         setStep("already-submitted");
         return;
       }
-      // No response (network) or server trouble: don't lose the student's work — queue it and retry
       if (!err.response || status >= 500) return stashAndWait();
       submittingRef.current = false;
       setIsSubmitting(false);
@@ -731,7 +682,6 @@ export default function TakeQuiz() {
     if (index >= 0) jumpToQuestion(index);
   };
 
-  /* ----- Derived values ----- */
   const totalQuestions = quizData ? quizData.questions.length : 0;
   const answeredCount = quizData ? quizData.questions.filter((q) => answers[q._id]).length : 0;
   const progress = totalQuestions ? (answeredCount / totalQuestions) * 100 : 0;
@@ -1028,7 +978,6 @@ export default function TakeQuiz() {
         )}
 
         <div className="mx-auto max-w-3xl space-y-4">
-          {/* Compact sticky bar: title, timer, progress */}
           <header className="sticky top-2 z-10 overflow-hidden rounded-2xl border border-border bg-card/95 shadow-lg backdrop-blur">
             <div className="flex items-center justify-between gap-3 p-3 sm:p-4">
               <div className="min-w-0">
@@ -1068,7 +1017,14 @@ export default function TakeQuiz() {
           ) : (
             <>
               {quizData.questions.map((q, idx) => (
-                <QuestionCard key={q._id} id={`question-${q._id}`} question={q} number={idx + 1} selected={answers[q._id]} onSelect={handleSelectAnswer} confidence={confidenceByQuestion[q._id]} onConfidence={handleSetConfidence} />
+                <QuestionCard 
+                  key={q._id} 
+                  id={`question-${q._id}`} 
+                  question={q} 
+                  number={idx + 1} 
+                  selected={answers[q._id]} 
+                  onSelect={handleSelectAnswer} 
+                />
               ))}
               <div className="space-y-4 rounded-2xl border border-border bg-card p-5 text-center shadow-sm sm:p-6">
                 <p className="text-sm text-muted-foreground">
@@ -1084,7 +1040,6 @@ export default function TakeQuiz() {
           )}
         </div>
 
-        {/* Paginated mode: thumb-reach navigation pinned to the bottom (respects the iPhone home bar) */}
         {isPaginated && (
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
             <div className="mx-auto flex max-w-3xl items-center gap-3">
