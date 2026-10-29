@@ -32,6 +32,7 @@ const AdminGameShowCreator = lazy(() => import("./pages/AdminGameShowCreator"));
 import StudentDashboardLayout from "./components/layouts/StudentDashboardLayout";
 const StudentHome = lazy(() => import("./pages/Dashboard/homePage"));
 const Revision = lazy(() => import("./pages/Dashboard/Revision"));
+const AcademicProgress = lazy(() => import("./pages/Dashboard/AcademicProgress"));
 const StudentAiGenerator = lazy(() => import("./pages/Dashboard/aiGenerator"));
 const AiTeacher = lazy(() => import("./pages/Dashboard/AiTeacher"));
 const StudentLibrary = lazy(() => import("./pages/Dashboard/libirary"));
