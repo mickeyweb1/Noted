@@ -9,17 +9,79 @@ import {
   Clock3,
   Flame,
   GraduationCap,
+  Keyboard,
   Loader2,
   RotateCcw,
   Sparkles,
+  WifiOff,
   X,
 } from 'lucide-react';
 import api from '../../utils/api';
 import MathRenderer from '../../components/MathRenderer';
-import { syncPendingReviewItems } from '../../utils/spacedReview';
+import { getDueReviewItems, syncPendingReviewItems, updateReviewSchedule } from '../../utils/spacedReview';
 
 const card = 'rounded-2xl border border-border bg-card shadow-sm';
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2';
+
+/**
+ * Robust answer matcher handling letter prefixes (e.g. "A", "A. Text"),
+ * case-insensitive comparisons, and option text matching.
+ */
+function checkAnswerMatch(selectedChoice, correctAnswer, options = []) {
+  if (!selectedChoice || !correctAnswer) return false;
+  const safeChoice = String(selectedChoice).trim();
+  const safeCorrect = String(correctAnswer).trim();
+  const lowerChoice = safeChoice.toLowerCase();
+  const lowerCorrect = safeCorrect.toLowerCase();
+
+  // 1. Direct equality
+  if (lowerChoice === lowerCorrect) return true;
+
+  // 2. Correct answer is a single letter (e.g. "A", "B", "C", "D")
+  if (/^[a-d]$/i.test(lowerCorrect)) {
+    const letterIdx = lowerCorrect.charCodeAt(0) - 97;
+    if (options[letterIdx] && String(options[letterIdx]).trim().toLowerCase() === lowerChoice) {
+      return true;
+    }
+  }
+
+  // 3. Correct answer starts with letter prefix (e.g. "A. Some text" or "A) Some text")
+  const prefixMatch = lowerCorrect.match(/^([a-d])[\.\)]\s*(.*)$/i);
+  if (prefixMatch) {
+    const letter = prefixMatch[1].toLowerCase();
+    const textPart = prefixMatch[2].trim().toLowerCase();
+    if (textPart && (lowerChoice === textPart || lowerChoice.includes(textPart) || textPart.includes(lowerChoice))) {
+      return true;
+    }
+    const letterIdx = letter.charCodeAt(0) - 97;
+    if (options[letterIdx] && String(options[letterIdx]).trim().toLowerCase() === lowerChoice) {
+      return true;
+    }
+  }
+
+  // 4. Choice starts with letter prefix and matches correct text
+  const choicePrefix = lowerChoice.match(/^([a-d])[\.\)]\s*(.*)$/i);
+  if (choicePrefix) {
+    const textPart = choicePrefix[2].trim().toLowerCase();
+    if (textPart === lowerCorrect) return true;
+  }
+
+  // 5. Lengthy substring containment
+  if (lowerCorrect.length > 3 && (lowerChoice.includes(lowerCorrect) || lowerCorrect.includes(lowerChoice))) {
+    return true;
+  }
+
+  return false;
+}
+
+function isOptionCorrect(option, correctAnswer, options = [], index = 0) {
+  if (!correctAnswer) return false;
+  const safeCorrect = String(correctAnswer).trim().toLowerCase();
+  if (/^[a-d]$/i.test(safeCorrect)) {
+    return safeCorrect.charCodeAt(0) - 97 === index;
+  }
+  return checkAnswerMatch(option, correctAnswer, options);
+}
 
 export default function Revision() {
   const [queue, setQueue] = useState([]);
@@ -30,13 +92,16 @@ export default function Revision() {
   const [showAnswer, setShowAnswer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [error, setError] = useState('');
   const [lastFailedSubmission, setLastFailedSubmission] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
+    setIsOfflineMode(false);
     setLastFailedSubmission(null);
+
     try {
       // Sync any local pending review items first so account is up to date
       await syncPendingReviewItems().catch(() => {});
@@ -80,7 +145,27 @@ export default function Revision() {
       setResult(null);
       setShowAnswer(false);
     } catch {
-      setError('Revision could not load. Check your connection and try again.');
+      // Fallback: If network is offline, load local due review items so study isn't blocked
+      const localDue = getDueReviewItems();
+      if (localDue.length > 0) {
+        setIsOfflineMode(true);
+        setQueue(
+          localDue.map((item) => ({
+            ...item,
+            reviewItemId: item.id,
+            parentId: null,
+            hasMultipleChoice: false,
+            sourceType: item.type || 'flashcard',
+          }))
+        );
+        setStats({ dueCount: localDue.length, masteredCount: 0, streak: 0, nextReviewDate: null });
+        setIndex(0);
+        setChoice(null);
+        setResult(null);
+        setShowAnswer(false);
+      } else {
+        setError('Revision could not load. Check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -101,7 +186,10 @@ export default function Revision() {
     setLastFailedSubmission(null);
 
     try {
-      if (current.reviewItemId) {
+      if (isOfflineMode) {
+        // Offline: update local schedule
+        updateReviewSchedule(current.reviewItemId || current.id, isCorrect);
+      } else if (current.reviewItemId) {
         await api.post(`/revision/items/${current.reviewItemId}/review`, { correct: isCorrect });
       } else if (current.parentId) {
         await api.post(`/quiz/${current.parentId}/review`, {
@@ -134,7 +222,7 @@ export default function Revision() {
 
   const handleMultipleChoiceSubmit = () => {
     if (!current || choice === null || saving) return;
-    const isCorrect = choice === current.correctAnswer;
+    const isCorrect = checkAnswerMatch(choice, current.correctAnswer, options);
     setResult({ correct: isCorrect });
     saveReviewResult(isCorrect);
   };
@@ -143,6 +231,37 @@ export default function Revision() {
     if (!current || saving) return;
     saveReviewResult(remembered);
   };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!current || saving) return;
+      const key = e.key.toLowerCase();
+
+      // Multiple choice shortcuts (1-4 or a-d)
+      if (current.hasMultipleChoice && !result) {
+        if (['1', 'a'].includes(key) && options[0]) setChoice(options[0]);
+        if (['2', 'b'].includes(key) && options[1]) setChoice(options[1]);
+        if (['3', 'c'].includes(key) && options[2]) setChoice(options[2]);
+        if (['4', 'd'].includes(key) && options[3]) setChoice(options[3]);
+        if (e.key === 'Enter' && choice !== null) handleMultipleChoiceSubmit();
+      }
+
+      // Flashcard shortcuts (Space to reveal, 1 or 2 to rate)
+      if (!current.hasMultipleChoice) {
+        if (e.key === ' ' && !showAnswer) {
+          e.preventDefault();
+          setShowAnswer(true);
+        } else if (showAnswer) {
+          if (key === '1') handleFlashcardRate(false);
+          if (key === '2') handleFlashcardRate(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [current, options, choice, result, showAnswer, saving]);
 
   if (loading) {
     return (
@@ -169,8 +288,15 @@ export default function Revision() {
             Spaced repetition synced to your Noted account across devices.
           </p>
         </div>
-        <div className="inline-flex w-fit items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground">
-          <Flame className="h-5 w-5 text-orange-500" /> {stats.streak} day streak
+        <div className="flex flex-wrap items-center gap-2">
+          {isOfflineMode && (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+              <WifiOff className="h-4 w-4" /> Offline review
+            </span>
+          )}
+          <div className="inline-flex w-fit items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground">
+            <Flame className="h-5 w-5 text-orange-500" /> {stats.streak} day streak
+          </div>
         </div>
       </header>
 
@@ -287,7 +413,7 @@ export default function Revision() {
                 <div className="mt-6 grid gap-3">
                   {options.map((option, i) => {
                     const selected = choice === option;
-                    const right = result && option === current.correctAnswer;
+                    const right = result && isOptionCorrect(option, current.correctAnswer, options, i);
                     const wrong = result && selected && !result.correct;
                     return (
                       <button
@@ -328,7 +454,11 @@ export default function Revision() {
                     role="status"
                   >
                     <p className="font-semibold text-foreground">
-                      {result.correct ? 'Correct!' : `Not quite. Correct answer: ${current.correctAnswer}`}
+                      {result.correct
+                        ? 'Correct!'
+                        : `Not quite. Correct answer: ${
+                            options.find((opt, i) => isOptionCorrect(opt, current.correctAnswer, options, i)) || current.correctAnswer
+                          }`}
                     </p>
                     {current.explanation && (
                       <p className="mt-1 text-sm text-muted-foreground">{current.explanation}</p>
@@ -337,7 +467,11 @@ export default function Revision() {
                 )}
 
                 <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-muted-foreground">Your progress saves after each answer.</p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Keyboard className="h-3.5 w-3.5 hidden sm:inline" />
+                    <span className="hidden sm:inline">Press 1-4 or A-D to select, Enter to check</span>
+                    <span className="sm:hidden">Progress saves after each answer.</span>
+                  </div>
                   {!result ? (
                     <button
                       type="button"
@@ -374,7 +508,7 @@ export default function Revision() {
                     onClick={() => setShowAnswer(true)}
                     className={`w-full rounded-xl bg-brand px-5 py-3.5 font-semibold text-brand-foreground hover:bg-brand/90 ${focusRing}`}
                   >
-                    Show answer
+                    Show answer <span className="hidden sm:inline text-xs opacity-75 font-normal">(Press Space)</span>
                   </button>
                 ) : (
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -384,7 +518,7 @@ export default function Revision() {
                       onClick={() => handleFlashcardRate(false)}
                       className={`inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-5 py-3 font-semibold text-foreground hover:bg-accent disabled:opacity-50 ${focusRing}`}
                     >
-                      <RotateCcw className="h-4 w-4" /> Review tomorrow
+                      <RotateCcw className="h-4 w-4" /> Review tomorrow <span className="hidden sm:inline text-xs text-muted-foreground">(1)</span>
                     </button>
                     <button
                       type="button"
@@ -393,7 +527,7 @@ export default function Revision() {
                       className={`inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50 ${focusRing}`}
                     >
                       {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                      <Check className="h-4 w-4" /> Got it · review in a few days
+                      <Check className="h-4 w-4" /> Got it · review in a few days <span className="hidden sm:inline text-xs text-brand-foreground/75">(2)</span>
                     </button>
                   </div>
                 )}
