@@ -335,7 +335,6 @@ export default function TakeQuiz() {
       studentName: studentInfoRef.current.name,
       studentSurname: studentInfoRef.current.surname,
       studentClass: studentInfoRef.current.className,
-confidence: confidenceRef.current[q._id] || null })),
       currentQuestionIndex: currentIndexRef.current,
       savedAt: Date.now(),
     };
