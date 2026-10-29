@@ -239,3 +239,10 @@
     transform: none !important;
   }
 }
+/* Noted accessible reading mode */
+.noted-reader-text {
+  font-family: 'Atkinson Hyperlegible', Arial, sans-serif !important;
+  line-height: 1.85 !important;
+  letter-spacing: 0.015em;
+  word-spacing: 0.04em;
+}
