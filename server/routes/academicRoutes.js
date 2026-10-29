@@ -2,24 +2,86 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { protect } from '../middleware/protect.js';
 import { AcademicTerm } from '../models/AcademicTerm.js';
-import { calculateTermSummary } from '../utils/academicCalculations.js';
+import { Content } from '../models/Content.js';
+import {
+  calculateTermSummary,
+  calculateCumulativeSummary,
+  calculateRequiredScore,
+} from '../utils/academicCalculations.js';
 
 const router = express.Router();
 router.use(protect);
 
 // -------------------------------------------------------------
-// TERMS
+// TERMS & DASHBOARD
 // -------------------------------------------------------------
 
-// GET all terms for the user
+// GET all terms for the user with CGPA
 router.get('/terms', async (req, res, next) => {
   try {
     const terms = await AcademicTerm.find({ userId: req.user._id })
       .populate('subjects.linkedContentIds', 'title type createdAt')
       .sort({ isCurrent: -1, createdAt: -1 });
 
-    const summaries = terms.map(calculateTermSummary);
-    res.json({ success: true, data: summaries });
+    const cumulative = calculateCumulativeSummary(terms);
+    res.json({
+      success: true,
+      data: cumulative.terms,
+      cumulative: {
+        cgpa: cumulative.cgpa,
+        cumulativeAverage: cumulative.cumulativeAverage,
+        cumulativeLetter: cumulative.cumulativeLetter,
+        totalCreditsGraded: cumulative.totalCreditsGraded,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET upcoming assessments across terms
+router.get('/upcoming', async (req, res, next) => {
+  try {
+    const terms = await AcademicTerm.find({ userId: req.user._id }).lean();
+    const upcoming = [];
+    const now = new Date();
+
+    terms.forEach((term) => {
+      (term.subjects || []).forEach((subject) => {
+        (subject.assessments || []).forEach((a) => {
+          if (a.score === null || a.score === undefined || a.score === '') {
+            const dueDate = a.date ? new Date(a.date) : null;
+            const diffMs = dueDate ? dueDate.getTime() - now.getTime() : null;
+            const daysRemaining = diffMs !== null ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : null;
+
+            upcoming.push({
+              assessmentId: String(a._id),
+              subjectId: String(subject._id),
+              termId: String(term._id),
+              title: a.title,
+              category: a.category,
+              maxScore: a.maxScore,
+              weight: a.weight || 1,
+              subjectName: subject.name,
+              subjectCode: subject.code,
+              subjectColor: subject.color || '#4F46E5',
+              date: a.date,
+              dueDate: a.date,
+              daysRemaining,
+              feedback: a.feedback,
+            });
+          }
+        });
+      });
+    });
+
+    upcoming.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return new Date(a.date) - new Date(b.date);
+    });
+
+    res.json({ success: true, data: upcoming.slice(0, 30) });
   } catch (error) {
     next(error);
   }
@@ -28,56 +90,97 @@ router.get('/terms', async (req, res, next) => {
 // GET dashboard summary
 router.get('/summary', async (req, res, next) => {
   try {
-    let term = await AcademicTerm.findOne({ userId: req.user._id, isCurrent: true })
-      .populate('subjects.linkedContentIds', 'title type createdAt');
+    const terms = await AcademicTerm.find({ userId: req.user._id })
+      .populate('subjects.linkedContentIds', 'title type createdAt')
+      .sort({ isCurrent: -1, createdAt: -1 });
 
-    if (!term) {
-      term = await AcademicTerm.findOne({ userId: req.user._id })
-        .populate('subjects.linkedContentIds', 'title type createdAt')
-        .sort({ createdAt: -1 });
-    }
-
-    if (!term) {
+    if (terms.length === 0) {
       return res.json({
         success: true,
         data: {
           hasTerms: false,
           currentTerm: null,
           termAverage: null,
+          termGpa: null,
+          termLetter: '—',
+          cgpa: null,
+          cumulativeAverage: null,
           belowTargetSubjects: [],
           onTrackCount: 0,
           totalSubjects: 0,
+          upcomingCount: 0,
+          upcomingAssessments: [],
         },
       });
     }
 
-    const summary = calculateTermSummary(term);
-    const belowTargetSubjects = summary.subjects.filter((s) => s.status === 'below_target');
+    const cumulative = calculateCumulativeSummary(terms);
+    const activeTerm = cumulative.terms.find((t) => t.isCurrent) || cumulative.terms[0];
+    const belowTargetSubjects = activeTerm.subjects.filter((s) => s.status === 'below_target');
+
+    // Extract upcoming from active term
+    const upcoming = [];
+    const now = new Date();
+    (activeTerm.subjects || []).forEach((subject) => {
+      (subject.assessments || []).forEach((a) => {
+        if (a.score === null || a.score === undefined || a.score === '') {
+          const dueDate = a.date ? new Date(a.date) : null;
+          const diffMs = dueDate ? dueDate.getTime() - now.getTime() : null;
+          const daysRemaining = diffMs !== null ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : null;
+
+          upcoming.push({
+            assessmentId: String(a._id),
+            subjectId: String(subject._id),
+            title: a.title,
+            category: a.category,
+            subjectName: subject.name,
+            subjectColor: subject.color || '#4F46E5',
+            date: a.date,
+            daysRemaining,
+          });
+        }
+      });
+    });
+
+    upcoming.sort((a, b) => (a.date && b.date ? new Date(a.date) - new Date(b.date) : 0));
 
     res.json({
       success: true,
       data: {
         hasTerms: true,
         currentTerm: {
-          id: String(summary._id),
-          name: summary.name,
-          year: summary.year,
-          isCurrent: summary.isCurrent,
+          id: String(activeTerm._id),
+          name: activeTerm.name,
+          year: activeTerm.year,
+          isCurrent: activeTerm.isCurrent,
         },
-        termAverage: summary.termAverage,
-        onTrackCount: summary.onTrackCount,
-        belowTargetCount: summary.belowTargetCount,
-        totalSubjects: summary.totalSubjects,
+        termAverage: activeTerm.termAverage,
+        termGpa: activeTerm.termGpa,
+        termLetter: activeTerm.termLetter,
+        cgpa: cumulative.cgpa,
+        cumulativeAverage: cumulative.cumulativeAverage,
+        onTrackCount: activeTerm.onTrackCount,
+        belowTargetCount: activeTerm.belowTargetCount,
+        totalSubjects: activeTerm.totalSubjects,
+        upcomingCount: upcoming.length,
+        upcomingAssessments: upcoming.slice(0, 3),
         belowTargetSubjects: belowTargetSubjects.map((s) => ({
           id: String(s._id),
           name: s.name,
           code: s.code,
           currentAverage: s.currentAverage,
           targetScore: s.targetScore,
+          gpa: s.gpa,
+          letterGrade: s.letterGrade,
+          whatIf: s.whatIf,
           linkedContentIds: s.linkedContentIds,
         })),
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
   } catch (error) {
     next(error);
   }
