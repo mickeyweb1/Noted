@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { 
     Calendar, Clock, Plus, Trash2, BookOpen, Brain, 
-    FileText, AlertCircle, X, CheckCircle2, Bell, Sparkles
+    FileText, AlertCircle, X, CheckCircle2, Bell, Sparkles, GraduationCap
 } from "lucide-react";
+import api from "../../utils/api";
 
 export default function StudentSchedule() {
     const [showAddModal, setShowAddModal] = useState(false);
