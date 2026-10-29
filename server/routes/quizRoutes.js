@@ -21,6 +21,9 @@ router.post('/:id/review', protect, async (req, res, next) => {
     if (!Number.isInteger(questionIndex) || typeof correct !== 'boolean') {
       return res.status(400).json({ success: false, message: 'questionIndex and boolean correct are required.' });
     }
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid quiz ID.' });
+    }
     const quiz = await Quiz.findOne({ _id: req.params.id, createdBy: req.user._id });
     let target;
     if (quiz) {
