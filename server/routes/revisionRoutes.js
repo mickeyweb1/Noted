@@ -137,10 +137,12 @@ router.post('/queue', async (req, res, next) => {
 router.get('/due', async (req, res, next) => {
   try {
     const now = new Date();
-    const [contents, quizzes, reviewItems] = await Promise.all([
+    const [contents, quizzes, reviewItems, totalReviewDue, futureReviewItem] = await Promise.all([
       Content.find({ userId: req.user._id, type: 'quiz', 'revisionQuestions.0': { $exists: true } }).select('title revisionQuestions'),
       Quiz.find({ createdBy: req.user._id, 'questions.revisionQueued': true }).select('title questions'),
       ReviewItem.find({ userId: req.user._id, nextReviewDate: { $lte: now } }).sort({ nextReviewDate: 1 }).limit(20),
+      ReviewItem.countDocuments({ userId: req.user._id, nextReviewDate: { $lte: now } }),
+      ReviewItem.findOne({ userId: req.user._id, nextReviewDate: { $gt: now } }).sort({ nextReviewDate: 1 }).select('nextReviewDate'),
     ]);
     const due = [];
     let totalDue = 0;
@@ -161,6 +163,11 @@ router.get('/due', async (req, res, next) => {
       if (!grouped.has(key)) grouped.set(key, { parentId, title, sourceType, questions: [] });
       grouped.get(key).questions.push(question);
     });
+
+    if (futureReviewItem && (!nextReviewDate || new Date(futureReviewItem.nextReviewDate) < new Date(nextReviewDate))) {
+      nextReviewDate = futureReviewItem.nextReviewDate;
+    }
+
     res.json({
       success: true,
       data: {
@@ -176,7 +183,7 @@ router.get('/due', async (req, res, next) => {
           nextReviewDate: item.nextReviewDate,
           reviewItemId: String(item._id),
         })),
-        dueCount: totalDue + reviewItems.length,
+        dueCount: totalDue + totalReviewDue,
         nextReviewDate,
       },
     });
