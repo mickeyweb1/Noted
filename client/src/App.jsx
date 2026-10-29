@@ -111,6 +111,7 @@ function App() {
       >
         <Route path="/dashboard" element={<StudentHome />} />
         <Route path="/revision" element={<Revision />} />
+        <Route path="/academic-progress" element={<AcademicProgress />} />
         <Route path="/battle-arena" element={<BattleArena />} />
         <Route path="/ai-teacher" element={<AiTeacher />} />
         <Route path="/aiGenerator" element={<StudentAiGenerator />} />
