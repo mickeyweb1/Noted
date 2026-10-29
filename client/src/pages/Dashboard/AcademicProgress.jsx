@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
+  Award,
   BookOpen,
   Calendar,
   CheckCircle2,
@@ -11,9 +12,11 @@ import {
   Edit2,
   FileText,
   GraduationCap,
+  HelpCircle,
   Loader2,
   Plus,
   RotateCcw,
+  Sliders,
   Sparkles,
   Target,
   Trash2,
@@ -21,6 +24,7 @@ import {
   TrendingUp,
   Upload,
   X,
+  Zap,
 } from "lucide-react";
 import api from "../../utils/api";
 
@@ -47,8 +51,11 @@ const PRESET_COLORS = [
 ];
 
 export default function AcademicProgress() {
+  const navigate = useNavigate();
   const [terms, setTerms] = useState([]);
+  const [cumulative, setCumulative] = useState(null);
   const [selectedTermId, setSelectedTermId] = useState(null);
+  const [gradeDisplayMode, setGradeDisplayMode] = useState("percentage"); // 'percentage' | 'gpa' | 'letter'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [libraryItems, setLibraryItems] = useState([]);
@@ -82,6 +89,17 @@ export default function AcademicProgress() {
     feedback: "",
   });
 
+  // What-If Simulator state
+  const [whatIfModalOpen, setWhatIfModalOpen] = useState(false);
+  const [whatIfSubject, setWhatIfSubject] = useState(null);
+  const [whatIfSimulatedScores, setWhatIfSimulatedScores] = useState({});
+  const [whatIfTarget, setWhatIfTarget] = useState(85);
+
+  // Booster Quiz state
+  const [boostingSubjectId, setBoostingSubjectId] = useState(null);
+  const [boosterSuccessModal, setBoosterSuccessModal] = useState(null);
+
+  // Import/Export state
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState("");
   const [importPreview, setImportPreview] = useState(null);
@@ -100,6 +118,7 @@ export default function AcademicProgress() {
       ]);
       const data = termsRes.data?.data || [];
       setTerms(data);
+      setCumulative(termsRes.data?.cumulative || null);
       setLibraryItems(libraryRes.data?.data || []);
 
       if (data.length > 0) {
@@ -124,9 +143,16 @@ export default function AcademicProgress() {
 
   const currentTerm = terms.find((t) => t._id === selectedTermId) || terms[0] || null;
 
-  // Toggle subject accordion
   const toggleSubject = (subjectId) => {
     setExpandedSubjects((prev) => ({ ...prev, [subjectId]: !prev[subjectId] }));
+  };
+
+  // Helper for grade display mode
+  const formatGrade = (avg, gpa, letter) => {
+    if (avg === null || avg === undefined) return "No marks";
+    if (gradeDisplayMode === "gpa") return `${gpa ?? 0.0} GPA`;
+    if (gradeDisplayMode === "letter") return letter || "—";
+    return `${avg}%`;
   };
 
   // --------------------------------------------------------------------------
@@ -342,6 +368,60 @@ export default function AcademicProgress() {
   };
 
   // --------------------------------------------------------------------------
+  // WHAT-IF SIMULATOR
+  // --------------------------------------------------------------------------
+  const openWhatIfModal = (subject) => {
+    setWhatIfSubject(subject);
+    setWhatIfTarget(subject.targetScore || 80);
+    const initialSim = {};
+    (subject.assessments || []).forEach((a) => {
+      if (a.score === null || a.score === undefined || a.score === "") {
+        initialSim[a._id] = Math.round(a.maxScore * 0.8);
+      }
+    });
+    setWhatIfSimulatedScores(initialSim);
+    setWhatIfModalOpen(true);
+  };
+
+  const computeSimulatedGrade = () => {
+    if (!whatIfSubject) return null;
+    const assessments = whatIfSubject.assessments || [];
+    let sumProduct = 0;
+    let sumWeight = 0;
+
+    assessments.forEach((a) => {
+      const w = Number(a.weight) > 0 ? Number(a.weight) : 1;
+      const max = Number(a.maxScore) > 0 ? Number(a.maxScore) : 100;
+      let score = a.score;
+      if (score === null || score === undefined || score === "") {
+        score = whatIfSimulatedScores[a._id] !== undefined ? Number(whatIfSimulatedScores[a._id]) : 0;
+      }
+      sumProduct += (score / max) * 100 * w;
+      sumWeight += w;
+    });
+
+    return sumWeight > 0 ? Math.round((sumProduct / sumWeight) * 10) / 10 : 0;
+  };
+
+  // --------------------------------------------------------------------------
+  // TARGET BOOSTER QUIZ GENERATOR
+  // --------------------------------------------------------------------------
+  const handleGenerateBoosterQuiz = async (subjectId) => {
+    if (!currentTerm) return;
+    setBoostingSubjectId(subjectId);
+    try {
+      const response = await api.post(`/academic/terms/${currentTerm._id}/subjects/${subjectId}/boost`);
+      setBoosterSuccessModal(response.data?.data);
+      window.dispatchEvent(new Event("revision-updated"));
+      await loadTerms();
+    } catch {
+      alert("Could not generate booster quiz. Please try again.");
+    } finally {
+      setBoostingSubjectId(null);
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // BACKUP EXPORT & IMPORT
   // --------------------------------------------------------------------------
   const handleExportBackup = async () => {
@@ -427,10 +507,41 @@ export default function AcademicProgress() {
           </div>
           <h1 className="mt-1 text-2xl font-bold text-foreground sm:text-3xl">Grade & Target Tracker</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track assessments, monitor target grades, and link subjects directly to study materials.
+            Track assessments, simulate exam marks, monitor CGPA, and link subjects directly to study materials.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* SCALE TOGGLE */}
+          <div className="inline-flex rounded-xl border border-border bg-card p-0.5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setGradeDisplayMode("percentage")}
+              className={`rounded-lg px-2.5 py-1.5 transition-colors ${
+                gradeDisplayMode === "percentage" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              %
+            </button>
+            <button
+              type="button"
+              onClick={() => setGradeDisplayMode("gpa")}
+              className={`rounded-lg px-2.5 py-1.5 transition-colors ${
+                gradeDisplayMode === "gpa" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              4.0 GPA
+            </button>
+            <button
+              type="button"
+              onClick={() => setGradeDisplayMode("letter")}
+              className={`rounded-lg px-2.5 py-1.5 transition-colors ${
+                gradeDisplayMode === "letter" ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Letter
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={handleExportBackup}
@@ -477,7 +588,7 @@ export default function AcademicProgress() {
           </div>
           <h2 className="mt-5 text-xl font-bold text-foreground">Start tracking your academic progress</h2>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Create your first academic term (such as “Fall 2026” or “Term 1”) or import existing records to monitor marks, assess targets, and study weak subjects.
+            Create your first academic term or import an existing backup to monitor marks, simulate final exam requirements, and boost weak subjects.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
@@ -545,21 +656,39 @@ export default function AcademicProgress() {
             )}
           </div>
 
-          {/* TERM SUMMARY STATS */}
+          {/* TERM & CUMULATIVE SUMMARY STATS */}
           {currentTerm && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Term Average */}
+              {/* Term Average / GPA */}
               <div className={`${card} p-5`}>
                 <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="text-xs font-bold uppercase tracking-wider">Term Average</span>
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {gradeDisplayMode === "gpa" ? "Term GPA" : gradeDisplayMode === "letter" ? "Term Grade" : "Term Average"}
+                  </span>
                   <Sparkles className="h-4 w-4 text-brand" />
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-3xl font-extrabold text-foreground">
-                    {currentTerm.termAverage !== null ? `${currentTerm.termAverage}%` : "—"}
+                    {formatGrade(currentTerm.termAverage, currentTerm.termGpa, currentTerm.termLetter)}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {currentTerm.termAverage !== null ? "recorded average" : "no marks yet"}
+                    {currentTerm.termAverage !== null ? `(${currentTerm.termAverage}%)` : "no marks yet"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cumulative CGPA */}
+              <div className={`${card} p-5`}>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="text-xs font-bold uppercase tracking-wider">Cumulative CGPA</span>
+                  <Award className="h-4 w-4 text-purple-500" />
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-3xl font-extrabold text-foreground">
+                    {cumulative?.cgpa !== null && cumulative?.cgpa !== undefined ? `${cumulative.cgpa}` : "—"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {cumulative?.totalCreditsGraded ? `${cumulative.totalCreditsGraded} credits graded` : "all terms"}
                   </span>
                 </div>
               </div>
@@ -567,7 +696,7 @@ export default function AcademicProgress() {
               {/* Targets On Track */}
               <div className={`${card} p-5`}>
                 <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="text-xs font-bold uppercase tracking-wider">Target Progress</span>
+                  <span className="text-xs font-bold uppercase tracking-wider">Target Status</span>
                   <Target className="h-4 w-4 text-emerald-500" />
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
@@ -578,33 +707,19 @@ export default function AcademicProgress() {
                 </div>
               </div>
 
-              {/* Assessments Total */}
+              {/* Assessments / Pending */}
               <div className={`${card} p-5`}>
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="text-xs font-bold uppercase tracking-wider">Assessments</span>
-                  <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                  <Calendar className="h-4 w-4 text-amber-500" />
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-3xl font-extrabold text-foreground">
                     {currentTerm.totalAssessments - currentTerm.totalPending}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    of {currentTerm.totalAssessments} graded
+                    of {currentTerm.totalAssessments} graded ({currentTerm.totalPending} pending)
                   </span>
-                </div>
-              </div>
-
-              {/* Pending / Unscored */}
-              <div className={`${card} p-5`}>
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="text-xs font-bold uppercase tracking-wider">Pending</span>
-                  <Calendar className="h-4 w-4 text-amber-500" />
-                </div>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold text-foreground">
-                    {currentTerm.totalPending}
-                  </span>
-                  <span className="text-xs text-muted-foreground">unscored / upcoming</span>
                 </div>
               </div>
             </div>
@@ -616,7 +731,7 @@ export default function AcademicProgress() {
               <div>
                 <h2 className="text-lg font-bold text-foreground">Subjects ({currentTerm?.subjects?.length || 0})</h2>
                 <p className="text-xs text-muted-foreground">
-                  Click a subject to view assessments, monitor targets, and view study materials.
+                  View scores, simulate what-if requirements, generate booster quizzes, and review study materials.
                 </p>
               </div>
               <button
@@ -646,6 +761,7 @@ export default function AcademicProgress() {
                 const avg = subject.currentAverage;
                 const isBelowTarget = subject.status === "below_target";
                 const isOnTrack = subject.status === "on_track";
+                const whatIf = subject.whatIf;
                 const linkedMaterials = subject.linkedContentIds || [];
 
                 return (
@@ -660,7 +776,7 @@ export default function AcademicProgress() {
                     >
                       <div className="flex items-center gap-3">
                         <span
-                          className="h-9 w-9 shrink-0 rounded-xl flex items-center justify-center font-bold text-white text-xs"
+                          className="h-10 w-10 shrink-0 rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-sm"
                           style={{ backgroundColor: subject.color || "#4F46E5" }}
                         >
                           {(subject.code || subject.name.slice(0, 3)).toUpperCase()}
@@ -673,6 +789,9 @@ export default function AcademicProgress() {
                                 {subject.code}
                               </span>
                             )}
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                              {subject.letterGrade || "—"} ({subject.gpa !== null ? `${subject.gpa} GPA` : "—"})
+                            </span>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {subject.scoredAssessmentsCount} graded · {subject.pendingAssessmentsCount} pending · {subject.creditHours} credit{subject.creditHours === 1 ? "" : "s"}
@@ -681,11 +800,10 @@ export default function AcademicProgress() {
                       </div>
 
                       <div className="flex items-center justify-between gap-4 sm:justify-end">
-                        {/* Status / Percentage */}
                         <div className="text-right">
                           <div className="flex items-center gap-2">
                             <span className="text-xl font-black text-foreground">
-                              {avg !== null ? `${avg}%` : "No marks"}
+                              {formatGrade(avg, subject.gpa, subject.letterGrade)}
                             </span>
                             {target !== null && (
                               <span
@@ -702,14 +820,13 @@ export default function AcademicProgress() {
                               </span>
                             )}
                           </div>
-                          {isBelowTarget && (
-                            <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                              Below target by {(target - avg).toFixed(1)}%
+                          {whatIf?.status === "in_progress" && whatIf.neededPercentage !== null && (
+                            <p className="text-[11px] font-medium text-muted-foreground">
+                              Need <span className="font-bold text-brand">{whatIf.neededPercentage}%</span> on remaining
                             </p>
                           )}
                         </div>
 
-                        {/* Expand toggle */}
                         <div className="text-muted-foreground">
                           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                         </div>
@@ -719,21 +836,33 @@ export default function AcademicProgress() {
                     {/* EXPANDED CONTENT */}
                     {isExpanded && (
                       <div className="border-t border-border bg-muted/20 p-4 sm:p-5">
-                        {/* BELOW TARGET ADVISORY / SMART ACTION */}
+                        {/* BELOW TARGET ADVISORY & SMART ACTIONS */}
                         {isBelowTarget && (
                           <div className="mb-4 flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
                               <TrendingDown className="h-4 w-4 shrink-0" />
                               <span>
-                                Score is currently <strong>{(target - avg).toFixed(1)}% below target</strong> ({avg}% vs {target}%). Reviewing your notes and flashcards will help close this gap.
+                                Score is currently <strong>{(target - avg).toFixed(1)}% below target</strong> ({avg}% vs {target}%).
+                                {whatIf?.neededPercentage !== null && ` You need an average of ${whatIf.neededPercentage}% on remaining assessments.`}
                               </span>
                             </div>
-                            <Link
-                              to="/revision"
-                              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
-                            >
-                              <RotateCcw className="h-3.5 w-3.5" /> Start revision
-                            </Link>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={boostingSubjectId === subject._id}
+                                onClick={() => handleGenerateBoosterQuiz(subject._id)}
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+                              >
+                                {boostingSubjectId === subject._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                Booster Quiz
+                              </button>
+                              <Link
+                                to="/revision"
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/40 bg-card px-3 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-500/20"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" /> Start revision
+                              </Link>
+                            </div>
                           </div>
                         )}
 
@@ -759,9 +888,9 @@ export default function AcademicProgress() {
                           </div>
                         )}
 
-                        {/* ACTIONS & STUDY LINK */}
+                        {/* TOOLBAR: ADD ASSESSMENT / WHAT-IF / BOOSTER / EDIT */}
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -771,6 +900,28 @@ export default function AcademicProgress() {
                               className={`inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:bg-brand/90 ${focusRing}`}
                             >
                               <Plus className="h-3.5 w-3.5" /> Add Assessment
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openWhatIfModal(subject);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-accent"
+                            >
+                              <Sliders className="h-3.5 w-3.5 text-brand" /> What-If Simulator
+                            </button>
+                            <button
+                              type="button"
+                              disabled={boostingSubjectId === subject._id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGenerateBoosterQuiz(subject._id);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50"
+                            >
+                              {boostingSubjectId === subject._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-brand" />}
+                              Booster Quiz
                             </button>
                             <button
                               type="button"
@@ -795,7 +946,6 @@ export default function AcademicProgress() {
                             </button>
                           </div>
 
-                          {/* Subject Review Link */}
                           <Link
                             to="/revision"
                             className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
@@ -836,6 +986,11 @@ export default function AcademicProgress() {
                                     <tr key={assessment._id} className="hover:bg-muted/30">
                                       <td className="p-3 font-semibold text-foreground">
                                         {assessment.title}
+                                        {assessment.date && (
+                                          <span className="block text-[11px] font-normal text-muted-foreground">
+                                            Due / Date: {new Date(assessment.date).toLocaleDateString()}
+                                          </span>
+                                        )}
                                         {assessment.feedback && (
                                           <p className="mt-0.5 text-[11px] text-muted-foreground italic">
                                             "{assessment.feedback}"
@@ -905,6 +1060,162 @@ export default function AcademicProgress() {
             )}
           </section>
         </>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: WHAT-IF GRADE SIMULATOR */}
+      {/* ========================================================================= */}
+      {whatIfModalOpen && whatIfSubject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-background p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="h-5 w-5 text-brand" />
+                <h3 className="text-lg font-bold text-foreground">What-If Exam & Grade Simulator</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatIfModalOpen(false)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-5">
+              <div>
+                <p className="text-sm font-bold text-foreground">{whatIfSubject.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  Simulate potential marks on remaining tests, assignments, or finals to forecast your final subject grade.
+                </p>
+              </div>
+
+              {/* TARGET INPUT */}
+              <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
+                <span className="text-xs font-semibold text-foreground">Desired Target Grade (%):</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={whatIfTarget}
+                  onChange={(e) => setWhatIfTarget(Number(e.target.value))}
+                  className="w-20 rounded-lg border border-border bg-background px-2.5 py-1 text-sm font-bold text-foreground text-right"
+                />
+              </div>
+
+              {/* SIMULATED RESULT CALLOUT */}
+              {(() => {
+                const simAvg = computeSimulatedGrade();
+                const isMet = simAvg !== null && simAvg >= whatIfTarget;
+                return (
+                  <div
+                    className={`rounded-2xl border p-4 text-center ${
+                      isMet
+                        ? "border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                    }`}
+                  >
+                    <p className="text-xs font-bold uppercase tracking-wider">Projected Final Grade</p>
+                    <p className="mt-1 text-3xl font-black">{simAvg !== null ? `${simAvg}%` : "—"}</p>
+                    <p className="mt-1 text-xs font-medium">
+                      {isMet ? `✓ Target of ${whatIfTarget}% achieved (+${(simAvg - whatIfTarget).toFixed(1)}% cushion)` : `Below target by ${(whatIfTarget - simAvg).toFixed(1)}%`}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* PENDING ASSESSMENTS SLIDERS */}
+              <div className="space-y-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Pending Assessments (Adjust Simulated Scores):
+                </p>
+                {whatIfSubject.assessments.filter((a) => a.score === null || a.score === undefined || a.score === "").length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">
+                    All assessments have already been recorded.
+                  </p>
+                ) : (
+                  whatIfSubject.assessments
+                    .filter((a) => a.score === null || a.score === undefined || a.score === "")
+                    .map((a) => {
+                      const curVal = whatIfSimulatedScores[a._id] !== undefined ? whatIfSimulatedScores[a._id] : 0;
+                      const pct = Math.round((curVal / a.maxScore) * 100);
+
+                      return (
+                        <div key={a._id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-foreground">{a.title}</span>
+                            <span className="font-mono font-bold text-brand">
+                              {curVal} / {a.maxScore} ({pct}%)
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max={a.maxScore}
+                            step="0.5"
+                            value={curVal}
+                            onChange={(e) =>
+                              setWhatIfSimulatedScores({
+                                ...whatIfSimulatedScores,
+                                [a._id]: Number(e.target.value),
+                              })
+                            }
+                            className="w-full accent-brand cursor-pointer"
+                          />
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+
+              <div className="flex justify-end border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setWhatIfModalOpen(false)}
+                  className="rounded-xl bg-brand px-5 py-2 text-xs font-semibold text-brand-foreground hover:bg-brand/90"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: BOOSTER QUIZ SUCCESS */}
+      {/* ========================================================================= */}
+      {boosterSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-background p-6 text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand/10 text-brand">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-foreground">Target Booster Quiz Queued!</h3>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {boosterSuccessModal.questionsCount} diagnostic questions tailored to <strong>{boosterSuccessModal.title}</strong> have been queued to your Account-Synced Revision.
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setBoosterSuccessModal(null);
+                  navigate("/revision");
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-xs font-semibold text-brand-foreground hover:bg-brand/90"
+              >
+                <RotateCcw className="h-4 w-4" /> Practice Now
+              </button>
+              <button
+                type="button"
+                onClick={() => setBoosterSuccessModal(null)}
+                className="rounded-xl border border-border px-4 py-2.5 text-xs font-semibold text-foreground hover:bg-accent"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ========================================================================= */}
@@ -1225,18 +1536,31 @@ export default function AcademicProgress() {
                 Tip: Enter 0 for an actual zero mark; leave blank if this assessment hasn't been graded yet.
               </p>
 
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Weight / Factor
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={assessmentForm.weight}
-                  onChange={(e) => setAssessmentForm({ ...assessmentForm, weight: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-border bg-card px-3.5 py-2 text-sm text-foreground focus:border-brand focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Weight / Factor
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={assessmentForm.weight}
+                    onChange={(e) => setAssessmentForm({ ...assessmentForm, weight: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-border bg-card px-3.5 py-2 text-sm text-foreground focus:border-brand focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Due / Exam Date
+                  </label>
+                  <input
+                    type="date"
+                    value={assessmentForm.date ? assessmentForm.date.slice(0, 10) : ""}
+                    onChange={(e) => setAssessmentForm({ ...assessmentForm, date: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-border bg-card px-3.5 py-2 text-sm text-foreground focus:border-brand focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div>
@@ -1343,7 +1667,7 @@ export default function AcademicProgress() {
                   Cancel
                 </button>
                 <button
-                  type="button"
+                  type="submit"
                   disabled={!importPreview || submitting}
                   onClick={handleExecuteImport}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
