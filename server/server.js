@@ -22,6 +22,7 @@ import { submitContactForm } from './controllers/contactController.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import quizRoutes from './routes/quizRoutes.js';
 import revisionRoutes from './routes/revisionRoutes.js';
+import academicRoutes from './routes/academicRoutes.js';
 
 dotenv.config();
 
