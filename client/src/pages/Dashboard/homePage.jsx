@@ -17,6 +17,7 @@ import {
   Check,
   Share2,
   MessageCircle,
+  GraduationCap,
 } from "lucide-react";
 import api from "../../utils/api";
 import FeedbackModal from "../../components/FeedbackModal";
