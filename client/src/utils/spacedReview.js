@@ -33,6 +33,8 @@ const clearReviewItems = () => {
 };
 
 export async function syncPendingReviewItems() {
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('userToken') || localStorage.getItem('token')) : null;
+  if (!token) return { synced: false, count: 0 };
   const items = getReviewItems();
   if (items.length === 0) return { synced: true, count: 0 };
 
