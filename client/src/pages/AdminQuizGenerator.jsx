@@ -37,6 +37,7 @@ const INITIAL_METADATA = {
   timeType: "total",
   maxTabSwitches: "",
   layoutMode: "scroll",
+  showAnswersAfterSubmission: true,
 };
 
 const emptyQuestion = () => ({
@@ -129,7 +130,8 @@ export default function AdminQuizGenerator() {
         timeUnit: metadata.timeUnit,
         timeType: metadata.timeType,
         maxTabSwitches,
-        layoutMode: metadata.layoutMode
+        layoutMode: metadata.layoutMode,
+        showAnswersAfterSubmission: metadata.showAnswersAfterSubmission,
       },
     };
   };
@@ -242,6 +244,7 @@ export default function AdminQuizGenerator() {
         numQuestions: questions.length,
         maxTabSwitches: settings.maxTabSwitches,
         layoutMode: settings.layoutMode,
+              showAnswersAfterSubmission: settings.showAnswersAfterSubmission,
         questions,
         useAIAutocomplete: false,
       });
@@ -437,10 +440,6 @@ export default function AdminQuizGenerator() {
                     <option value="total">total</option><option value="perQuestion">per question</option>
                   </SelectField>
                 </div>
-              </Field>
-
-              <Field label="Pass mark (%)" htmlFor="quiz-pass-mark" hint="Students meet the pass mark when their score reaches this percentage.">
-                <NumberInput id="quiz-pass-mark" aria-describedby="quiz-pass-mark-hint" value={metadata.passMark} onChange={setField("passMark")} placeholder="e.g., 50" />
               </Field>
 
               <label htmlFor="quiz-show-answers" className="md:col-span-2 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background p-4 transition-colors hover:bg-accent/40">
