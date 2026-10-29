@@ -20,118 +20,104 @@ import api from '../../utils/api';
 import MathRenderer from '../../components/MathRenderer';
 import StudyAccessibilityTools from '../../components/StudyAccessibilityTools';
 import { getDueReviewItems, syncPendingReviewItems, updateReviewSchedule } from '../../utils/spacedReview';
-
 const card = 'rounded-2xl border border-border bg-card shadow-sm';
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2';
-
 /**
  * Robust answer matcher handling letter prefixes (e.g. "A", "A. Text"),
  * case-insensitive comparisons, and option text matching.
  */
 function checkAnswerMatch(selectedChoice, correctAnswer, options = []) {
   if (!selectedChoice || !correctAnswer) return false;
-  const safeChoice = String(selectedChoice).trim();
-  const safeCorrect = String(correctAnswer).trim();
-  const lowerChoice = safeChoice.toLowerCase();
-  const lowerCorrect = safeCorrect.toLowerCase();
-
-  // 1. Direct equality
+const safeChoice = String(selectedChoice).trim();
+const safeCorrect = String(correctAnswer).trim();
+const lowerChoice = safeChoice.toLowerCase();
+const lowerCorrect = safeCorrect.toLowerCase();
+// 1. Direct equality
   if (lowerChoice === lowerCorrect) return true;
-
-  // 2. Correct answer is a single letter (e.g. "A", "B", "C", "D")
+// 2. Correct answer is a single letter (e.g. "A", "B", "C", "D")
   if (/^[a-d]$/i.test(lowerCorrect)) {
-    const letterIdx = lowerCorrect.charCodeAt(0) - 97;
+const letterIdx = lowerCorrect.charCodeAt(0) - 97;
     if (options[letterIdx] && String(options[letterIdx]).trim().toLowerCase() === lowerChoice) {
-      return true;
+return true;
     }
   }
-
-  // 3. Correct answer starts with letter prefix (e.g. "A. Some text" or "A) Some text")
-  const prefixMatch = lowerCorrect.match(/^([a-d])[\.\)]\s*(.*)$/i);
+// 3. Correct answer starts with letter prefix (e.g. "A. Some text" or "A) Some text")
+const prefixMatch = lowerCorrect.match(/^([a-d])[.)]\s*(.*)$/i);
   if (prefixMatch) {
-    const letter = prefixMatch[1].toLowerCase();
-    const textPart = prefixMatch[2].trim().toLowerCase();
+const letter = prefixMatch[1].toLowerCase();
+const textPart = prefixMatch[2].trim().toLowerCase();
     if (textPart && (lowerChoice === textPart || lowerChoice.includes(textPart) || textPart.includes(lowerChoice))) {
-      return true;
+return true;
     }
-    const letterIdx = letter.charCodeAt(0) - 97;
+const letterIdx = letter.charCodeAt(0) - 97;
     if (options[letterIdx] && String(options[letterIdx]).trim().toLowerCase() === lowerChoice) {
-      return true;
+return true;
     }
   }
-
-  // 4. Choice starts with letter prefix and matches correct text
-  const choicePrefix = lowerChoice.match(/^([a-d])[\.\)]\s*(.*)$/i);
+// 4. Choice starts with letter prefix and matches correct text
+const choicePrefix = lowerChoice.match(/^([a-d])[.)]\s*(.*)$/i);
   if (choicePrefix) {
-    const textPart = choicePrefix[2].trim().toLowerCase();
+const textPart = choicePrefix[2].trim().toLowerCase();
     if (textPart === lowerCorrect) return true;
   }
-
-  // 5. Lengthy substring containment
+// 5. Lengthy substring containment
   if (lowerCorrect.length > 3 && (lowerChoice.includes(lowerCorrect) || lowerCorrect.includes(lowerChoice))) {
-    return true;
+return true;
   }
-
-  return false;
+return false;
 }
-
 function isOptionCorrect(option, correctAnswer, options = [], index = 0) {
   if (!correctAnswer) return false;
-  const safeCorrect = String(correctAnswer).trim().toLowerCase();
+const safeCorrect = String(correctAnswer).trim().toLowerCase();
   if (/^[a-d]$/i.test(safeCorrect)) {
-    return safeCorrect.charCodeAt(0) - 97 === index;
+return safeCorrect.charCodeAt(0) - 97 === index;
   }
-  return checkAnswerMatch(option, correctAnswer, options);
+return checkAnswerMatch(option, correctAnswer, options);
 }
-
 export default function Revision() {
-  const [queue, setQueue] = useState([]);
-  const [stats, setStats] = useState({ dueCount: 0, masteredCount: 0, streak: 0, nextReviewDate: null });
-  const [index, setIndex] = useState(0);
-  const [choice, setChoice] = useState(null);
-  const [result, setResult] = useState(null);
-  const [showAnswer, setShowAnswer] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [error, setError] = useState('');
-  const [lastFailedSubmission, setLastFailedSubmission] = useState(null);
-
-  const load = useCallback(async () => {
+const [queue, setQueue] = useState([]);
+const [stats, setStats] = useState({ dueCount: 0, masteredCount: 0, streak: 0, nextReviewDate: null });
+const [index, setIndex] = useState(0);
+const [choice, setChoice] = useState(null);
+const [result, setResult] = useState(null);
+const [showAnswer, setShowAnswer] = useState(false);
+const [loading, setLoading] = useState(true);
+const [saving, setSaving] = useState(false);
+const [isOfflineMode, setIsOfflineMode] = useState(false);
+const [error, setError] = useState('');
+const [lastFailedSubmission, setLastFailedSubmission] = useState(null);
+const [readableMode, setReadableMode] = useState(false);
+const [readerScale, setReaderScale] = useState(1);
+const load = useCallback(async () => {
     setLoading(true);
     setError('');
     setIsOfflineMode(false);
     setLastFailedSubmission(null);
-
     try {
-      // Sync any local pending review items first so account is up to date
-      await syncPendingReviewItems().catch(() => {});
-
-      const [dueResponse, statsResponse] = await Promise.all([
+// Sync any local pending review items first so account is up to date
+await syncPendingReviewItems().catch(() => {});
+const [dueResponse, statsResponse] = await Promise.all([
         api.get('/revision/due'),
         api.get('/revision/stats'),
       ]);
-
-      const groups = dueResponse.data?.data?.groups || [];
-      const groupQuestions = groups.flatMap((group) =>
+const groups = dueResponse.data?.data?.groups || [];
+const groupQuestions = groups.flatMap((group) =>
         group.questions.map((question) => ({
-          ...question,
+...question,
           parentId: group.parentId,
           title: group.title,
           sourceType: group.sourceType || 'quiz',
           hasMultipleChoice: Array.isArray(question.options) && question.options.length > 0,
         }))
       );
-
-      const items = (dueResponse.data?.data?.items || []).map((item) => ({
-        ...item,
+const items = (dueResponse.data?.data?.items || []).map((item) => ({
+...item,
         parentId: null,
         reviewItemId: item.reviewItemId || item.id,
         hasMultipleChoice: false,
         sourceType: item.sourceType || 'flashcard',
       }));
-
-      const combinedQueue = [...groupQuestions, ...items];
+const combinedQueue = [...groupQuestions, ...items];
       setQueue(combinedQueue);
       setStats(
         statsResponse.data?.data || {
@@ -146,13 +132,13 @@ export default function Revision() {
       setResult(null);
       setShowAnswer(false);
     } catch {
-      // Fallback: If network is offline, load local due review items so study isn't blocked
-      const localDue = getDueReviewItems();
+// Fallback: If network is offline, load local due review items so study isn't blocked
+const localDue = getDueReviewItems();
       if (localDue.length > 0) {
         setIsOfflineMode(true);
         setQueue(
           localDue.map((item) => ({
-            ...item,
+...item,
             reviewItemId: item.id,
             parentId: null,
             hasMultipleChoice: false,
@@ -171,39 +157,50 @@ export default function Revision() {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     load();
   }, [load]);
+const current = queue[index];
+const options = useMemo(() => current?.options || [], [current]);
+const progress = queue.length ? ((index + (result ? 1 : 0)) / queue.length) * 100 : 0;
+const speechText = useMemo(() => {
+    if (!current) return '';
 
-  const current = queue[index];
-  const options = useMemo(() => current?.options || [], [current]);
-  const progress = queue.length ? ((index + (result ? 1 : 0)) / queue.length) * 100 : 0;
+    const prompt = current.question || current.front || '';
+    const choices = current.hasMultipleChoice && options.length
+      ? `Options: ${options.map((option, optionIndex) => `Option ${optionIndex + 1}: ${option}`).join('. ')}`
+      : '';
+    const answer = current.hasMultipleChoice
+      ? result
+        ? `Correct answer: ${current.correctAnswer || ''}. ${current.explanation || ''}`
+        : ''
+      : showAnswer
+        ? current.back || current.correctAnswer || ''
+        : '';
 
-  const saveReviewResult = async (isCorrect) => {
+    return [prompt, choices, answer].filter(Boolean).join('. ');
+  }, [current, options, result, showAnswer]);
+const saveReviewResult = async (isCorrect) => {
     if (!current || saving) return;
     setSaving(true);
     setError('');
     setLastFailedSubmission(null);
-
     try {
       if (isOfflineMode) {
-        // Offline: update local schedule
+// Offline: update local schedule
         updateReviewSchedule(current.reviewItemId || current.id, isCorrect);
       } else if (current.reviewItemId) {
-        await api.post(`/revision/items/${current.reviewItemId}/review`, { correct: isCorrect });
+await api.post(`/revision/items/${current.reviewItemId}/review`, { correct: isCorrect });
       } else if (current.parentId) {
-        await api.post(`/quiz/${current.parentId}/review`, {
+await api.post(`/quiz/${current.parentId}/review`, {
           questionIndex: current.questionIndex,
           correct: isCorrect,
         });
       } else {
         throw new Error('Unrecognized review target');
       }
-
       window.dispatchEvent(new Event('revision-updated'));
       setStats((previous) => ({ ...previous, dueCount: Math.max(0, previous.dueCount - 1) }));
-
       window.setTimeout(() => {
         setIndex((previous) => previous + 1);
         setChoice(null);
@@ -220,26 +217,22 @@ export default function Revision() {
       setSaving(false);
     }
   };
-
-  const handleMultipleChoiceSubmit = () => {
+const handleMultipleChoiceSubmit = () => {
     if (!current || choice === null || saving) return;
-    const isCorrect = checkAnswerMatch(choice, current.correctAnswer, options);
+const isCorrect = checkAnswerMatch(choice, current.correctAnswer, options);
     setResult({ correct: isCorrect });
     saveReviewResult(isCorrect);
   };
-
-  const handleFlashcardRate = (remembered) => {
+const handleFlashcardRate = (remembered) => {
     if (!current || saving) return;
     saveReviewResult(remembered);
   };
-
-  // Keyboard navigation
+// Keyboard navigation
   useEffect(() => {
-    const handleKeyDown = (e) => {
+const handleKeyDown = (e) => {
       if (!current || saving) return;
-      const key = e.key.toLowerCase();
-
-      // Multiple choice shortcuts (1-4 or a-d)
+const key = e.key.toLowerCase();
+// Multiple choice shortcuts (1-4 or a-d)
       if (current.hasMultipleChoice && !result) {
         if (['1', 'a'].includes(key) && options[0]) setChoice(options[0]);
         if (['2', 'b'].includes(key) && options[1]) setChoice(options[1]);
@@ -247,8 +240,7 @@ export default function Revision() {
         if (['4', 'd'].includes(key) && options[3]) setChoice(options[3]);
         if (e.key === 'Enter' && choice !== null) handleMultipleChoiceSubmit();
       }
-
-      // Flashcard shortcuts (Space to reveal, 1 or 2 to rate)
+// Flashcard shortcuts (Space to reveal, 1 or 2 to rate)
       if (!current.hasMultipleChoice) {
         if (e.key === ' ' && !showAnswer) {
           e.preventDefault();
@@ -259,22 +251,18 @@ export default function Revision() {
         }
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+return () => window.removeEventListener('keydown', handleKeyDown);
   }, [current, options, choice, result, showAnswer, saving]);
-
   if (loading) {
-    return (
+return (
       <div className={`${card} flex min-h-72 items-center justify-center text-muted-foreground`}>
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading your account review queue…
       </div>
     );
   }
-
-  const allCaughtUp = !current;
-
-  return (
+const allCaughtUp = !current;
+return (
     <main className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
@@ -300,7 +288,15 @@ export default function Revision() {
           </div>
         </div>
       </header>
-
+      {current && (
+        <StudyAccessibilityTools
+          speechText={speechText}
+          readableMode={readableMode}
+          onReadableModeChange={setReadableMode}
+          readerScale={readerScale}
+          onReaderScaleChange={setReaderScale}
+        />
+      )}
       {error && (
         <div role="alert" className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -329,7 +325,6 @@ export default function Revision() {
           )}
         </div>
       )}
-
       {allCaughtUp ? (
         <section className={`${card} flex flex-col items-center px-5 py-12 text-center sm:py-16`}>
           <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10 text-brand">
@@ -347,7 +342,6 @@ export default function Revision() {
           <p className="mt-3 text-sm text-muted-foreground">
             {stats.masteredCount} mastered item{stats.masteredCount === 1 ? '' : 's'}
           </p>
-
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               to="/ai-flashcards"
@@ -398,25 +392,26 @@ export default function Revision() {
               />
             </div>
           </div>
-
           <div className="p-4 sm:p-7">
             {/* Question / Front */}
             <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
               {current.hasMultipleChoice ? 'Question' : 'Front / Prompt'}
             </div>
-            <div className="break-words text-xl font-semibold leading-relaxed text-foreground sm:text-2xl">
+            <div
+              className={`break-words text-xl font-semibold leading-relaxed text-foreground sm:text-2xl ${readableMode ? 'noted-reader-text' : ''}`}
+              style={readableMode ? { fontSize: `${1.25 * readerScale}rem` } : undefined}
+            >
               <MathRenderer>{current.question || current.front}</MathRenderer>
             </div>
-
             {/* Multiple Choice Options */}
             {current.hasMultipleChoice ? (
               <>
                 <div className="mt-6 grid gap-3">
                   {options.map((option, i) => {
-                    const selected = choice === option;
-                    const right = result && isOptionCorrect(option, current.correctAnswer, options, i);
-                    const wrong = result && selected && !result.correct;
-                    return (
+const selected = choice === option;
+const right = result && isOptionCorrect(option, current.correctAnswer, options, i);
+const wrong = result && selected && !result.correct;
+return (
                       <button
                         key={`${i}-${option}`}
                         type="button"
@@ -435,7 +430,10 @@ export default function Revision() {
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-current/20 text-sm font-semibold">
                           {String.fromCharCode(65 + i)}
                         </span>
-                        <span className="min-w-0 flex-1 break-words">
+                        <span
+                          className={`min-w-0 flex-1 break-words ${readableMode ? 'noted-reader-text' : ''}`}
+                          style={readableMode ? { fontSize: `${readerScale}rem` } : undefined}
+                        >
                           <MathRenderer>{option}</MathRenderer>
                         </span>
                         {right && <Check className="h-5 w-5 text-green-600" />}
@@ -444,7 +442,6 @@ export default function Revision() {
                     );
                   })}
                 </div>
-
                 {result && (
                   <div
                     className={`mt-5 rounded-xl border p-4 ${
@@ -466,7 +463,6 @@ export default function Revision() {
                     )}
                   </div>
                 )}
-
                 <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Keyboard className="h-3.5 w-3.5 hidden sm:inline" />
@@ -490,19 +486,21 @@ export default function Revision() {
                 </div>
               </>
             ) : (
-              /* Flashcard / Open Question Answer Reveal & Rating */
+/* Flashcard / Open Question Answer Reveal & Rating */
               <div className="mt-6 space-y-5">
                 {showAnswer ? (
                   <div className="rounded-2xl border border-border bg-muted/40 p-5">
                     <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand">
                       Answer / Back
                     </p>
-                    <div className="break-words text-base leading-7 text-foreground">
+                    <div
+                      className={`break-words text-base leading-7 text-foreground ${readableMode ? 'noted-reader-text' : ''}`}
+                      style={readableMode ? { fontSize: `${readerScale}rem` } : undefined}
+                    >
                       <MathRenderer>{current.back || current.correctAnswer}</MathRenderer>
                     </div>
                   </div>
                 ) : null}
-
                 {!showAnswer ? (
                   <button
                     type="button"
