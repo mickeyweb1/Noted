@@ -306,17 +306,23 @@ export default function StudentHome() {
               <GraduationCap className="h-5 w-5" />
             </span>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-semibold text-foreground">Academic Progress · {academicSummary.currentTerm?.name}</h2>
                 {academicSummary.termAverage !== null && (
                   <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-bold text-brand">
-                    {academicSummary.termAverage}% Avg
+                    {academicSummary.termAverage}% Avg {academicSummary.termGpa !== null ? `· ${academicSummary.termGpa} GPA` : ''}
+                  </span>
+                )}
+                {academicSummary.cgpa !== null && (
+                  <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-xs font-bold text-purple-600 dark:text-purple-400">
+                    {academicSummary.cgpa} CGPA
                   </span>
                 )}
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {academicSummary.onTrackCount} of {academicSummary.totalSubjects} subjects meeting target.
                 {academicSummary.belowTargetCount > 0 ? ` ${academicSummary.belowTargetCount} subject${academicSummary.belowTargetCount === 1 ? '' : 's'} below target.` : ''}
+                {academicSummary.upcomingCount > 0 ? ` ${academicSummary.upcomingCount} upcoming test/assignment${academicSummary.upcomingCount === 1 ? '' : 's'}.` : ''}
               </p>
             </div>
           </div>
