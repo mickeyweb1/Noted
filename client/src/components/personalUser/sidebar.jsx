@@ -15,7 +15,8 @@ import {
   RotateCw,
   Bot,
   Zap,
-   MessageSquare
+  GraduationCap,
+  MessageSquare
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
