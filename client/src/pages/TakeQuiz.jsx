@@ -224,7 +224,6 @@ export default function TakeQuiz() {
   const [quizData, setQuizData] = useState(null);
   const [studentInfo, setStudentInfo] = useState({ name: "", surname: "", className: "" });
   const [answers, setAnswers] = useState({});
-  const [confidenceByQuestion, setConfidenceByQuestion] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [result, setResult] = useState(null);
@@ -255,7 +254,6 @@ export default function TakeQuiz() {
   const toastTimerRef = useRef(null);
   const retryIntervalRef = useRef(null);
   const answersRef = useRef({});
-  const confidenceRef = useRef({});
   const studentInfoRef = useRef(studentInfo);
   const quizDataRef = useRef(null);
   const currentIndexRef = useRef(currentIndex);
@@ -274,7 +272,6 @@ export default function TakeQuiz() {
   const isPaginated = quizData?.layoutMode === "paginated";
 
   useEffect(() => { answersRef.current = answers; }, [answers]);
-  useEffect(() => { confidenceRef.current = confidenceByQuestion; }, [confidenceByQuestion]);
   useEffect(() => { studentInfoRef.current = studentInfo; }, [studentInfo]);
   useEffect(() => { quizDataRef.current = quizData; }, [quizData]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
@@ -338,7 +335,7 @@ export default function TakeQuiz() {
       studentName: studentInfoRef.current.name,
       studentSurname: studentInfoRef.current.surname,
       studentClass: studentInfoRef.current.className,
-      answers: activeQuiz.questions.map((q) => ({ questionId: q._id, selectedAnswer: answersRef.current[q._id] || null, confidence: confidenceRef.current[q._id] || null })),
+confidence: confidenceRef.current[q._id] || null })),
       currentQuestionIndex: currentIndexRef.current,
       savedAt: Date.now(),
     };
@@ -668,22 +665,8 @@ export default function TakeQuiz() {
 
   const handleSelectAnswer = (questionId, option) => {
     setAnswers((prev) => ({ ...prev, [questionId]: option }));
-    setConfidenceByQuestion((prev) => {
-      if (!prev[questionId]) return prev;
-      const next = { ...prev };
-      delete next[questionId];
-      return next;
-    });
   };
 
-  const handleSetConfidence = (questionId, value) => {
-    setConfidenceByQuestion((prev) => {
-      const next = { ...prev };
-      if (value) next[questionId] = value;
-      else delete next[questionId];
-      return next;
-    });
-  };
 
   const handleSubmitQuiz = async () => {
     if (submittingRef.current) return;
