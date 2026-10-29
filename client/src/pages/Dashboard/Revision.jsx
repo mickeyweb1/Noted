@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import MathRenderer from '../../components/MathRenderer';
+import StudyAccessibilityTools from '../../components/StudyAccessibilityTools';
 import { getDueReviewItems, syncPendingReviewItems, updateReviewSchedule } from '../../utils/spacedReview';
 
 const card = 'rounded-2xl border border-border bg-card shadow-sm';
