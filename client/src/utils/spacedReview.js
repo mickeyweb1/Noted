@@ -1,3 +1,5 @@
+import api from "./api";
+
 const STORAGE_KEY = "noted_spaced_review_v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -20,7 +22,32 @@ const saveReviewItems = (items) => {
   }
 };
 
-export function scheduleReviewItems(items) {
+const clearReviewItems = () => {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new Event("noted-spaced-review-updated"));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export async function syncPendingReviewItems() {
+  const items = getReviewItems();
+  if (items.length === 0) return { synced: true, count: 0 };
+
+  try {
+    await api.post("/revision/items", { items });
+    clearReviewItems();
+    window.dispatchEvent(new Event("revision-updated"));
+    return { synced: true, count: items.length };
+  } catch (error) {
+    console.error("Failed to sync locally saved review items:", error);
+    return { synced: false, count: items.length };
+  }
+}
+
+export async function scheduleReviewItems(items) {
   const existing = new Map(getReviewItems().map((item) => [item.id, item]));
   const dueAt = Date.now() + DAY_MS;
   items.forEach((item) => {
@@ -35,7 +62,9 @@ export function scheduleReviewItems(items) {
       createdAt: previous?.createdAt || Date.now(),
     });
   });
-  return saveReviewItems([...existing.values()]);
+  if (!saveReviewItems([...existing.values()])) return { saved: false, synced: false };
+  const sync = await syncPendingReviewItems();
+  return { saved: true, synced: sync.synced };
 }
 
 export function updateReviewSchedule(id, remembered) {
@@ -68,4 +97,3 @@ export function getNextReviewItem(now = Date.now()) {
     .filter((item) => Number(item.dueAt) > now)
     .sort((a, b) => Number(a.dueAt) - Number(b.dueAt))[0] || null;
 }
-
