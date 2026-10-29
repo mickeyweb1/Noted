@@ -181,10 +181,6 @@ router.get('/summary', async (req, res, next) => {
     next(error);
   }
 });
-   catch (error) {
-    next(error);
-  }
-});
 
 // POST create term
 router.post('/terms', async (req, res, next) => {
