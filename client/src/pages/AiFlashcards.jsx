@@ -218,16 +218,16 @@ const handleGenerate = async () => {
     }
   };
 
-  const handleScheduleReview = () => {
+  const handleScheduleReview = async () => {
     const sourceKey = selectedNoteId || `${notesText.slice(0, 48)}-${flashcards.length}`;
-    const saved = scheduleReviewItems(flashcards.map((flashcard, index) => ({
+    const res = await scheduleReviewItems(flashcards.map((flashcard, index) => ({
       id: `flashcard-${sourceKey}-${index}`,
       type: "flashcard",
       front: flashcard.front,
       back: flashcard.back,
       sourceTitle: selectedNote?.title || "AI flashcards",
     })));
-    setReviewScheduled(saved);
+    setReviewScheduled(Boolean(res?.saved));
   };
 
   const handleExport = () => {
