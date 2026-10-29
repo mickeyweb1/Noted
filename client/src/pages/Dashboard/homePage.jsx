@@ -70,6 +70,10 @@ export default function StudentHome() {
     return () => window.removeEventListener('revision-updated', refresh);
   }, []);
 
+  useEffect(() => {
+    api.get('/academic/summary').then((res) => setAcademicSummary(res.data?.data)).catch(() => {});
+  }, []);
+
   const formatTime = (minutes) => {
     if (!minutes || minutes === 0) return "0m";
     const h = Math.floor(minutes / 60);
