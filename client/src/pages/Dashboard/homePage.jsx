@@ -289,24 +289,21 @@ export default function StudentHome() {
         </div>
       </div>
 
-      {dueReviewCount > 0 && (
-        <section className="flex flex-col gap-4 rounded-2xl border border-brand/20 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Spaced reviews due">
-          <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Clock className="h-5 w-5" /></span>
-            <div>
-              <h2 className="font-semibold text-foreground">A few things are ready for review</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">{dueReviewCount} question{dueReviewCount === 1 ? "" : "s"} or flashcard{dueReviewCount === 1 ? "" : "s"} due. Take a quick look whenever it suits you.</p>
-            </div>
-          </div>
-          <NavLink to="/study-review" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
-            Review now <ArrowRight className="h-4 w-4" />
-          </NavLink>
-        </section>
-      )}
-
       <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Revision due">
-        <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Brain className="h-5 w-5" /></span><div><h2 className="font-semibold text-foreground">Revision Due</h2><p className="mt-0.5 text-sm text-muted-foreground">{revisionDue ? `${revisionDue} question${revisionDue === 1 ? '' : 's'} ready to review.` : 'Your spaced revision queue is clear for now.'}</p></div></div>
-        <NavLink to="/revision" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground hover:bg-brand/90">{revisionDue ? 'Review now' : 'Open revision'} <ArrowRight className="h-4 w-4" /></NavLink>
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+            <Brain className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="font-semibold text-foreground">Account-Synced Revision</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {revisionDue ? `${revisionDue} item${revisionDue === 1 ? '' : 's'} (flashcards & quiz questions) ready to review.` : 'Your spaced revision queue is clear for now.'}
+            </p>
+          </div>
+        </div>
+        <NavLink to="/revision" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
+          {revisionDue ? 'Review now' : 'Open revision'} <ArrowRight className="h-4 w-4" />
+        </NavLink>
       </section>
 
       {/* BOTTOM SECTION: Stats & Recent Activity */}
