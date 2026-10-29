@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Download,
   Edit2,
+  FileText,
   GraduationCap,
   Loader2,
   Plus,
@@ -17,6 +19,7 @@ import {
   Trash2,
   TrendingDown,
   TrendingUp,
+  Upload,
   X,
 } from "lucide-react";
 import api from "../../utils/api";
@@ -48,6 +51,7 @@ export default function AcademicProgress() {
   const [selectedTermId, setSelectedTermId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [libraryItems, setLibraryItems] = useState([]);
 
   // Modals state
   const [termModalOpen, setTermModalOpen] = useState(false);
@@ -63,6 +67,7 @@ export default function AcademicProgress() {
     targetScore: "",
     creditHours: 1,
     notes: "",
+    linkedContentIds: [],
   });
 
   const [assessmentModalOpen, setAssessmentModalOpen] = useState(false);
@@ -77,6 +82,11 @@ export default function AcademicProgress() {
     feedback: "",
   });
 
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importJsonText, setImportJsonText] = useState("");
+  const [importPreview, setImportPreview] = useState(null);
+  const [importError, setImportError] = useState("");
+
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -84,9 +94,14 @@ export default function AcademicProgress() {
     setLoading(true);
     setError("");
     try {
-      const response = await api.get("/academic/terms");
-      const data = response.data?.data || [];
+      const [termsRes, libraryRes] = await Promise.all([
+        api.get("/academic/terms"),
+        api.get("/ai/library").catch(() => ({ data: { data: [] } })),
+      ]);
+      const data = termsRes.data?.data || [];
       setTerms(data);
+      setLibraryItems(libraryRes.data?.data || []);
+
       if (data.length > 0) {
         setSelectedTermId((prev) => {
           if (prev && data.some((t) => t._id === prev)) return prev;
@@ -179,6 +194,7 @@ export default function AcademicProgress() {
       targetScore: "80",
       creditHours: 1,
       notes: "",
+      linkedContentIds: [],
     });
     setSubjectModalOpen(true);
   };
@@ -192,8 +208,21 @@ export default function AcademicProgress() {
       targetScore: subject.targetScore !== null && subject.targetScore !== undefined ? String(subject.targetScore) : "",
       creditHours: subject.creditHours || 1,
       notes: subject.notes || "",
+      linkedContentIds: (subject.linkedContentIds || []).map((item) => (typeof item === "object" ? item._id : item)),
     });
     setSubjectModalOpen(true);
+  };
+
+  const toggleLinkedContent = (id) => {
+    setSubjectForm((prev) => {
+      const exists = prev.linkedContentIds.includes(id);
+      return {
+        ...prev,
+        linkedContentIds: exists
+          ? prev.linkedContentIds.filter((item) => item !== id)
+          : [...prev.linkedContentIds, id],
+      };
+    });
   };
 
   const handleSaveSubject = async (e) => {
@@ -293,7 +322,6 @@ export default function AcademicProgress() {
         );
       }
       setAssessmentModalOpen(false);
-      // Auto-expand subject so learner sees their updated assessment
       setExpandedSubjects((prev) => ({ ...prev, [targetSubjectId]: true }));
       await loadTerms();
     } catch {
@@ -310,6 +338,74 @@ export default function AcademicProgress() {
       await loadTerms();
     } catch {
       alert("Failed to delete assessment.");
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // BACKUP EXPORT & IMPORT
+  // --------------------------------------------------------------------------
+  const handleExportBackup = async () => {
+    try {
+      const res = await api.get("/academic/backup/export");
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `noted-academic-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to export backup. Please try again.");
+    }
+  };
+
+  const handleJsonInputChange = (text) => {
+    setImportJsonText(text);
+    setImportError("");
+    try {
+      if (!text.trim()) {
+        setImportPreview(null);
+        return;
+      }
+      const parsed = JSON.parse(text);
+      let count = 0;
+      if (Array.isArray(parsed.terms)) count = parsed.terms.length;
+      else if (Array.isArray(parsed.years)) count = parsed.years.reduce((acc, y) => acc + (y.terms?.length || 0), 0);
+      else throw new Error("Invalid structure: missing terms or years array.");
+      setImportPreview({ count, data: parsed });
+    } catch (err) {
+      setImportPreview(null);
+      setImportError(err.message || "Invalid JSON syntax");
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result;
+      if (typeof content === "string") {
+        handleJsonInputChange(content);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteImport = async () => {
+    if (!importPreview?.data) return;
+    setSubmitting(true);
+    try {
+      await api.post("/academic/backup/import", importPreview.data);
+      setImportModalOpen(false);
+      setImportJsonText("");
+      setImportPreview(null);
+      await loadTerms();
+      alert("Records imported successfully!");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to import records.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -337,8 +433,24 @@ export default function AcademicProgress() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={handleExportBackup}
+            title="Download full JSON backup of your records"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-accent"
+          >
+            <Download className="h-3.5 w-3.5" /> Export
+          </button>
+          <button
+            type="button"
+            onClick={() => setImportModalOpen(true)}
+            title="Import records from Noted or Academic Tracker JSON"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-accent"
+          >
+            <Upload className="h-3.5 w-3.5" /> Import
+          </button>
+          <button
+            type="button"
             onClick={openNewTermModal}
-            className={`inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground shadow-sm hover:bg-brand/90 ${focusRing}`}
+            className={`inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground shadow-sm hover:bg-brand/90 ${focusRing}`}
           >
             <Plus className="h-4 w-4" /> New Term
           </button>
@@ -365,15 +477,24 @@ export default function AcademicProgress() {
           </div>
           <h2 className="mt-5 text-xl font-bold text-foreground">Start tracking your academic progress</h2>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Create your first academic term (such as “Fall 2026” or “Term 1”) to add subjects, log assessment marks, and set target grades.
+            Create your first academic term (such as “Fall 2026” or “Term 1”) or import existing records to monitor marks, assess targets, and study weak subjects.
           </p>
-          <button
-            type="button"
-            onClick={openNewTermModal}
-            className={`mt-6 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-brand-foreground hover:bg-brand/90 ${focusRing}`}
-          >
-            <Plus className="h-4 w-4" /> Create First Term
-          </button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={openNewTermModal}
+              className={`inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-brand-foreground hover:bg-brand/90 ${focusRing}`}
+            >
+              <Plus className="h-4 w-4" /> Create First Term
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent"
+            >
+              <Upload className="h-4 w-4" /> Import Backup JSON
+            </button>
+          </div>
         </section>
       ) : (
         <>
@@ -495,7 +616,7 @@ export default function AcademicProgress() {
               <div>
                 <h2 className="text-lg font-bold text-foreground">Subjects ({currentTerm?.subjects?.length || 0})</h2>
                 <p className="text-xs text-muted-foreground">
-                  Click a subject to view or manage its assessment marks.
+                  Click a subject to view assessments, monitor targets, and view study materials.
                 </p>
               </div>
               <button
@@ -525,6 +646,7 @@ export default function AcademicProgress() {
                 const avg = subject.currentAverage;
                 const isBelowTarget = subject.status === "below_target";
                 const isOnTrack = subject.status === "on_track";
+                const linkedMaterials = subject.linkedContentIds || [];
 
                 return (
                   <article
@@ -594,9 +716,49 @@ export default function AcademicProgress() {
                       </div>
                     </div>
 
-                    {/* EXPANDED CONTENT: ASSESSMENTS TABLE */}
+                    {/* EXPANDED CONTENT */}
                     {isExpanded && (
                       <div className="border-t border-border bg-muted/20 p-4 sm:p-5">
+                        {/* BELOW TARGET ADVISORY / SMART ACTION */}
+                        {isBelowTarget && (
+                          <div className="mb-4 flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
+                              <TrendingDown className="h-4 w-4 shrink-0" />
+                              <span>
+                                Score is currently <strong>{(target - avg).toFixed(1)}% below target</strong> ({avg}% vs {target}%). Reviewing your notes and flashcards will help close this gap.
+                              </span>
+                            </div>
+                            <Link
+                              to="/revision"
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" /> Start revision
+                            </Link>
+                          </div>
+                        )}
+
+                        {/* LINKED STUDY MATERIALS */}
+                        {linkedMaterials.length > 0 && (
+                          <div className="mb-4 rounded-xl border border-border bg-card p-3">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-2">
+                              <BookOpen className="h-3.5 w-3.5 text-brand" /> Linked Study Materials:
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {linkedMaterials.map((item) => (
+                                <Link
+                                  key={item._id}
+                                  to={item.type === "quiz" ? `/take-quiz?contentId=${item._id}` : "/myLibrary"}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                                >
+                                  <FileText className="h-3 w-3 text-brand" />
+                                  <span className="max-w-[160px] truncate">{item.title}</span>
+                                  <span className="text-[10px] uppercase text-muted-foreground">({item.type})</span>
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* ACTIONS & STUDY LINK */}
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
@@ -638,7 +800,7 @@ export default function AcademicProgress() {
                             to="/revision"
                             className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
                           >
-                            <BookOpen className="h-3.5 w-3.5" /> Practice revision for this subject
+                            <BookOpen className="h-3.5 w-3.5" /> Practice revision
                           </Link>
                         </div>
 
@@ -832,7 +994,7 @@ export default function AcademicProgress() {
       {/* ========================================================================= */}
       {subjectModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-background p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-background p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <h3 className="text-lg font-bold text-foreground">
                 {editingSubject ? "Edit Subject" : "Add Subject"}
@@ -890,24 +1052,69 @@ export default function AcademicProgress() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Color Tag
-                </label>
-                <div className="mt-1.5 flex items-center gap-2">
-                  {PRESET_COLORS.map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onClick={() => setSubjectForm({ ...subjectForm, color: col })}
-                      className={`h-7 w-7 rounded-full border-2 transition-transform ${
-                        subjectForm.color === col ? "scale-110 border-foreground" : "border-transparent"
-                      }`}
-                      style={{ backgroundColor: col }}
-                    />
-                  ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Credit Weight
+                  </label>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={subjectForm.creditHours}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, creditHours: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-border bg-card px-3.5 py-2 text-sm text-foreground focus:border-brand focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Color Tag
+                  </label>
+                  <div className="mt-2 flex items-center gap-2">
+                    {PRESET_COLORS.map((col) => (
+                      <button
+                        key={col}
+                        type="button"
+                        onClick={() => setSubjectForm({ ...subjectForm, color: col })}
+                        className={`h-6 w-6 rounded-full border-2 transition-transform ${
+                          subjectForm.color === col ? "scale-110 border-foreground" : "border-transparent"
+                        }`}
+                        style={{ backgroundColor: col }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
+
+              {/* LINK STUDY CONTENT */}
+              {libraryItems.length > 0 && (
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Link Study Materials from Library
+                  </label>
+                  <p className="text-[11px] text-muted-foreground mb-1.5">
+                    Select quizzes or summaries to associate with this subject for quick review.
+                  </p>
+                  <div className="max-h-36 overflow-y-auto rounded-xl border border-border bg-card p-2 space-y-1">
+                    {libraryItems.map((item) => {
+                      const isSelected = subjectForm.linkedContentIds.includes(item._id);
+                      return (
+                        <button
+                          key={item._id}
+                          type="button"
+                          onClick={() => toggleLinkedContent(item._id)}
+                          className={`flex w-full items-center justify-between rounded-lg p-2 text-left text-xs transition-colors ${
+                            isSelected ? "bg-brand/10 text-brand font-semibold" : "hover:bg-muted text-foreground"
+                          }`}
+                        >
+                          <span className="truncate max-w-[300px]">{item.title}</span>
+                          <span className="text-[10px] uppercase text-muted-foreground">({item.type})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-6 flex justify-end gap-2 border-t border-border pt-4">
                 <button
@@ -1063,6 +1270,89 @@ export default function AcademicProgress() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: IMPORT BACKUP (JSON) */}
+      {/* ========================================================================= */}
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-background p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="text-lg font-bold text-foreground">Import Backup (JSON)</h3>
+              <button
+                type="button"
+                onClick={() => setImportModalOpen(false)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Upload a JSON backup file exported from Noted or Academic Tracker. Records will be validated and appended to your account.
+              </p>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Choose JSON File
+                </label>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleFileUpload}
+                  className="mt-1.5 block w-full text-xs text-muted-foreground file:mr-3 file:rounded-xl file:border file:border-border file:bg-card file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-foreground hover:file:bg-accent"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Or Paste JSON Text
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder='{"terms": [...] } or {"years": [...] }'
+                  value={importJsonText}
+                  onChange={(e) => handleJsonInputChange(e.target.value)}
+                  className="mt-1.5 w-full font-mono text-xs rounded-xl border border-border bg-card p-3 text-foreground focus:border-brand focus:outline-none"
+                />
+              </div>
+
+              {importError && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  {importError}
+                </div>
+              )}
+
+              {importPreview && (
+                <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-xs text-green-700 dark:text-green-300">
+                  <p className="font-bold">✓ Valid Backup Detected</p>
+                  <p className="mt-0.5">Found {importPreview.count} term(s) ready to import.</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setImportModalOpen(false)}
+                  className="rounded-xl border border-border px-4 py-2 text-xs font-semibold text-foreground hover:bg-accent"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!importPreview || submitting}
+                  onClick={handleExecuteImport}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+                >
+                  {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Import Records
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
