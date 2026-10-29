@@ -809,15 +809,15 @@ export default function TakeQuiz() {
     setStudyPracticeChecked(false);
   };
 
-  const scheduleMissedQuestions = () => {
-    const saved = scheduleReviewItems(studyPracticeQuestions.map((item) => ({
+  const scheduleMissedQuestions = async () => {
+    const res = await scheduleReviewItems(studyPracticeQuestions.map((item) => ({
       id: `quiz-${code}-${item.questionId}`,
       type: "quiz-question",
       front: item.question,
       back: `Correct answer: ${item.correctAnswer}${item.explanation ? `\n\nExplanation: ${item.explanation}` : ""}`,
       sourceTitle: quizData?.title || "Quiz review",
     })));
-    setSpacedReviewSaved(saved);
+    setSpacedReviewSaved(Boolean(res?.saved));
   };
 
   useEffect(() => {
