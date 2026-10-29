@@ -299,6 +299,33 @@ export default function StudentHome() {
         </NavLink>
       </section>
 
+      {academicSummary?.hasTerms && (
+        <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Academic progress">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+              <GraduationCap className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-foreground">Academic Progress · {academicSummary.currentTerm?.name}</h2>
+                {academicSummary.termAverage !== null && (
+                  <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-bold text-brand">
+                    {academicSummary.termAverage}% Avg
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {academicSummary.onTrackCount} of {academicSummary.totalSubjects} subjects meeting target.
+                {academicSummary.belowTargetCount > 0 ? ` ${academicSummary.belowTargetCount} subject${academicSummary.belowTargetCount === 1 ? '' : 's'} below target.` : ''}
+              </p>
+            </div>
+          </div>
+          <NavLink to="/academic-progress" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent">
+            View Gradebook <ArrowRight className="h-4 w-4" />
+          </NavLink>
+        </section>
+      )}
+
       {/* BOTTOM SECTION: Stats & Recent Activity */}
       <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
         {/* Left Column: Stats & Recent Notes */}
