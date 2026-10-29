@@ -42,7 +42,6 @@ export default function StudentHome() {
 
   const [libraryData, setLibraryData] = useState([]);
   const [stats, setStats] = useState({ streak: 0, weeklyStudyDays: 0, totalNotes: 0, totalQuizzes: 0 });
-  const [dueReviewCount, setDueReviewCount] = useState(() => getDueReviewItems().length);
   const [revisionDue, setRevisionDue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [topStudents, setTopStudents] = useState([]);
