@@ -62,6 +62,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/quiz', quizRoutes);
 app.use('/api/revision', revisionRoutes);
+app.use('/api/academic', academicRoutes);
 app.use('/api/support', supportRoutes); 
 
 app.get('/', (req, res) => res.json({ success: true, message: '✅ Noted Backend API is running!' }));
