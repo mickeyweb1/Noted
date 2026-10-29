@@ -51,6 +51,32 @@ export default function StudentSchedule() {
         setEvents(events.filter(e => e.id !== id));
     };
 
+    // Load upcoming academic assessments
+    useEffect(() => {
+        api.get('/academic/upcoming')
+            .then(res => {
+                const list = res.data?.data || [];
+                const mapped = list.map(item => ({
+                    id: `academic-${item.assessmentId}`,
+                    title: item.title,
+                    subject: item.subjectName,
+                    type: item.category || 'exam',
+                    date: item.date ? item.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+                    time: '09:00',
+                    reminderOffset: 60,
+                    isAcademic: true,
+                    maxScore: item.maxScore,
+                    weight: item.weight,
+                    reminderTriggered: false
+                }));
+                setEvents(prev => {
+                    const manual = prev.filter(e => !e.isAcademic);
+                    return [...manual, ...mapped];
+                });
+            })
+            .catch(() => {});
+    }, []);
+
     // 5. LOGIC: Real-Time Checker (Triggers Alerts)
     useEffect(() => {
         // Check every 10 seconds
