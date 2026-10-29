@@ -1065,8 +1065,6 @@ confidence: confidenceRef.current[q._id] || null })),
               number={currentIndex + 1}
               selected={answers[currentQuestion._id]}
               onSelect={handleSelectAnswer}
-              confidence={confidenceByQuestion[currentQuestion._id]}
-              onConfidence={handleSetConfidence}
             />
           ) : (
             <>
