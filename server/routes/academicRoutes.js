@@ -381,6 +381,126 @@ router.delete('/terms/:termId/subjects/:subjectId', async (req, res, next) => {
   }
 });
 
+// GET what-if calculation for a subject
+router.get('/terms/:termId/subjects/:subjectId/what-if', async (req, res, next) => {
+  try {
+    const { termId, subjectId } = req.params;
+    if (!mongoose.isValidObjectId(termId) || !mongoose.isValidObjectId(subjectId)) {
+      return res.status(400).json({ success: false, message: 'Invalid IDs provided.' });
+    }
+
+    const term = await AcademicTerm.findOne({ _id: termId, userId: req.user._id });
+    if (!term) return res.status(404).json({ success: false, message: 'Term not found.' });
+
+    const subject = term.subjects.id(subjectId);
+    if (!subject) return res.status(404).json({ success: false, message: 'Subject not found.' });
+
+    const customTarget = req.query.target !== undefined && req.query.target !== '' ? Number(req.query.target) : null;
+    const whatIf = calculateRequiredScore(subject, customTarget);
+
+    res.json({ success: true, data: whatIf });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST generate booster quiz for subject
+router.post('/terms/:termId/subjects/:subjectId/boost', async (req, res, next) => {
+  try {
+    const { termId, subjectId } = req.params;
+    if (!mongoose.isValidObjectId(termId) || !mongoose.isValidObjectId(subjectId)) {
+      return res.status(400).json({ success: false, message: 'Invalid IDs provided.' });
+    }
+
+    const term = await AcademicTerm.findOne({ _id: termId, userId: req.user._id })
+      .populate('subjects.linkedContentIds', 'title type rawText generatedText');
+    if (!term) return res.status(404).json({ success: false, message: 'Term not found.' });
+
+    const subject = term.subjects.id(subjectId);
+    if (!subject) return res.status(404).json({ success: false, message: 'Subject not found.' });
+
+    let contextSnippet = `Subject: ${subject.name} (${subject.code || ''}). Notes: ${subject.notes || ''}`;
+    if (subject.linkedContentIds && subject.linkedContentIds.length > 0) {
+      const texts = subject.linkedContentIds
+        .map((c) => c.rawText || c.generatedText || c.title)
+        .filter(Boolean)
+        .join('\n\n')
+        .slice(0, 4000);
+      if (texts) contextSnippet += `\n\nStudy Content:\n${texts}`;
+    }
+
+    const quizTitle = `${subject.name} Diagnostic Booster Quiz`;
+    const questions = [
+      {
+        question: `Which fundamental principle is key to understanding ${subject.name}?`,
+        options: [
+          `Understanding foundational concepts and their applications in ${subject.name}`,
+          `Memorizing terms without understanding the relationships`,
+          `Skipping analytical problem formulation`,
+          `Focusing only on the final calculation result`,
+        ],
+        correctAnswer: `Understanding foundational concepts and their applications in ${subject.name}`,
+        explanation: `Grasping foundational definitions and core problem-solving frameworks is essential for mastering ${subject.name}.`,
+      },
+      {
+        question: `When answering complex assessment questions in ${subject.name}, what is the most effective strategy?`,
+        options: [
+          `Deconstruct question parameters, identify knowns/unknowns, and state method steps clearly`,
+          `Immediately guess based on intuition alone`,
+          `Rely solely on final answers without showing work or rationale`,
+          `Omit unit conversions or situational boundaries`,
+        ],
+        correctAnswer: `Deconstruct question parameters, identify knowns/unknowns, and state method steps clearly`,
+        explanation: `Systematically laying out knowns, formulas, and structured rationale secures both method marks and high scores.`,
+      },
+      {
+        question: `How should you review missed questions or low assessment scores in ${subject.name}?`,
+        options: [
+          `Perform error analysis to locate concept misconceptions and re-attempt similar problems`,
+          `Ignore missed questions and move to unrelated topics`,
+          `Look at the answer once and never practice it again`,
+          `Assume the mark cannot be improved`,
+        ],
+        correctAnswer: `Perform error analysis to locate concept misconceptions and re-attempt similar problems`,
+        explanation: `Targeted spaced repetition and error analysis turn weaknesses into strengths before the final exam.`,
+      },
+    ];
+
+    const newContent = await Content.create({
+      userId: req.user._id,
+      title: quizTitle,
+      type: 'quiz',
+      subject: subject.name,
+      rawText: contextSnippet,
+      generatedText: JSON.stringify({ title: quizTitle, questions }),
+      revisionQuestions: questions.map((q, i) => ({
+        questionIndex: i,
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        nextReviewDate: new Date(),
+      })),
+    });
+
+    subject.linkedContentIds.push(newContent._id);
+    await term.save();
+    await term.populate('subjects.linkedContentIds', 'title type createdAt');
+
+    res.status(201).json({
+      success: true,
+      data: {
+        contentId: String(newContent._id),
+        title: quizTitle,
+        questionsCount: questions.length,
+        term: calculateTermSummary(term),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // -------------------------------------------------------------
 // ASSESSMENTS
 // -------------------------------------------------------------
