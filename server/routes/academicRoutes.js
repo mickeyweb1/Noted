@@ -422,4 +422,129 @@ router.delete('/terms/:termId/subjects/:subjectId/assessments/:assessmentId', as
   }
 });
 
+// -------------------------------------------------------------
+// BACKUP EXPORT & IMPORT
+// -------------------------------------------------------------
+
+// GET export all academic records
+router.get('/backup/export', async (req, res, next) => {
+  try {
+    const terms = await AcademicTerm.find({ userId: req.user._id })
+      .populate('subjects.linkedContentIds', 'title type createdAt')
+      .lean();
+
+    const exportData = {
+      version: 1,
+      source: 'Noted Academic Progress',
+      exportedAt: new Date().toISOString(),
+      terms: terms.map(({ _id, userId, __v, createdAt, updatedAt, ...rest }) => ({
+        ...rest,
+        subjects: (rest.subjects || []).map(({ _id, createdAt, updatedAt, ...s }) => ({
+          ...s,
+          assessments: (s.assessments || []).map(({ _id, createdAt, updatedAt, ...a }) => a),
+        })),
+      })),
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=noted-academic-backup-${Date.now()}.json`);
+    res.json(exportData);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST import academic records
+router.post('/backup/import', async (req, res, next) => {
+  try {
+    const payload = req.body || {};
+    let rawTerms = [];
+
+    if (Array.isArray(payload.terms)) {
+      rawTerms = payload.terms;
+    } else if (Array.isArray(payload.years)) {
+      // Handle Academic Tracker hierarchy: years -> terms -> subjects
+      payload.years.forEach((y) => {
+        const yearName = y.name || y.year || 'Academic Year';
+        (y.terms || []).forEach((t) => {
+          rawTerms.push({
+            name: t.name || 'Term',
+            year: yearName,
+            isCurrent: Boolean(t.isCurrent),
+            subjects: (t.subjects || []).map((s) => ({
+              name: s.name || s.title || 'Subject',
+              code: s.code || '',
+              color: s.color || '#4F46E5',
+              targetScore: Number(s.targetScore) || null,
+              creditHours: Number(s.credits || s.creditHours) || 1,
+              assessments: (s.assessments || s.marks || []).map((a) => ({
+                title: a.title || a.name || 'Assessment',
+                category: a.category || 'assignment',
+                maxScore: Number(a.maxScore || a.total || 100) || 100,
+                weight: Number(a.weight) || 1,
+                score: a.score !== undefined && a.score !== null && a.score !== '' ? Number(a.score) : null,
+              })),
+            })),
+          });
+        });
+      });
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid backup format. Expected a JSON with terms or years.' });
+    }
+
+    if (rawTerms.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid terms found to import.' });
+    }
+
+    const createdTerms = [];
+    for (const raw of rawTerms) {
+      if (!raw.name || typeof raw.name !== 'string') continue;
+
+      const newTerm = await AcademicTerm.create({
+        userId: req.user._id,
+        name: raw.name.trim(),
+        year: typeof raw.year === 'string' && raw.year.trim() ? raw.year.trim() : `${new Date().getFullYear()}`,
+        isCurrent: Boolean(raw.isCurrent),
+        subjects: (raw.subjects || []).map((s) => ({
+          name: typeof s.name === 'string' && s.name.trim() ? s.name.trim() : 'Subject',
+          code: typeof s.code === 'string' ? s.code.trim() : '',
+          color: typeof s.color === 'string' && s.color.trim() ? s.color.trim() : '#4F46E5',
+          targetScore: Number.isFinite(Number(s.targetScore)) ? Number(s.targetScore) : null,
+          creditHours: Number.isFinite(Number(s.creditHours)) && Number(s.creditHours) > 0 ? Number(s.creditHours) : 1,
+          notes: typeof s.notes === 'string' ? s.notes.trim() : '',
+          linkedContentIds: [],
+          assessments: (s.assessments || []).map((a) => ({
+            title: typeof a.title === 'string' && a.title.trim() ? a.title.trim() : 'Assessment',
+            category: ['exam', 'quiz', 'assignment', 'project', 'homework', 'other'].includes(a.category)
+              ? a.category
+              : 'assignment',
+            maxScore: Number(a.maxScore) > 0 ? Number(a.maxScore) : 100,
+            weight: Number.isFinite(Number(a.weight)) && Number(a.weight) >= 0 ? Number(a.weight) : 1,
+            score: a.score !== undefined && a.score !== null && a.score !== '' && Number.isFinite(Number(a.score))
+              ? Number(a.score)
+              : null,
+            date: a.date ? new Date(a.date) : new Date(),
+            feedback: typeof a.feedback === 'string' ? a.feedback.trim() : '',
+          })),
+        })),
+      });
+      createdTerms.push(newTerm);
+    }
+
+    const allTerms = await AcademicTerm.find({ userId: req.user._id })
+      .populate('subjects.linkedContentIds', 'title type createdAt')
+      .sort({ isCurrent: -1, createdAt: -1 });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        importedCount: createdTerms.length,
+        terms: allTerms.map(calculateTermSummary),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
