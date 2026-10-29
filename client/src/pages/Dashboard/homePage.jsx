@@ -62,17 +62,6 @@ export default function StudentHome() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const refreshDueReviews = () => setDueReviewCount(getDueReviewItems().length);
-    refreshDueReviews();
-    window.addEventListener("noted-spaced-review-updated", refreshDueReviews);
-    window.addEventListener("storage", refreshDueReviews);
-    return () => {
-      window.removeEventListener("noted-spaced-review-updated", refreshDueReviews);
-      window.removeEventListener("storage", refreshDueReviews);
-    };
-  }, []);
-
-  useEffect(() => {
     const refresh = () => api.get('/revision/stats').then((response) => setRevisionDue(response.data?.data?.dueCount || 0)).catch(() => {});
     refresh();
     window.addEventListener('revision-updated', refresh);
