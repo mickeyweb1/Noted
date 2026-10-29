@@ -44,6 +44,7 @@ export default function StudentHome() {
   const [libraryData, setLibraryData] = useState([]);
   const [stats, setStats] = useState({ streak: 0, weeklyStudyDays: 0, totalNotes: 0, totalQuizzes: 0 });
   const [revisionDue, setRevisionDue] = useState(0);
+  const [academicSummary, setAcademicSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [topStudents, setTopStudents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
