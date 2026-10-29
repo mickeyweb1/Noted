@@ -298,6 +298,7 @@ export default function AcademicProgress() {
       maxScore: 100,
       weight: 1,
       score: "",
+      date: new Date().toISOString().slice(0, 10),
       feedback: "",
     });
     setAssessmentModalOpen(true);
@@ -312,6 +313,7 @@ export default function AcademicProgress() {
       maxScore: assessment.maxScore,
       weight: assessment.weight || 1,
       score: assessment.score !== null && assessment.score !== undefined ? String(assessment.score) : "",
+      date: assessment.date ? assessment.date.slice(0, 10) : "",
       feedback: assessment.feedback || "",
     });
     setAssessmentModalOpen(true);
@@ -333,6 +335,7 @@ export default function AcademicProgress() {
         maxScore: max,
         weight: Number(assessmentForm.weight) || 1,
         score: assessmentForm.score === "" ? null : Number(assessmentForm.score),
+        date: assessmentForm.date ? new Date(assessmentForm.date) : new Date(),
         feedback: assessmentForm.feedback.trim(),
       };
 
