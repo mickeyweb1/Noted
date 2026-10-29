@@ -84,7 +84,10 @@ router.post('/items/:id/review', async (req, res, next) => {
     if (typeof correct !== 'boolean') {
       return res.status(400).json({ success: false, message: 'A boolean correct value is required.' });
     }
-    const item = await ReviewItem.findOne({ _id: req.params.id, userId: req.user._id });
+    const filter = mongoose.isValidObjectId(req.params.id)
+      ? { _id: req.params.id, userId: req.user._id }
+      : { sourceKey: req.params.id, userId: req.user._id };
+    const item = await ReviewItem.findOne(filter);
     if (!item) return res.status(404).json({ success: false, message: 'Review item not found.' });
 
     Object.assign(item, applyReview(item.toObject(), correct));
