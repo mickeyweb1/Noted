@@ -257,6 +257,11 @@ export default function StudentSchedule() {
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <span className={`text-[10px] font-bold uppercase tracking-wider ${isPassed ? 'text-muted-foreground' : `text-${color}`}`}>{event.subject}</span>
                                                         <span className="text-[10px] text-muted-foreground uppercase">• {event.type}</span>
+                                                        {event.isAcademic && (
+                                                            <span className="inline-flex items-center gap-1 rounded bg-brand/10 px-1.5 py-0.2 text-[9px] font-bold text-brand">
+                                                                <GraduationCap className="w-2.5 h-2.5" /> Academic
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <h3 className={`text-base font-semibold truncate ${isPassed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{event.title}</h3>
                                                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
