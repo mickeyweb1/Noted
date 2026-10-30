@@ -28,6 +28,7 @@ const userSchema = new mongoose.Schema({
     
     pendingBattles: [{
       challengerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      opponentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
       challengerName: { type: String },
       topic: { type: String, default: 'General Knowledge' },
       questions: [{

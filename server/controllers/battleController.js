@@ -130,10 +130,19 @@ export const acceptBattle = async (req, res, next) => {
     const battle = battleId 
       ? opponentDoc.pendingBattles.id(battleId) 
       : opponentDoc.pendingBattles.find(b => b.inviteCode === inviteCode);
+
+    if (!battle) return res.status(404).json({ success: false, message: "Battle not found" });
+    if (String(opponentDoc._id) === String(req.user._id)) {
+      return res.status(400).json({ success: false, message: "You cannot join your own battle." });
+    }
+    if (battle.status !== 'pending' && String(battle.opponentId) !== String(req.user._id)) {
+      return res.status(409).json({ success: false, message: "This battle is no longer available." });
+    }
     
     // ✅ CRITICAL FIX: Update status to 'joined' so the host's polling detects it!
     if (battle.status === 'pending') {
       battle.status = 'joined';
+      battle.opponentId = req.user._id;
       await opponentDoc.save();
       console.log("✅ Guest joined! Status updated to 'joined'");
     }
@@ -177,6 +186,9 @@ export const startBattle = async (req, res, next) => {
     const battle = user.pendingBattles ? user.pendingBattles.id(battleId) : null;
     if (!battle) return res.status(404).json({ success: false, message: "Battle not found" });
 
+    if (battle.status !== 'joined' || !battle.opponentId) {
+      return res.status(409).json({ success: false, message: "A player must join before the battle can start." });
+    }
     battle.status = 'active';
     await user.save();
     res.status(200).json({ success: true, message: "Battle started!" });
@@ -187,33 +199,52 @@ export const startBattle = async (req, res, next) => {
 export const resolveBattle = async (req, res, next) => {
   try {
     const { battleId, opponentScore } = req.body;
-    const user = await User.findById(req.user._id);
-
-    let battle, isChallenger;
-    const challengerBattle = user.pendingBattles ? user.pendingBattles.id(battleId) : null;
-    
-    if (challengerBattle) {
-      battle = challengerBattle; isChallenger = true;
-    } else {
-      const opponentDoc = await User.findOne({ 'pendingBattles._id': battleId });
-      if (!opponentDoc) return res.status(404).json({ success: false, message: "Battle not found" });
-      battle = opponentDoc.pendingBattles.id(battleId); isChallenger = false;
+    const score = Number(opponentScore);
+    if (!Number.isInteger(score) || score < 0) {
+      return res.status(400).json({ success: false, message: "A valid battle score is required." });
     }
 
-    battle.status = 'completed';
-    if (isChallenger) battle.challengerScore = opponentScore;
-    else battle.opponentScore = opponentScore;
+    const owned = await User.findOne({ _id: req.user._id, 'pendingBattles._id': battleId });
+    const owner = owned || await User.findOne({ 'pendingBattles._id': battleId });
+    if (!owner) return res.status(404).json({ success: false, message: "Battle not found" });
+    const battle = owner.pendingBattles.id(battleId);
+    if (!battle || ![String(battle.challengerId), String(battle.opponentId)].includes(String(req.user._id))) {
+      return res.status(403).json({ success: false, message: "You are not a participant in this battle." });
+    }
+    if (battle.status !== 'active') {
+      return res.status(409).json({ success: false, message: "This battle has already been resolved or has not started." });
+    }
+    if (score > battle.questions.length) {
+      return res.status(400).json({ success: false, message: "Battle score cannot exceed the number of questions." });
+    }
 
-    const finalChallengerScore = isChallenger ? opponentScore : battle.challengerScore;
-    const finalOpponentScore = isChallenger ? battle.opponentScore : opponentScore;
-    const userScore = isChallenger ? finalChallengerScore : finalOpponentScore;
-    const enemyScore = isChallenger ? finalOpponentScore : finalChallengerScore;
+    const isChallenger = String(battle.challengerId) === String(req.user._id);
+    const scoreField = isChallenger ? 'pendingBattles.$.challengerScore' : 'pendingBattles.$.opponentScore';
+    const completedOwner = await User.findOneAndUpdate(
+      {
+        _id: owner._id,
+        pendingBattles: { $elemMatch: { _id: battleId, status: 'active' } },
+      },
+      { $set: { [scoreField]: score, 'pendingBattles.$.status': 'completed' } },
+      { new: true }
+    );
+    if (!completedOwner) {
+      return res.status(409).json({ success: false, message: "This battle has already been resolved." });
+    }
 
-    let xpGained = userScore > enemyScore ? 50 : userScore === enemyScore ? 25 : 10;
-    user.xp += xpGained;
-    user.level = Math.floor(user.xp / 100) + 1;
-    await user.save();
+    const completedBattle = completedOwner.pendingBattles.id(battleId);
+    const userScore = score;
+    const enemyScore = isChallenger ? completedBattle.opponentScore : completedBattle.challengerScore;
 
-    res.status(200).json({ success: true, data: { xpGained, newLevel: user.level, won: xpGained === 50 } });
+    const xpGained = userScore > enemyScore ? 50 : userScore === enemyScore ? 25 : 10;
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $inc: { xp: xpGained } },
+      { new: true }
+    );
+    updatedUser.level = Math.floor(updatedUser.xp / 100) + 1;
+    await updatedUser.save();
+
+    res.status(200).json({ success: true, data: { xpGained, newLevel: updatedUser.level, won: xpGained === 50 } });
   } catch (error) { next(error); }
 };
