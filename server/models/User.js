@@ -40,6 +40,10 @@ const userSchema = new mongoose.Schema({
       status: { type: String, enum: ['pending', 'joined', 'active', 'completed'], default: 'pending' },
       challengerScore: { type: Number, default: 0 },
       opponentScore: { type: Number, default: 0 },
+      challengerAnswers: { type: [String], default: [] },
+      opponentAnswers: { type: [String], default: [] },
+      challengerSubmitted: { type: Boolean, default: false },
+      opponentSubmitted: { type: Boolean, default: false },
       inviteCode: { type: String },
       createdAt: { type: Date, default: Date.now }
     }],

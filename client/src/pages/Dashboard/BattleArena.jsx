@@ -20,6 +20,7 @@ export default function BattleArena() {
  
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [score, setScore] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState([]);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [timeLeft, setTimeLeft] = useState(10); // ✅ CHANGED: 15 to 10 seconds
@@ -65,6 +66,11 @@ export default function BattleArena() {
           if (res.data.success) {
             const newStatus = res.data.data.status;
             setBattleStatus(newStatus);
+            if (newStatus === "completed" && res.data.data.result) {
+              setScore(res.data.data.result.score);
+              setResultData(res.data.data.result);
+              setBattleResolved(true);
+            }
             
             // ✅ NEW: Check if opponent is ready
             if (res.data.data.opponentReady !== undefined) {
@@ -149,8 +155,11 @@ export default function BattleArena() {
     clearInterval(timerRef.current);
     setSelectedOption(option);
     setIsAnswered(true);
-    const currentQ = battleData.questions[currentQIndex];
-    if (option === currentQ.correctAnswer) setScore((prev) => prev + 1);
+    setSelectedAnswers((prev) => {
+      const next = [...prev];
+      next[currentQIndex] = option;
+      return next;
+    });
     setTimeout(() => advanceQuestion(), 1500);
   };
  
@@ -168,8 +177,10 @@ export default function BattleArena() {
   const resolveBattle = async () => {
     setBattleResolved(true);
     try {
-      const res = await api.post("/ai/battle/resolve", { battleId: battleData.battleId, opponentScore: score });
-      if (res.data.success) setResultData(res.data.data);
+      const answers = battleData.questions.map((_, index) => selectedAnswers[index] ?? null);
+      const res = await api.post("/ai/battle/resolve", { battleId: battleData.battleId, answers });
+      if (res.data.success && res.data.data.complete) setResultData(res.data.data);
+      else setBattleResolved(false);
     } catch (err) {
       console.error("Failed to resolve battle:", err);
     }
@@ -369,8 +380,7 @@ export default function BattleArena() {
           {currentQ.options.map((opt, idx) => {
             let btnClass = "border-border bg-background hover:bg-accent/50 hover:border-brand/30";
             if (isAnswered) {
-              if (opt === currentQ.correctAnswer) btnClass = "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400";
-              else if (opt === selectedOption) btnClass = "border-destructive bg-destructive/10 text-destructive";
+              if (opt === selectedOption) btnClass = "border-brand bg-brand-soft text-brand";
               else btnClass = "border-border bg-background opacity-50";
             }
             return (
@@ -381,8 +391,7 @@ export default function BattleArena() {
                 className={`w-full p-4 rounded-xl border-2 text-left text-sm font-medium transition-all flex items-center justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed ${btnClass}`}
               >
                 <span>{opt}</span>
-                {isAnswered && opt === currentQ.correctAnswer && <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />}
-                {isAnswered && opt === selectedOption && opt !== currentQ.correctAnswer && <XCircle className="w-5 h-5 text-destructive shrink-0" />}
+                {isAnswered && opt === selectedOption && <CheckCircle2 className="w-5 h-5 text-brand shrink-0" />}
               </button>
             );
           })}
