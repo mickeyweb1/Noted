@@ -1,5 +1,6 @@
 import path from 'path';
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
@@ -80,7 +81,66 @@ const io = new Server(server, {
 const activeGames = new Map();
 const cardTimers = new Map();
 const gameShowOutboxDir = process.env.GAME_SHOW_OUTBOX_DIR || path.join(__dirname, 'data', 'game-show-outbox');
+const activeGameSnapshotsDir = path.join(gameShowOutboxDir, 'active-games');
 let gameShowOutboxRetryTimer = null;
+
+const persistActiveGameSnapshot = async (game) => {
+  await mkdir(activeGameSnapshotsDir, { recursive: true, mode: 0o700 });
+  const snapshotPath = path.join(activeGameSnapshotsDir, `${game.quizId}.json`);
+  const tempPath = `${snapshotPath}.${process.pid}.${Date.now()}.tmp`;
+  const snapshot = {
+    ...game,
+    adminSocketId: null,
+    savingToDb: false,
+    saveRetryTimer: null,
+    players: game.players.map((player) => ({ ...player, id: null }))
+  };
+  await writeFile(tempPath, JSON.stringify(snapshot), { mode: 0o600 });
+  await rename(tempPath, snapshotPath);
+};
+
+const removeActiveGameSnapshot = async (quizId) => {
+  try {
+    await unlink(path.join(activeGameSnapshotsDir, `${quizId}.json`));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+};
+
+const loadActiveGameSnapshots = async () => {
+  let filenames = [];
+  try {
+    filenames = (await readdir(activeGameSnapshotsDir)).filter((name) => name.endsWith('.json'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.error('Failed to read active Game Show snapshots:', error);
+    return;
+  }
+
+  for (const filename of filenames) {
+    try {
+      const snapshot = JSON.parse(await readFile(path.join(activeGameSnapshotsDir, filename), 'utf8'));
+      if (!snapshot.quizId || !Array.isArray(snapshot.questions) || !Array.isArray(snapshot.players)) {
+        throw new Error('Invalid active Game Show snapshot');
+      }
+      snapshot.players = snapshot.players.map((player) => ({ ...player, id: null }));
+      snapshot.adminSocketId = null;
+      snapshot.savingToDb = false;
+      snapshot.savedToDb = false;
+      snapshot.saveRetryTimer = null;
+      if (snapshot.activeCard) {
+        snapshot.activeCard = null;
+        snapshot.lastPicker = null;
+        snapshot.activityLog.push({ time: new Date().toLocaleTimeString(), message: 'Match resumed after a server restart. The interrupted card is available again.' });
+      }
+      activeGames.set(snapshot.quizId, snapshot);
+      await persistActiveGameSnapshot(snapshot);
+      console.log(`✅ Restored active Game Show for quiz ${snapshot.quizId}`);
+      if (snapshot.completedCards.length === snapshot.questions.length) void saveGameShowResults(snapshot);
+    } catch (error) {
+      console.error(`Failed to restore active Game Show snapshot ${filename}:`, error);
+    }
+  }
+};
 
 const persistGameShowSubmissions = async (submissions) => {
   for (const submission of submissions) {
@@ -93,11 +153,11 @@ const persistGameShowSubmissions = async (submissions) => {
   }
 };
 
-const queueGameShowSubmissions = async (quizId, submissions) => {
+const queueGameShowSubmissions = async (quizId, submissions, complete = false) => {
   await mkdir(gameShowOutboxDir, { recursive: true, mode: 0o700 });
-  const outboxPath = path.join(gameShowOutboxDir, `${quizId}.json`);
+  const outboxPath = path.join(gameShowOutboxDir, `${quizId}-${randomUUID()}.json`);
   const tempPath = `${outboxPath}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tempPath, JSON.stringify({ quizId, submissions }), { mode: 0o600 });
+  await writeFile(tempPath, JSON.stringify({ quizId, submissions, complete }), { mode: 0o600 });
   await rename(tempPath, outboxPath);
   return outboxPath;
 };
@@ -123,6 +183,7 @@ const flushGameShowOutbox = async () => {
       }
       await persistGameShowSubmissions(record.submissions);
       await unlink(outboxPath);
+      if (record.complete) await removeActiveGameSnapshot(record.quizId);
       console.log(`✅ Recovered pending Game Show results for quiz ${record.quizId}`);
     } catch (error) {
       failed = true;
@@ -179,7 +240,8 @@ const saveGameShowResults = async (game) => {
       });
     }
 
-    const outboxPath = await queueGameShowSubmissions(game.quizId, submissions);
+    const outboxPath = await queueGameShowSubmissions(game.quizId, submissions, true);
+    await removeActiveGameSnapshot(game.quizId);
     await persistGameShowSubmissions(submissions);
     await unlink(outboxPath);
     game.savedToDb = true;
@@ -266,6 +328,7 @@ io.on('connection', (socket) => {
         }
       }
 
+      await persistActiveGameSnapshot(game);
       io.to(actualQuizId).emit('player_joined', { players: game.players, status: game.status });
 
       const safeState = { ...game };
@@ -281,11 +344,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('admin_start_game', ({ quizId }) => {
+  socket.on('admin_start_game', async ({ quizId }) => {
     const game = activeGames.get(quizId);
     if (game && socket.id === game.adminSocketId) {
       game.status = 'live';
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: "🚀 Match Started!" });
+      await persistActiveGameSnapshot(game);
       
       const studentSafeState = { ...game };
       studentSafeState.questions = game.questions.map(q => ({
@@ -300,7 +364,7 @@ io.on('connection', (socket) => {
   });
 
   // ✅ UPDATED: Accepts boolean and broadcasts to all clients
-  socket.on('disqualify_player', ({ quizId, playerName, disqualified }) => {
+  socket.on('disqualify_player', async ({ quizId, playerName, disqualified }) => {
     const game = activeGames.get(quizId);
     if (game && socket.id === game.adminSocketId) {
       if (disqualified) {
@@ -310,11 +374,12 @@ io.on('connection', (socket) => {
       } else {
         game.disqualified = game.disqualified.filter(p => p !== playerName);
       }
+      await persistActiveGameSnapshot(game);
       io.to(quizId).emit('player_disqualified', { disqualified: game.disqualified });
     }
   });
 
-socket.on('pick_card', ({ quizId, cardIndex }) => {
+socket.on('pick_card', async ({ quizId, cardIndex }) => {
   const game = activeGames.get(quizId);
   const playerName = socket.data.playerName;
     const player = game?.players.find((candidate) => candidate.id === socket.id && candidate.name === playerName);
@@ -333,6 +398,7 @@ socket.on('pick_card', ({ quizId, cardIndex }) => {
     game.activeCard = { index: cardIndex, player: playerName, attempt: 1, pickedAt: Date.now() };
     game.lastPicker = playerName;
     game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `${playerName} picked Card ${cardIndex + 1}` });
+    await persistActiveGameSnapshot(game);
     
     const timeLimitMs = 30000;
     // ✅ SEND remainingMs for accurate frontend timers
@@ -340,13 +406,14 @@ socket.on('pick_card', ({ quizId, cardIndex }) => {
     
     if (cardTimers.has(quizId)) clearTimeout(cardTimers.get(quizId));
     
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
       if (game.activeCard && game.activeCard.index === cardIndex) {
         game.cardResults.push({ cardIndex, player: playerName, result: 'timeout', points: 0, selectedAnswer: 'Skipped' });
         game.completedCards.push(cardIndex);
         game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `⏰ ${playerName} ran out of time on Card ${cardIndex + 1}` });
         game.activeCard = null;
         cardTimers.delete(quizId);
+        await persistActiveGameSnapshot(game);
         
         if (game.completedCards.length === game.questions.length) saveGameShowResults(game);
         
@@ -522,6 +589,7 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 4
   .then(async () => {
     console.log('✅ Connected to MongoDB Atlas!');
     await flushGameShowOutbox();
+    await loadActiveGameSnapshots();
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🔌 Socket.io ready!`);
