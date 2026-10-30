@@ -194,6 +194,7 @@ export const checkBattleStatus = async (req, res, next) => {
         score: ownScore,
         opponentScore,
         xpGained: ownScore > opponentScore ? 50 : ownScore === opponentScore ? 25 : 10,
+        newLevel: user.level,
         won: ownScore > opponentScore,
       } : null,
     } });

@@ -20,7 +20,6 @@ export default function BattleArena() {
  
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [score, setScore] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState([]);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [timeLeft, setTimeLeft] = useState(10); // ✅ CHANGED: 15 to 10 seconds
@@ -159,7 +158,6 @@ export default function BattleArena() {
     const nextAnswers = [...selectedAnswersRef.current];
     nextAnswers[currentQIndex] = option;
     selectedAnswersRef.current = nextAnswers;
-    setSelectedAnswers(nextAnswers);
     setTimeout(() => advanceQuestion(), 1500);
   };
  
@@ -183,6 +181,7 @@ export default function BattleArena() {
       else setBattleResolved(false);
     } catch (err) {
       console.error("Failed to resolve battle:", err);
+      setBattleResolved(false);
     }
   };
  
