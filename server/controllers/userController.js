@@ -47,46 +47,54 @@ export const completeFocusSession = async (req, res, next) => {
     if (!mongoose.isValidObjectId(sessionId)) {
       return res.status(400).json({ success: false, message: 'A valid focus session ID is required.' });
     }
-    const session = await FocusSession.findOne({ _id: sessionId, userId: req.user._id, status: 'active' });
-    if (!session) return res.status(409).json({ success: false, message: 'This focus session is no longer active.' });
-
     const now = new Date();
-    const minimumEnd = new Date(session.startedAt.getTime() + session.durationMinutes * 60_000);
-    if (now < minimumEnd) {
+    const completion = await mongoose.connection.transaction(async (transaction) => {
+      const session = await FocusSession.findOne({ _id: sessionId, userId: req.user._id, status: 'active' }).session(transaction);
+      if (!session) return { error: 'inactive' };
+
+      const minimumEnd = new Date(session.startedAt.getTime() + session.durationMinutes * 60_000);
+      if (now < minimumEnd) return { error: 'early' };
+
+      const claimed = await FocusSession.findOneAndUpdate(
+        { _id: session._id, userId: req.user._id, status: 'active', startedAt: { $lte: new Date(now.getTime() - session.durationMinutes * 60_000) } },
+        { $set: { status: 'completed', completedAt: now } },
+        { new: true, session: transaction },
+      );
+      if (!claimed) return { error: 'inactive' };
+
+      const user = await User.findById(req.user._id).session(transaction);
+      if (!user) {
+        const error = new Error('User not found');
+        error.status = 404;
+        throw error;
+      }
+
+      const today = now.toISOString().split('T')[0];
+      const lastFocus = user.lastFocusDate ? new Date(user.lastFocusDate).toISOString().split('T')[0] : null;
+      if (lastFocus !== today) {
+        user.focusSessionsToday = 1;
+        user.lastFocusDate = now;
+      } else {
+        user.focusSessionsToday += 1;
+      }
+
+      const currentDailyMinutes = user.dailyFocusLog.get(today) || 0;
+      user.dailyFocusLog.set(today, currentDailyMinutes + claimed.durationMinutes);
+      user.totalFocusHours = (user.totalFocusHours || 0) + (claimed.durationMinutes / 60);
+      user.xp += 15;
+      user.level = Math.floor(user.xp / 100) + 1;
+      await user.save({ session: transaction });
+
+      return { user, today };
+    });
+
+    if (completion.error === 'early') {
       return res.status(400).json({ success: false, message: 'Focus session is not complete yet.' });
     }
-    const claimed = await FocusSession.findOneAndUpdate(
-      { _id: session._id, userId: req.user._id, status: 'active', startedAt: { $lte: new Date(now.getTime() - session.durationMinutes * 60_000) } },
-      { $set: { status: 'completed', completedAt: now } },
-      { new: true },
-    );
-    if (!claimed) return res.status(409).json({ success: false, message: 'This focus session has already been completed.' });
-
-    const durationMinutes = claimed.durationMinutes;
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      const error = new Error("User not found");
-      error.status = 404; throw error;
+    if (completion.error === 'inactive') {
+      return res.status(409).json({ success: false, message: 'This focus session is no longer active.' });
     }
-
-    const today = now.toISOString().split('T')[0];
-    const lastFocus = user.lastFocusDate ? new Date(user.lastFocusDate).toISOString().split('T')[0] : null;
-
-    if (lastFocus !== today) {
-      user.focusSessionsToday = 1;
-      user.lastFocusDate = new Date();
-    } else {
-      user.focusSessionsToday += 1;
-    }
-
-    const currentDailyMinutes = user.dailyFocusLog.get(today) || 0;
-    user.dailyFocusLog.set(today, currentDailyMinutes + durationMinutes);
-    user.totalFocusHours = (user.totalFocusHours || 0) + (durationMinutes / 60);
-
-    user.xp += 15;
-    user.level = Math.floor(user.xp / 100) + 1;
-    
-    await user.save();
+    const { user, today } = completion;
 
     res.status(200).json({
       success: true,

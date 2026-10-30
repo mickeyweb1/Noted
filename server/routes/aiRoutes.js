@@ -65,9 +65,9 @@ router.post('/ocr/extract-text', protect, expensiveAiLimiter, extractTextFromIma
 
 // Battle Routes
 router.get('/battle/classmates', protect, getClassmates);
-router.post('/battle/challenge', protect, challengeClassmate);
+router.post('/battle/challenge', protect, expensiveAiLimiter, challengeClassmate);
 router.get('/battle/pending', protect, getMyBattles);
-router.post('/battle/generate-link', protect, generateChallengeLink);
+router.post('/battle/generate-link', protect, expensiveAiLimiter, generateChallengeLink);
 router.post('/battle/accept', protect, acceptBattle);
 router.get('/battle/status', protect, checkBattleStatus);
 router.post('/battle/ready', protect, markBattleReady);
