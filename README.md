@@ -151,6 +151,8 @@ cp client/.env.example client/.env
 | `PORT` | No | API port; defaults to `5000` |
 | `GAME_SHOW_OUTBOX_DIR` | Recommended for production | Directory for pending Game Show results and active match snapshots; point this to a persistent mounted disk to recover them after an API restart |
 
+The API uses MongoDB transactions when completing focus sessions. MongoDB must run as a replica set (MongoDB Atlas is supported); a standalone local `mongod` instance must be configured as a single-node replica set.
+
 For local development, use these values where appropriate:
 
 ```env
