@@ -54,7 +54,7 @@ const fetchData = useCallback(async () => { // ✅ CHANGED to useCallback
   // ✅ CONDITIONAL STATS: Show different stats for Teachers vs School Owners
   const stats = data?.stats?.isTeacher ? [
     { title: "Total Quizzes", value: data.stats.totalQuizzes || 0, change: "All time", trend: "up", icon: FileText, color: "text-brand", bg: "bg-brand-soft" },
-    { title: "Students Assessed", value: data.stats.totalStudentsAssessed || 0, change: "Across all quizzes", trend: "up", icon: Users, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
+    { title: "Quiz Submissions", value: data.stats.totalQuizSubmissions || 0, change: "Across all quizzes", trend: "up", icon: Users, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
     { title: "Active Game Shows", value: data.stats.activeGameShows || 0, change: "Currently running", trend: "up", icon: Trophy, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/10" },
   ] : [
     { title: "Total Teachers", value: data?.stats?.totalTeachers || 0, change: "All time", trend: "up", icon: GraduationCap, color: "text-brand", bg: "bg-brand-soft" },

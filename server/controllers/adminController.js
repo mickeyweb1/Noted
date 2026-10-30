@@ -1,6 +1,7 @@
 import { User } from '../models/User.js';
 import { Organization } from '../models/Organization.js';
 import { Quiz } from '../models/Quiz.js';
+import { QuizSubmission } from '../models/QuizSubmission.js';
 import crypto from 'crypto'; 
 
 // Helper to generate a unique SCHOOL code
@@ -55,7 +56,9 @@ export const getAdminStats = async (req, res, next) => {
       
       const totalQuizzes = await Quiz.countDocuments({ createdBy: teacherId });
       const teacherQuizzes = await Quiz.find({ createdBy: teacherId });
-      const totalStudentsAssessed = teacherQuizzes.reduce((sum, q) => sum + (q.numberOfStudents || 0), 0);
+      const totalQuizSubmissions = await QuizSubmission.countDocuments({
+        quiz: { $in: teacherQuizzes.map((quiz) => quiz._id) }
+      });
       const activeGameShows = await Quiz.countDocuments({ createdBy: teacherId, gameMode: 'gameShow' });
       
       const recentQuizzes = await Quiz.find({ createdBy: teacherId })
@@ -69,7 +72,7 @@ export const getAdminStats = async (req, res, next) => {
           inviteCode: "N/A (Teacher Account)",
           stats: {
             totalQuizzes,
-            totalStudentsAssessed,
+            totalQuizSubmissions,
             activeGameShows,
             isTeacher: true // ✅ Flag for the frontend
           },
