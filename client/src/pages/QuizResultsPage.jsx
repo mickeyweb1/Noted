@@ -759,7 +759,6 @@ const handleRevokeShare = async (shareCode) => {
 
           {showCodeHistory && (
             <div className="border-t border-border p-5 sm:p-6">
-            <div className="border-t border-border p-5 sm:p-6">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
                   Codes automatically expire 30 days after generation. Students cannot use expired codes.
