@@ -1059,9 +1059,9 @@ export default function TakeQuiz() {
             </div>
           </div>
         )}
-                  {/* ✅ NEW: Free Tier Watermark */}
+          {/* ✅ NEW: Free Tier Watermark */}
           {quizData?.isFreeTier && (
-            <div className="mt-8 text-center">
+            <div className="mt-8 text-center pb-4">
               <p className="text-xs font-medium text-muted-foreground/60">
                 Powered by <span className="font-bold text-brand">Noted AI</span>
               </p>
