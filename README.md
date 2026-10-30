@@ -149,7 +149,7 @@ cp client/.env.example client/.env
 | `VITE_API_URL` | Yes for local client setup | API base URL, including `/api` |
 | `CLIENT_URL` | Recommended | Frontend origin used for CORS and generated links |
 | `PORT` | No | API port; defaults to `5000` |
-| `GAME_SHOW_OUTBOX_DIR` | Recommended for production | Directory for pending Game Show result records; point this to a persistent mounted disk to recover results after an API restart during a MongoDB outage |
+| `GAME_SHOW_OUTBOX_DIR` | Recommended for production | Directory for pending Game Show results and active match snapshots; point this to a persistent mounted disk to recover them after an API restart |
 
 For local development, use these values where appropriate:
 
@@ -333,7 +333,7 @@ Deploy the client and API as separate services, and provision a MongoDB database
 
 Configure the server's environment variables in your hosting provider. Make sure the MongoDB connection string, JWT secret, and any required service credentials are set securely.
 
-For Game Show result recovery, mount persistent storage for the API and set `GAME_SHOW_OUTBOX_DIR` to a directory on that mount. Without a persistent mount, the local outbox can survive process restarts on some hosts but is not guaranteed to survive instance replacement or redeployment.
+For Game Show recovery, mount persistent storage for the API and set `GAME_SHOW_OUTBOX_DIR` to a directory on that mount. Completed result writes and active match snapshots are recovered from this directory after restart. Without a persistent mount, local files are not guaranteed to survive instance replacement or redeployment.
 
 Set `CLIENT_URL` to the deployed frontend origin so browser requests can pass the configured CORS checks.
 
