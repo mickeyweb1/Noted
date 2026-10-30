@@ -302,15 +302,17 @@ router.post('/session/start', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
     if (!code) return res.status(400).json({ success: false, message: 'Access code is required' });
-        const creator = await User.findById(quiz.createdBy).select('subscriptionTier');
-    const isFreeTier = creator?.subscriptionTier === 'free';
 
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
 
+    // ✅ FIX: Moved this AFTER quiz is defined so it doesn't crash
+    const creator = await User.findById(quiz.createdBy).select('subscriptionTier');
+    const isFreeTier = creator?.subscriptionTier === 'free';
+
     let session = await QuizSession.findOne({ code });
     const resumed = Boolean(session);
-    // A brand-new start on an expired code is refused; a student already mid-quiz may continue
+    
     if (!session && isCodeExpired(quiz, code)) {
       return res.status(400).json({ success: false, message: `This access code has expired (older than ${CODE_LIFETIME_DAYS} days).` });
     }
@@ -326,7 +328,6 @@ router.post('/session/start', async (req, res, next) => {
         else throw err;
       }
     } else {
-      // Refresh the retention window when a student reopens the attempt.
       session.createdAt = new Date();
       await session.save();
     }
@@ -351,7 +352,7 @@ router.post('/session/start', async (req, res, next) => {
         currentQuestionIndex: session.currentQuestionIndex || 0,
         savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null,
         resumed,
-         isFreeTier
+        isFreeTier // ✅ Sent to frontend for the watermark
       },
     });
   } catch (error) { next(error); }
@@ -573,11 +574,12 @@ router.post('/validate-code', async (req, res, next) => {
     const code = normalizeCode(req.body?.code);
     if (!code) return res.status(400).json({ success: false, message: 'Access code is required' });
 
-    const creator = await User.findById(quiz.createdBy).select('subscriptionTier'); 
-    const isFreeTier = creator?.subscriptionTier === 'free';
-
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
+
+    // ✅ FIX: Moved this AFTER quiz is defined so it doesn't crash
+    const creator = await User.findById(quiz.createdBy).select('subscriptionTier');
+    const isFreeTier = creator?.subscriptionTier === 'free';
 
     if (isCodeExpired(quiz, code)) {
       return res.status(400).json({ success: false, message: `This access code has expired (older than ${CODE_LIFETIME_DAYS} days).` });
@@ -604,7 +606,7 @@ router.post('/validate-code', async (req, res, next) => {
         showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
         passMark: quiz.passMark ?? 50,
         hasActiveSession,
-        isFreeTier,
+        isFreeTier, // ✅ Sent to frontend
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
       },
     });
@@ -780,5 +782,45 @@ router.post('/shared-regenerate', async (req, res, next) => {
     res.json({ success: true, newCode, quizId });
   } catch (error) { next(error); }
 });
+
+/* ------------------------------------------------------------------ */
+/* 6. Duplicate Quiz                                                  */
+/* ------------------------------------------------------------------ */
+router.post('/:id/duplicate', protect, async (req, res, next) => {
+  try {
+    const quiz = await loadQuiz(req, res); // Must be owner
+    if (!quiz) return;
+
+    // Create a copy of the quiz with "(Copy)" in the title
+    const newQuiz = await Quiz.create({
+      ...quiz.toObject(),
+      _id: undefined, // Let MongoDB generate a new ID
+      title: `${quiz.title} (Copy)`,
+      accessCodes: [], // We will generate fresh codes
+      createdBy: req.user._id,
+    });
+
+    // Generate new access codes for the duplicated quiz
+    const used = new Set();
+    const newCodes = Array.from({ length: quiz.numberOfStudents }, () => ({ 
+      code: uniqueCode(quiz.gameMode || 'test', used), 
+      createdAt: new Date() 
+    }));
+    
+    newQuiz.accessCodes = newCodes;
+    await newQuiz.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Quiz duplicated successfully!',
+      data: { 
+        newQuizId: newQuiz._id, 
+        accessCodes: codesOf(newQuiz) 
+      }
+    });
+  } catch (error) { next(error); }
+});
+
+export default router;
 
 export default router;
