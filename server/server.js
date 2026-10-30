@@ -80,8 +80,10 @@ const activeGames = new Map();
 const cardTimers = new Map();
 
 const saveGameShowResults = async (game) => {
-  if (game.completedCards.length === game.questions.length && !game.savedToDb) {
-    game.savedToDb = true; 
+  if (game.completedCards.length !== game.questions.length || game.savedToDb || game.savingToDb) return;
+
+  game.savingToDb = true;
+  try {
     const maxScore = game.questions.length * (game.baseMarks || 10);
     
     for (const player of game.players) {
@@ -101,31 +103,38 @@ const saveGameShowResults = async (game) => {
 
       const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
 
-      try {
-        await QuizSubmission.findOneAndUpdate(
-          { quiz: game.quizId, accessCode: safeAccessCode },
-          {
-            quiz: game.quizId,
-            studentName: player.name,
-            studentSurname: "GameShow", 
-            studentClass: "Live Match",
-            accessCode: safeAccessCode,
-            answers: submissionAnswers,
-            score: totalScore,
-            totalQuestions: game.questions.length,
-            maxScore: maxScore,
-            timeTaken: 0,
-            tabSwitchCount: 0,
-            gameMode: 'gameShow'
-          },
-          { upsert: true, returnDocument: 'after' }
-        );
-      } catch (err) {
-        console.error("Failed to save game show result:", err);
-      }
+      await QuizSubmission.findOneAndUpdate(
+        { quiz: game.quizId, accessCode: safeAccessCode },
+        {
+          quiz: game.quizId,
+          studentName: player.name,
+          studentSurname: "GameShow",
+          studentClass: "Live Match",
+          accessCode: safeAccessCode,
+          answers: submissionAnswers,
+          score: totalScore,
+          totalQuestions: game.questions.length,
+          maxScore: maxScore,
+          timeTaken: 0,
+          tabSwitchCount: 0,
+          gameMode: 'gameShow'
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
     }
+    game.savedToDb = true;
     console.log(`✅ Game show results permanently saved to database for quiz ${game.quizId}`);
-    activeGames.delete(game.quizId);
+    if (activeGames.get(game.quizId) === game) activeGames.delete(game.quizId);
+  } catch (err) {
+    console.error(`Failed to save all game show results for quiz ${game.quizId}; retrying in 30 seconds:`, err);
+    if (!game.saveRetryTimer && activeGames.get(game.quizId) === game) {
+      game.saveRetryTimer = setTimeout(() => {
+        game.saveRetryTimer = null;
+        void saveGameShowResults(game);
+      }, 30_000);
+    }
+  } finally {
+    game.savingToDb = false;
   }
 };
 
