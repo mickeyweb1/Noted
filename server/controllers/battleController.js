@@ -121,7 +121,7 @@ export const generateChallengeLink = async (req, res, next) => {
 // 5. Accept Battle via Link or ID
 export const acceptBattle = async (req, res, next) => {
   try {
-    const { battleId, inviteCode } = req.body;
+    const { battleId, inviteCode, host = false } = req.body;
     let query = battleId ? { 'pendingBattles._id': battleId } : { 'pendingBattles.inviteCode': inviteCode };
     
     const opponentDoc = await User.findOne(query);
@@ -132,15 +132,21 @@ export const acceptBattle = async (req, res, next) => {
       : opponentDoc.pendingBattles.find(b => b.inviteCode === inviteCode);
 
     if (!battle) return res.status(404).json({ success: false, message: "Battle not found" });
-    if (String(opponentDoc._id) === String(req.user._id)) {
-      return res.status(400).json({ success: false, message: "You cannot join your own battle." });
-    }
-    if (battle.status !== 'pending' && String(battle.opponentId) !== String(req.user._id)) {
-      return res.status(409).json({ success: false, message: "This battle is no longer available." });
+    if (host) {
+      if (String(opponentDoc._id) !== String(req.user._id) || String(battle.challengerId) !== String(req.user._id)) {
+        return res.status(403).json({ success: false, message: "You are not the host of this battle." });
+      }
+    } else {
+      if (String(opponentDoc._id) === String(req.user._id)) {
+        return res.status(400).json({ success: false, message: "You cannot join your own battle." });
+      }
+      if (battle.status !== 'pending' && String(battle.opponentId) !== String(req.user._id)) {
+        return res.status(409).json({ success: false, message: "This battle is no longer available." });
+      }
     }
     
     // ✅ CRITICAL FIX: Update status to 'joined' so the host's polling detects it!
-    if (battle.status === 'pending') {
+    if (!host && battle.status === 'pending') {
       battle.status = 'joined';
       battle.opponentId = req.user._id;
       await opponentDoc.save();

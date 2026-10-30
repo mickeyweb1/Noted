@@ -38,11 +38,12 @@ export default function BattleArena() {
   const hasStartedCountdown = useRef(false);
   const timerRef = useRef(null);
   const pollRef = useRef(null);
+  const selectedAnswersRef = useRef([]);
  
   useEffect(() => {
     const fetchBattle = async () => {
       try {
-        const res = await api.post("/ai/battle/accept", { battleId, inviteCode });
+        const res = await api.post("/ai/battle/accept", { battleId, inviteCode, host: isHost });
         if (res.data.success) {
           setBattleData(res.data.data);
           setBattleStatus(res.data.data.status || "pending");
@@ -155,11 +156,10 @@ export default function BattleArena() {
     clearInterval(timerRef.current);
     setSelectedOption(option);
     setIsAnswered(true);
-    setSelectedAnswers((prev) => {
-      const next = [...prev];
-      next[currentQIndex] = option;
-      return next;
-    });
+    const nextAnswers = [...selectedAnswersRef.current];
+    nextAnswers[currentQIndex] = option;
+    selectedAnswersRef.current = nextAnswers;
+    setSelectedAnswers(nextAnswers);
     setTimeout(() => advanceQuestion(), 1500);
   };
  
@@ -177,7 +177,7 @@ export default function BattleArena() {
   const resolveBattle = async () => {
     setBattleResolved(true);
     try {
-      const answers = battleData.questions.map((_, index) => selectedAnswers[index] ?? null);
+      const answers = battleData.questions.map((_, index) => selectedAnswersRef.current[index] ?? null);
       const res = await api.post("/ai/battle/resolve", { battleId: battleData.battleId, answers });
       if (res.data.success && res.data.data.complete) setResultData(res.data.data);
       else setBattleResolved(false);
