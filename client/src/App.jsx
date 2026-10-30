@@ -18,6 +18,8 @@ const GameShowBoard = lazy(() => import("./pages/GameShowBoard"));
 const AdminHelp = lazy(() => import("./pages/AdminHelp"));
 const StudentHelp = lazy(() => import("./pages/StudentHelp"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
+const JoinSharedQuiz = lazy(() => import("./pages/schoolAdmin/JoinSharedQuiz"));
+const SharedQuizResults = lazy(() => import("./pages/schoolAdmin/SharedQuizResults"));
 const AiFlashcards = lazy(() => import("./pages/AiFlashcards"));
 const AddTeacher = lazy(() => import("./pages/schoolAdmin/AddTeacher"));
 
@@ -154,6 +156,9 @@ function App() {
 <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
  <Route path="/help/admin" element={<AdminHelp />} />
         <Route path="/admin/settings" element={<SettingsPage />} />
+ <Route path="/admin/join-shared-quiz" element={<JoinSharedQuiz />} />
+        <Route path="/admin/shared-quiz-results" element={<SharedQuizResults />} />
+ 
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
 <Route path="/admin/add-teacher" element={<AddTeacher />} />
         <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />

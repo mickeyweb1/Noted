@@ -11,6 +11,7 @@ import {
   X,
   MessageSquare,
   Trophy,
+  Share2,
   GraduationCap // ✅ Added for Teachers
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -29,6 +30,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
   const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
   const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
+        { to: "/admin/join-shared-quiz", icon: Share2, label: "Join Shared Quiz" },
     ...(isOwner ? [
       { to: "/admin/teachers", icon: GraduationCap, label: "My Teachers" },
       { to: "/admin/add-teacher", icon: UserPlus, label: "Add Teacher" },

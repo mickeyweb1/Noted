@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "rea
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, ChevronDown, ChevronUp,
-  CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Check, Award, Eye, Search, Trash2, RefreshCw, Target, Flag,
+  CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Award, Eye, Search, Trash2, RefreshCw, Target, Flag, Share2, Check, X
 } from "lucide-react";
 import api from "../utils/api";
 import Modal from "../components/Modal";
@@ -172,6 +172,12 @@ export function QuizResultsDashboard() {
   const [hasTeacherSection, setHasTeacherSection] = useState(false);
   const [toDelete, setToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+    const [isShareMode, setIsShareMode] = useState(false);
+  const [selectedQuizzes, setSelectedQuizzes] = useState([]);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [generatedShareCode, setGeneratedShareCode] = useState("");
+  const [shareExpiry, setShareExpiry] = useState("");
   const [deleteError, setDeleteError] = useState("");
 
   const fetchQuizzes = useCallback(async () => {
@@ -204,6 +210,31 @@ export function QuizResultsDashboard() {
     }
   };
 
+    const toggleQuizSelection = (quizId) => {
+    setSelectedQuizzes(prev => 
+      prev.includes(quizId) ? prev.filter(id => id !== quizId) : [...prev, quizId]
+    );
+  };
+
+  const handleGenerateShareCode = async () => {
+    if (selectedQuizzes.length === 0) return;
+    setIsSharing(true);
+    try {
+      const res = await api.post("/quiz/share", { quizIds: selectedQuizzes, daysValid: 7 });
+      if (res.data.success) {
+        setGeneratedShareCode(res.data.data.shareCode);
+        setShareExpiry(new Date(res.data.data.expiresAt).toLocaleDateString());
+        setShareModalOpen(true);
+        setSelectedQuizzes([]); // Clear selection after generating
+        setIsShareMode(false);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to generate share code.");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   const counts = useMemo(() => {
     const gameShows = quizzes.filter((q) => q.gameMode === "gameShow").length;
     return { all: quizzes.length, gameShow: gameShows, quiz: quizzes.length - gameShows };
@@ -225,15 +256,29 @@ export function QuizResultsDashboard() {
 
   const chips = [{ id: "all", label: "All" }, { id: "quiz", label: "Quizzes" }, { id: "gameShow", label: "Game shows" }];
   const renderCard = (quiz, isOwn) => (
-    <QuizCard
-      key={quiz._id}
-      quiz={quiz}
-      canDelete={isOwn}
-      teacherName={quiz.teacherName}
-      onResults={() => navigate(`/admin/quiz/${quiz._id}/results`)}
-      onResume={(code) => navigate(`/game-show?code=${code}`)}
-      onDelete={(q) => { setDeleteError(""); setToDelete(q); }}
-    />
+    <div className="relative">
+      {isShareMode && isOwn && (
+        <button
+          onClick={() => toggleQuizSelection(quiz._id)}
+          className={`absolute right-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors ${
+            selectedQuizzes.includes(quiz._id) 
+              ? "border-brand bg-brand text-white" 
+              : "border-border bg-background hover:border-brand/50"
+          }`}
+        >
+          {selectedQuizzes.includes(quiz._id) && <Check className="h-4 w-4" />}
+        </button>
+      )}
+      <QuizCard
+        key={quiz._id}
+        quiz={quiz}
+        canDelete={isOwn && !isShareMode}
+        teacherName={quiz.teacherName}
+        onResults={() => navigate(`/admin/quiz/${quiz._id}/results`)}
+        onResume={(code) => navigate(`/game-show?code=${code}`)}
+        onDelete={(q) => { setDeleteError(""); setToDelete(q); }}
+      />
+    </div>
   );
 
   return (
@@ -244,10 +289,47 @@ export function QuizResultsDashboard() {
             <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Quiz results</h1>
             <p className="text-muted-foreground">Pick a quiz to see how your students did.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => navigate("/admin/quizzes")} className={secondaryBtn}><Plus className="h-4 w-4" /> New quiz</button>
-            <button onClick={() => navigate("/admin/game-show-creator")} className={primaryBtn}><Trophy className="h-4 w-4" /> New game show</button>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Quiz results</h1>
+            <p className="text-muted-foreground">Pick a quiz to see how your students did.</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+            {isShareMode ? (
+              <>
+                <button 
+                  onClick={() => { setIsShareMode(false); setSelectedQuizzes([]); }} 
+                  className={secondaryBtn}
+                >
+                  <X className="h-4 w-4" /> Cancel
+                </button>
+                <button 
+                  onClick={handleGenerateShareCode} 
+                  disabled={selectedQuizzes.length === 0 || isSharing} 
+                  className={primaryBtn}
+                >
+                  {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                  Generate Share Code ({selectedQuizzes.length})
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => navigate("/admin/join-shared-quiz")} className={secondaryBtn}>
+                  <Share2 className="h-4 w-4" /> Join Shared
+                </button>
+                <button onClick={() => navigate("/admin/quizzes")} className={secondaryBtn}>
+                  <Plus className="h-4 w-4" /> New quiz
+                </button>
+                <button onClick={() => navigate("/admin/game-show-creator")} className={primaryBtn}>
+                  <Trophy className="h-4 w-4" /> New game show
+                </button>
+                <button onClick={() => setIsShareMode(true)} className={secondaryBtn}>
+                  <Share2 className="h-4 w-4" /> Share Access
+                </button>
+              </>
+            )}
+          </div>
+        </div>
         </div>
 
         {quizzes.length === 0 ? (
@@ -301,6 +383,27 @@ export function QuizResultsDashboard() {
             <button onClick={confirmDelete} disabled={isDeleting} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-destructive/90 disabled:opacity-60 ${focusRing}`}>
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete
             </button>
+          </div>
+        </Modal>
+      )}
+
+            {shareModalOpen && (
+        <Modal title="Share Code Generated" onClose={() => setShareModalOpen(false)} size="max-w-md">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Share this code with your colleague. It grants read-only access to the selected quizzes for <strong>7 days</strong>.
+          </p>
+          <div className="mb-4 rounded-xl border border-border bg-muted p-4 text-center">
+            <p className="break-all font-mono text-2xl font-bold tracking-wider text-foreground">{generatedShareCode}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Expires: {shareExpiry}</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button 
+              onClick={() => { navigator.clipboard.writeText(generatedShareCode); alert("Copied!"); }} 
+              className={`${secondaryBtn} flex-1`}
+            >
+              <Copy className="h-4 w-4" /> Copy Code
+            </button>
+            <button onClick={() => setShareModalOpen(false)} className={`${primaryBtn} flex-1`}>Done</button>
           </div>
         </Modal>
       )}
@@ -374,6 +477,9 @@ export default function QuizResultsPage() {
     const [showCodeHistory, setShowCodeHistory] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showShareManager, setShowShareManager] = useState(false);
+const [activeShares, setActiveShares] = useState([]);
+const [isRevoking, setIsRevoking] = useState(false);
   const [error, setError] = useState("");
     const [showCodesModal, setShowCodesModal] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -404,6 +510,28 @@ export default function QuizResultsPage() {
     }
   }, [quizId]);
   useEffect(() => { fetchResults(); }, [fetchResults]);
+
+  const fetchActiveShares = async () => {
+  try {
+    const res = await api.get(`/quiz/${quizId}/shares`);
+    if (res.data.success) setActiveShares(res.data.data);
+  } catch (err) {
+    console.error("Failed to fetch shares", err);
+  }
+};
+
+const handleRevokeShare = async (shareCode) => {
+  if (!window.confirm(`Are you sure you want to revoke the share code "${shareCode}"? Teacher B will lose access immediately.`)) return;
+  setIsRevoking(true);
+  try {
+    await api.delete(`/quiz/share/${shareCode}`);
+    setActiveShares(prev => prev.filter(s => s.shareCode !== shareCode));
+  } catch (err) {
+    alert(err.response?.data?.message || "Failed to revoke share code.");
+  } finally {
+    setIsRevoking(false);
+  }
+};
 
   const isGameShow = quizData?.gameMode === "gameShow";
   const questionById = useMemo(() => new Map((quizData?.questions ?? []).map((q) => [String(q._id), q])), [quizData]);
@@ -575,6 +703,9 @@ export default function QuizResultsPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => fetchResults({ silent: true })} disabled={refreshing} aria-label="Refresh results" className={`${secondaryBtn} px-3`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /></button>
+              <button onClick={() => { setShowShareManager(true); fetchActiveShares(); }} className={secondaryBtn}>
+    <Share2 className="h-4 w-4" /> Manage Shares
+  </button>
             <button onClick={() => setShowQuestions(true)} className={secondaryBtn}><Eye className="h-4 w-4" /> Questions</button>
              <button onClick={() => setShowCodesModal(true)} className={secondaryBtn}>
               <Clock className="h-4 w-4" /> View Codes
@@ -1095,6 +1226,44 @@ export default function QuizResultsPage() {
           </div>
         </Modal>
       )}
+
+      {/* ✅ Manage Shares Modal for Teacher A */}
+{showShareManager && (
+  <Modal title="Manage Shared Access" icon={<Share2 className="h-5 w-5 text-brand" />} size="max-w-2xl" onClose={() => setShowShareManager(false)}>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        These are the active share codes for this quiz. Revoking a code will immediately block Teacher B from accessing the results.
+      </p>
+      
+      {activeShares.length === 0 ? (
+        <div className="rounded-xl border border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+          No active share codes for this quiz.
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {activeShares.map((share) => (
+            <li key={share.shareCode} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+              <div>
+                <p className="font-mono text-lg font-bold tracking-wider text-foreground">{share.shareCode}</p>
+                <p className="text-xs text-muted-foreground">
+                  Expires: {new Date(share.expiresAt).toLocaleDateString()}
+                </p>
+              </div>
+              <button
+                onClick={() => handleRevokeShare(share.shareCode)}
+                disabled={isRevoking}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-background px-3 py-2 text-xs font-medium text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
+              >
+                {isRevoking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Revoke Access
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  </Modal>
+)}
     </div>
   );
 }

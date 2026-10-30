@@ -11,6 +11,8 @@ import { v2 as cloudinary } from 'cloudinary';
 import { protect } from '../middleware/protect.js';
 import { Content } from '../models/Content.js';
 import { applyReview } from '../utils/sm2.js';
+import { QuizShare } from '../models/QuizShare.js';
+import crypto from 'crypto';
 
 const router = express.Router();
 
@@ -637,6 +639,138 @@ router.delete('/:id', protect, async (req, res, next) => {
       QuizSession.deleteMany({ quizId: quiz._id }),
     ]);
     res.json({ success: true, message: 'Quiz deleted successfully' });
+  } catch (error) { next(error); }
+});
+
+/* ------------------------------------------------------------------ */
+/* 5. Quiz Sharing Management                                         */
+/* ------------------------------------------------------------------ */
+
+// Teacher A: Generate a share code for selected quizzes
+router.post('/share', protect, async (req, res, next) => {
+  try {
+    const { quizIds, daysValid = 7 } = req.body || {};
+    if (!Array.isArray(quizIds) || quizIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please select at least one quiz to share.' });
+    }
+
+    // Verify the user owns these quizzes
+    const ownedQuizzes = await Quiz.find({ _id: { $in: quizIds }, createdBy: req.user._id });
+    if (ownedQuizzes.length !== quizIds.length) {
+      return res.status(403).json({ success: false, message: 'You can only share quizzes you created.' });
+    }
+
+    // Generate a unique share code
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let shareCode = 'SHARE-';
+    for (let i = 0; i < 8; i++) shareCode += chars.charAt(Math.floor(Math.random() * chars.length));
+
+    const expiresAt = new Date(Date.now() + daysValid * 24 * 60 * 60 * 1000);
+
+    const share = await QuizShare.create({
+      shareCode,
+      ownerId: req.user._id,
+      quizIds,
+      expiresAt,
+      isActive: true
+    });
+
+    res.json({ success: true, data: { shareCode: share.shareCode, expiresAt: share.expiresAt } });
+  } catch (error) { next(error); }
+});
+
+router.get('/:id/shares', protect, async (req, res, next) => {
+  try {
+    const quiz = await loadQuiz(req, res); // Must be owner
+    if (!quiz) return;
+    
+    const shares = await QuizShare.find({ quizIds: { $in: [quiz._id] }, isActive: true })
+      .select('shareCode expiresAt createdAt')
+      .sort({ createdAt: -1 });
+      
+    res.json({ success: true, data: shares });
+  } catch (error) { next(error); }
+});
+
+// Teacher A: Revoke a share code
+router.delete('/share/:code', protect, async (req, res, next) => {
+  try {
+    const share = await QuizShare.findOne({ shareCode: req.params.code.toUpperCase(), ownerId: req.user._id });
+    if (!share) return res.status(404).json({ success: false, message: 'Share code not found or you do not own it.' });
+    
+    share.isActive = false;
+    await share.save();
+    
+    res.json({ success: true, message: 'Share code revoked successfully.' });
+  } catch (error) { next(error); }
+});
+
+// Teacher B: Get shared quiz results using the share code
+router.get('/shared-results', async (req, res, next) => {
+  try {
+    const { shareCode } = req.query;
+    if (!shareCode) return res.status(400).json({ success: false, message: 'Share code is required.' });
+
+    const share = await QuizShare.findOne({ shareCode: shareCode.trim().toUpperCase(), isActive: true });
+    if (!share) return res.status(404).json({ success: false, message: 'Invalid, expired, or revoked share code.' });
+    
+    if (new Date() > share.expiresAt) {
+      share.isActive = false; 
+      await share.save();
+      return res.status(400).json({ success: false, message: 'This share code has expired.' });
+    }
+
+    const quizzes = await Quiz.find({ _id: { $in: share.quizIds } }).populate('createdBy', 'fullName');
+    const submissions = await QuizSubmission.find({ quiz: { $in: share.quizIds } }).sort({ submittedAt: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        quizzes: quizzes.map(q => ({ 
+          ...q.toObject(), 
+          accessCodes: (q.accessCodes || []).map(ac => typeof ac === 'string' ? ac : ac.code) 
+        })),
+        submissions
+      }
+    });
+  } catch (error) { next(error); }
+});
+
+// Teacher B: Generate a new student access code for a specific shared quiz
+router.post('/shared-regenerate', async (req, res, next) => {
+  try {
+    const { shareCode, quizId } = req.body;
+    if (!shareCode || !quizId) return res.status(400).json({ success: false, message: 'Share code and quiz ID are required.' });
+
+    const share = await QuizShare.findOne({ shareCode: shareCode.trim().toUpperCase(), isActive: true });
+    if (!share || new Date() > share.expiresAt) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired share code.' });
+    }
+
+    // ✅ FIX: Verify the quizId is actually in the shared list
+    if (!share.quizIds.includes(quizId)) {
+      return res.status(403).json({ success: false, message: 'You do not have access to generate codes for this quiz.' });
+    }
+
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found.' });
+
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const prefix = quiz.gameMode === 'gameShow' ? 'G-' : 'T-';
+    let newCode = prefix;
+    for (let i = 0; i < 8; i++) newCode += chars.charAt(Math.floor(Math.random() * chars.length));
+
+    while ((quiz.accessCodes || []).some(ac => (typeof ac === 'string' ? ac : ac.code) === newCode)) {
+      newCode = prefix;
+      for (let i = 0; i < 8; i++) newCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    await Quiz.updateOne(
+      { _id: quizId },
+      { $push: { accessCodes: { code: newCode, createdAt: new Date() } }, $inc: { numberOfStudents: 1 } }
+    );
+
+    res.json({ success: true, newCode, quizId });
   } catch (error) { next(error); }
 });
 
