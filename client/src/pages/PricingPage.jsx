@@ -13,21 +13,49 @@ const teacherTiers = [
   {
     name: "Free", price: "$0", period: "forever", icon: Zap, tierKey: "free", checkoutPlan: null,
     description: "Everything you need to try Noted AI with a class.",
-    features: ["Up to 40 AI questions per quiz", "Up to 25 student codes per test", "5 AI tests per week", "Unlimited manual questions", "Basic tab-switch tracking", "Basic CSV export"],
+    features: [
+      "Up to 40 AI questions per quiz", 
+      "Up to 25 student codes per test", 
+      "5 AI tests per week", 
+      "Unlimited manual questions", 
+      "Basic tab-switch tracking", 
+      "Basic CSV export"
+    ],
     notIncluded: ["Game Show mode", "Secure result sharing", "No \"Powered by Noted AI\" watermark"],
   },
   {
     name: "Teacher Pro", price: "$5", oldPrice: "$8", period: "/ month", icon: Crown, tierKey: "pro", checkoutPlan: "teacher_pro",
     popular: true, badge: "Most popular", discountBadge: "Save 37%",
     description: "For teachers who run quizzes every week.",
-    features: ["Up to 60 AI questions per quiz", "Up to 40 student codes per test", "12 Game Shows per month", "Unlimited AI tests", "Advanced CSV grade export", "No watermark on quizzes", "Secure result sharing with colleagues", "Offline quiz support (auto-syncs)", "Advanced anti-cheating tab tracking", "Priority email support"],
+    features: [
+      "Everything in Free, plus:",
+      "Up to 60 AI questions per quiz", 
+      "Up to 40 student codes per test", 
+      "12 Game Shows per month", 
+      "Unlimited AI tests", 
+      "Advanced CSV grade export", 
+      "No watermark on quizzes", 
+      "Secure result sharing with colleagues", 
+      "Offline quiz support (auto-syncs)", 
+      "Advanced anti-cheating tab tracking", 
+      "Priority email support"
+    ],
     notIncluded: [],
   },
   {
     name: "Teacher Premium", price: "$10", oldPrice: "$15", period: "/ month", icon: Star, tierKey: "premium", checkoutPlan: null,
     discountBadge: "Save 33%",
     description: "For power users who need no limits.",
-    features: ["Unlimited AI questions per quiz", "Up to 100 student codes per test", "Unlimited Game Shows", "Everything in Teacher Pro", "Question quality insights", "Duplicate quiz feature", "Early access to new features", "24-hour priority support"],
+    features: [
+      "Everything in Teacher Pro, plus:",
+      "Unlimited AI questions per quiz", 
+      "Up to 100 student codes per test", 
+      "Unlimited Game Shows", 
+      "Question quality insights", 
+      "Duplicate quiz feature", 
+      "Early access to new features", 
+      "24-hour priority support"
+    ],
     notIncluded: [],
   },
 ];
@@ -35,21 +63,47 @@ const teacherTiers = [
 const schoolTiers = [
   {
     name: "School Starter", price: "$20", period: "/ month", icon: Building2, tierKey: "school_owner", checkoutPlan: "school_owner",
-    description: "Up to 4 teachers. Ideal for small schools.",
-    features: ["Owner: unlimited questions, codes and game shows", "Teachers: 50 AI questions, 30 codes, 8 Game Shows / month", "School overview dashboard", "School-wide CSV export", "No watermark on any quiz", "Secure result sharing across the school", "Offline quiz support for all students", "$4 / month per extra teacher"],
+    description: "Includes up to 4 teachers. Ideal for small schools.",
+    features: [
+      "Owner: unlimited questions, codes and game shows", 
+      "Teachers: 50 AI questions, 30 codes, 8 Game Shows / month", 
+      "School overview dashboard", 
+      "School-wide CSV export", 
+      "No watermark on any quiz", 
+      "Secure result sharing across the school", 
+      "Offline quiz support for all students", 
+      "$4 / month per extra teacher (beyond 4)"
+    ],
     notIncluded: [],
   },
   {
     name: "School Pro", price: "$50", period: "/ month", icon: Crown, tierKey: "school_pro", checkoutPlan: null,
     popular: true, badge: "Best value", discountBadge: "Up to 13 teachers",
     description: "Growing schools with several departments.",
-    features: ["Owner: unlimited + advanced analytics", "Teachers: 80 AI questions, 50 codes, 15 Game Shows / month", "School overview dashboard", "Export all school data", "No watermark on any quiz", "School-wide question quality insights", "Priority support", "$3 / month per extra teacher"],
+    features: [
+      "Everything in School Starter, plus:",
+      "Includes up to 13 teachers",
+      "Owner: advanced analytics & reporting", 
+      "Teachers: 80 AI questions, 50 codes, 15 Game Shows / month", 
+      "Export all school data", 
+      "School-wide question quality insights", 
+      "Priority support", 
+      "$3 / month per extra teacher (beyond 13)"
+    ],
     notIncluded: [],
   },
   {
     name: "School Premium", price: "$100", period: "/ month", icon: Star, tierKey: "school_premium", checkoutPlan: null,
-    description: "Large institutions up to 30 teachers.",
-    features: ["Owner: unlimited + dedicated account manager", "Teachers: 150 AI questions, 100 codes, 30 Game Shows / month", "Advanced analytics & reporting", "No watermark on any quiz", "24/7 priority support", "$3 / month per extra teacher"],
+    description: "Large institutions.",
+    features: [
+      "Everything in School Pro, plus:",
+      "Includes up to 30 teachers",
+      "Owner: dedicated account manager", 
+      "Teachers: 150 AI questions, 100 codes, 30 Game Shows / month", 
+      "Advanced analytics & reporting", 
+      "24/7 priority support", 
+      "$3 / month per extra teacher (beyond 30)"
+    ],
     notIncluded: [],
   },
 ];
@@ -75,12 +129,17 @@ const faqs = [
 ];
 
 function FeatureItem({ text, ok = true }) {
+  // Make the "Everything in X, plus:" text stand out slightly
+  const isHeader = text.toLowerCase().includes("everything in") && text.toLowerCase().includes("plus:");
+  
   return (
     <li className={`flex items-start gap-3 text-sm ${ok ? "text-foreground" : "text-muted-foreground"}`}>
       <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${ok ? "bg-green-500/15 text-green-600 dark:text-green-400" : "bg-muted text-muted-foreground"}`}>
         {ok ? <Check className="h-3 w-3" strokeWidth={3} /> : <X className="h-3 w-3" strokeWidth={3} />}
       </span>
-      <span className={ok ? "" : "line-through decoration-muted-foreground/40"}>{text}</span>
+      <span className={isHeader ? "font-semibold text-brand" : (ok ? "" : "line-through decoration-muted-foreground/40")}>
+        {text}
+      </span>
     </li>
   );
 }
