@@ -302,6 +302,8 @@ router.post('/session/start', async (req, res, next) => {
   try {
     const code = normalizeCode(req.body?.code);
     if (!code) return res.status(400).json({ success: false, message: 'Access code is required' });
+        const creator = await User.findById(quiz.createdBy).select('subscriptionTier');
+    const isFreeTier = creator?.subscriptionTier === 'free';
 
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
@@ -349,6 +351,7 @@ router.post('/session/start', async (req, res, next) => {
         currentQuestionIndex: session.currentQuestionIndex || 0,
         savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null,
         resumed,
+         isFreeTier
       },
     });
   } catch (error) { next(error); }
@@ -570,6 +573,9 @@ router.post('/validate-code', async (req, res, next) => {
     const code = normalizeCode(req.body?.code);
     if (!code) return res.status(400).json({ success: false, message: 'Access code is required' });
 
+    const creator = await User.findById(quiz.createdBy).select('subscriptionTier'); 
+    const isFreeTier = creator?.subscriptionTier === 'free';
+
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
 
@@ -598,6 +604,7 @@ router.post('/validate-code', async (req, res, next) => {
         showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
         passMark: quiz.passMark ?? 50,
         hasActiveSession,
+        isFreeTier,
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
       },
     });
