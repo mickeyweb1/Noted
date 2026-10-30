@@ -284,12 +284,7 @@ export function QuizResultsDashboard() {
   return (
     <div className="min-h-dvh bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Quiz results</h1>
-            <p className="text-muted-foreground">Pick a quiz to see how your students did.</p>
-          </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Quiz results</h1>
             <p className="text-muted-foreground">Pick a quiz to see how your students did.</p>
