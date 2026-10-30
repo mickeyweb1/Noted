@@ -470,6 +470,7 @@ export default function QuizResultsPage() {
   const [showQualityInsights, setShowQualityInsights] = useState(false);
     const [showCodeHistory, setShowCodeHistory] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+    const [isDuplicating, setIsDuplicating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showShareManager, setShowShareManager] = useState(false);
 const [activeShares, setActiveShares] = useState([]);
@@ -504,6 +505,23 @@ const [isRevoking, setIsRevoking] = useState(false);
     }
   }, [quizId]);
   useEffect(() => { fetchResults(); }, [fetchResults]);
+
+    const handleDuplicateQuiz = async () => {
+    if (!window.confirm(`Create a copy of "${quizData?.title}"? A new set of access codes will be generated.`)) return;
+    setIsDuplicating(true);
+    try {
+      const res = await api.post(`/quiz/${quizId}/duplicate`);
+      if (res.data.success) {
+        alert(`Quiz duplicated successfully! New codes: ${res.data.data.accessCodes.slice(0, 3).join(', ')}...`);
+        // Optional: navigate to the new quiz or just refresh
+        navigate(`/admin/quiz/${res.data.data.newQuizId}/results`);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to duplicate quiz.");
+    } finally {
+      setIsDuplicating(false);
+    }
+  };
 
   const fetchActiveShares = async () => {
   try {
@@ -697,6 +715,10 @@ const handleRevokeShare = async (shareCode) => {
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => fetchResults({ silent: true })} disabled={refreshing} aria-label="Refresh results" className={`${secondaryBtn} px-3`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /></button>
+               <button onClick={handleDuplicateQuiz} disabled={isDuplicating} className={secondaryBtn}>
+              {isDuplicating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 
+              {isDuplicating ? "Duplicating..." : "Duplicate"}
+            </button>
               <button onClick={() => { setShowShareManager(true); fetchActiveShares(); }} className={secondaryBtn}>
     <Share2 className="h-4 w-4" /> Manage Shares
   </button>
