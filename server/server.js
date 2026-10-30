@@ -248,9 +248,10 @@ io.on('connection', (socket) => {
 socket.on('pick_card', ({ quizId, cardIndex }) => {
   const game = activeGames.get(quizId);
   const playerName = socket.data.playerName;
+    const player = game?.players.find((candidate) => candidate.id === socket.id && candidate.name === playerName);
   
   // ✅ FIX: Check if game exists FIRST
-  if (!game || game.status !== 'live' || game.activeCard || game.completedCards.includes(cardIndex)) return;
+  if (!game || game.status !== 'live' || !player || !Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= game.questions.length || game.activeCard || game.completedCards.includes(cardIndex)) return;
 
   // ✅ NOW it's safe to check disqualified
   if (game.disqualified.includes(playerName)) {
@@ -303,20 +304,22 @@ socket.on('pick_card', ({ quizId, cardIndex }) => {
     
     if (!game || !game.activeCard || game.activeCard.index !== cardIndex) return;
 
+    const player = game.players.find((candidate) => candidate.id === socket.id && candidate.name.toLowerCase() === playerName?.toLowerCase());
+    const activePlayerLower = game.activeCard.player?.toLowerCase();
+    const stealPlayerLower = game.activeCard.stealPlayer ? game.activeCard.stealPlayer.toLowerCase() : null;
+    const submitterLower = player?.name.toLowerCase();
+    if (!player || (activePlayerLower !== submitterLower && stealPlayerLower !== submitterLower)) return;
+
+    const question = game.questions[cardIndex];
+    if (!question || !Array.isArray(question.options) || !Number.isInteger(selectedAnswerIndex) || (selectedAnswerIndex !== -1 && (selectedAnswerIndex < 0 || selectedAnswerIndex >= question.options.length))) return;
+
     if (cardTimers.has(quizId)) {
       clearTimeout(cardTimers.get(quizId));
       cardTimers.delete(quizId);
     }
 
-    const activePlayerLower = game.activeCard.player.toLowerCase();
-    const stealPlayerLower = game.activeCard.stealPlayer ? game.activeCard.stealPlayer.toLowerCase() : null;
-    const submitterLower = playerName.toLowerCase();
-
-    if (activePlayerLower !== submitterLower && stealPlayerLower !== submitterLower) return; 
-
-    const question = game.questions[cardIndex];
     const isCorrect = selectedAnswerIndex !== -1 && question.options[selectedAnswerIndex] === question.correctAnswer;
-    const exactPlayerName = game.players.find(p => p.name.toLowerCase() === submitterLower)?.name || playerName;
+    const exactPlayerName = player.name;
 
     if (isCorrect) {
       const points = game.activeCard.attempt === 2 ? (game.bonusMarks || 5) : (game.baseMarks || 10);
@@ -348,6 +351,27 @@ socket.on('pick_card', ({ quizId, cardIndex }) => {
           game.activeCard.attempt = 2;
           game.activeCard.stealPlayer = otherPlayer.name;
           game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed! ${otherPlayer.name} can STEAL for +${game.bonusMarks || 5} pts!` });
+
+          const stealTimeoutId = setTimeout(async () => {
+            if (!game.activeCard || game.activeCard.index !== cardIndex || game.activeCard.attempt !== 2) return;
+            game.cardResults.push({ cardIndex, player: otherPlayer.name, result: 'timeout', points: 0, selectedAnswer: 'Skipped' });
+            game.completedCards.push(cardIndex);
+            game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `⏰ ${otherPlayer.name} ran out of time on Card ${cardIndex + 1}` });
+            game.activeCard = null;
+            cardTimers.delete(quizId);
+            if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
+            io.to(quizId).emit('answer_result', {
+              isCorrect: false,
+              isTimeout: true,
+              cardIndex,
+              answeredBy: otherPlayer.name,
+              scores: game.scores,
+              completedCards: game.completedCards,
+              cardResults: game.cardResults,
+              activityLog: game.activityLog
+            });
+          }, 15000);
+          cardTimers.set(quizId, stealTimeoutId);
           
           // ✅ ENRICHED payload for steal
           io.to(quizId).emit('answer_result', { 

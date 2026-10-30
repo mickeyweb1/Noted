@@ -35,7 +35,7 @@ export default function AddStudent() {
   };
  
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(result?.inviteCode);
+    navigator.clipboard.writeText(result?.studentCode || "");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -72,10 +72,10 @@ export default function AddStudent() {
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a href={`mailto:${result.student.email}?subject=Your Noted Account Credentials&body=Email: ${result.student.email}%0APassword: ${result.tempPassword}%0ASchool Code: ${result.inviteCode}`} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-muted text-foreground text-sm font-medium hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
+            <a href={`mailto:${result.student.email}?subject=Your Noted Account Credentials&body=Email: ${result.student.email}%0APassword: ${result.tempPassword}%0ASchool Code: ${result.studentCode}`} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-muted text-foreground text-sm font-medium hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors">
               <Mail className="w-4 h-4" /> Email Credentials
             </a>
-            <a href={`https://wa.me/?text=Welcome to Noted!%0AEmail: ${result.student.email}%0APassword: ${result.tempPassword}%0ASchool Code: ${result.inviteCode}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-green-500 text-white text-sm font-medium hover:bg-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 transition-colors">
+            <a href={`https://wa.me/?text=Welcome to Noted!%0AEmail: ${result.student.email}%0APassword: ${result.tempPassword}%0ASchool Code: ${result.studentCode}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-green-500 text-white text-sm font-medium hover:bg-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 transition-colors">
               <MessageCircle className="w-4 h-4" /> Share via WhatsApp
             </a>
           </div>
