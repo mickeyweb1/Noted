@@ -17,9 +17,9 @@ export default function FocusTime() {
     const [isRunning, setIsRunning] = useState(false);
     const [activeMode, setActiveMode] = useState("focus");
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isStartingSession, setIsStartingSession] = useState(false);
     
-    // ✅ Refs to track session start and timer safely
-    const sessionStartRef = useRef(null);
+    const sessionIdRef = useRef(null);
     const timerRef = useRef(null);
     
     const { isPlaying: isBeatPlaying, currentBeat, playBeat, pauseBeat } = useMusic();
@@ -47,10 +47,6 @@ export default function FocusTime() {
     useEffect(() => {
         let interval = null;
         if (isRunning && timeLeft > 0) {
-            // Track session start ONLY once when the timer begins
-            if (!sessionStartRef.current) {
-                sessionStartRef.current = new Date();
-            }
             interval = setInterval(() => {
                 setTimeLeft((prev) => prev - 1);
             }, 1000);
@@ -73,13 +69,7 @@ export default function FocusTime() {
     // ✅ 3. The completion logic (defined before the effect that uses it)
     const handleFocusComplete = async () => {
         try {
-            let durationMinutes = activeMode === "shortBreak" ? 5 : activeMode === "longBreak" ? 15 : 25;
-            
-            const response = await api.post('/ai/focus-complete', { 
-                durationMinutes,
-                startTime: sessionStartRef.current,
-                endTime: new Date()
-            });
+            const response = await api.post('/ai/focus-complete', { sessionId: sessionIdRef.current });
             
             if (response.data.success) {
                 setShowSuccess(true);
@@ -91,24 +81,56 @@ export default function FocusTime() {
             }
             
             // Reset session start for the next round
-            sessionStartRef.current = null;
+            sessionIdRef.current = null;
         } catch (error) {
             console.error("Failed to award XP:", error);
             alert(error.response?.data?.message || "Session validation failed");
         }
     };
 
-    const handleModeChange = (mode) => {
+    const cancelActiveFocusSession = async () => {
+        const sessionId = sessionIdRef.current;
+        sessionIdRef.current = null;
+        if (!sessionId) return;
+        try {
+            await api.post('/ai/focus-session/cancel', { sessionId });
+        } catch (error) {
+            console.error('Failed to cancel focus session:', error);
+        }
+    };
+
+    const handleRunToggle = async () => {
+        if (isRunning) {
+            setIsRunning(false);
+            return;
+        }
+        if (activeMode === 'focus' && !sessionIdRef.current) {
+            setIsStartingSession(true);
+            try {
+                const durationMinutes = getTimeForMode('focus') / 60;
+                const response = await api.post('/ai/focus-session/start', { durationMinutes });
+                sessionIdRef.current = response.data.data.sessionId;
+            } catch (error) {
+                alert(error.response?.data?.message || 'Could not start a focus session. Please try again.');
+                setIsStartingSession(false);
+                return;
+            }
+            setIsStartingSession(false);
+        }
+        setIsRunning(true);
+    };
+
+    const handleModeChange = async (mode) => {
+        await cancelActiveFocusSession();
         setActiveMode(mode);
         setIsRunning(false);
         setTimeLeft(getTimeForMode(mode));
-        sessionStartRef.current = null; // Reset start time when mode changes
     };
 
-    const handleReset = () => {
+    const handleReset = async () => {
+        await cancelActiveFocusSession();
         setIsRunning(false);
         setTimeLeft(getTimeForMode(activeMode));
-        sessionStartRef.current = null;
     };
 
     const modes = [
@@ -155,7 +177,7 @@ export default function FocusTime() {
                                 </h2>
                                 <div className="flex items-center justify-center gap-4">
                                     <button onClick={handleReset} className="p-3 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"><RotateCcw className="w-6 h-6" /></button>
-                                    <button onClick={() => setIsRunning(!isRunning)} className={`p-5 rounded-full shadow-lg transition-all active:scale-95 ${activeMode === 'focus' ? 'bg-brand text-brand-foreground shadow-brand/30 hover:bg-brand/90' : 'bg-electric text-electric-foreground shadow-electric/30 hover:bg-electric/90'}`}>
+                                    <button onClick={handleRunToggle} disabled={isStartingSession} className={`p-5 rounded-full shadow-lg transition-all active:scale-95 disabled:opacity-60 ${activeMode === 'focus' ? 'bg-brand text-brand-foreground shadow-brand/30 hover:bg-brand/90' : 'bg-electric text-electric-foreground shadow-electric/30 hover:bg-electric/90'}`}>
                                         {isRunning ? <Pause className="w-8 h-8" fill="currentColor" /> : <Play className="w-8 h-8 ml-1" fill="currentColor" />}
                                     </button>
                                    
@@ -163,7 +185,7 @@ export default function FocusTime() {
   onClick={() => { 
     setIsRunning(false); 
     setTimeLeft(0); 
-    sessionStartRef.current = null; // ✅ This prevents XP from being awarded
+    cancelActiveFocusSession();
     alert("Session skipped. No XP awarded.");
   }} 
   className="p-3 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"

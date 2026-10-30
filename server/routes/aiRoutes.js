@@ -2,7 +2,7 @@ import express from 'express';
 import { getUserLibrary, getSingleContent, deleteContent } from '../controllers/contentController.js';
 import { saveQuizAttempt, getQuizAttempt } from '../controllers/quizController.js';
 import { protect } from '../middleware/protect.js';
-import { completeFocusSession } from '../controllers/userController.js';
+import { cancelFocusSession, completeFocusSession, startFocusSession } from '../controllers/userController.js';
 import { 
   getClassmates, challengeClassmate, getMyBattles, 
   generateChallengeLink, acceptBattle, resolveBattle,
@@ -35,6 +35,8 @@ router.post('/music/analyze-vibe', protect, analyzeVibe);
 // ✅ FIXED: Removed the extra "/ai/" so it correctly maps to /api/ai/text-to-speech
 router.post('/text-to-speech', protect, generateSpeech); 
 
+router.post('/focus-session/start', protect, startFocusSession);
+router.post('/focus-session/cancel', protect, cancelFocusSession);
 router.post('/focus-complete', protect, completeFocusSession);
 router.post('/attempt', protect, saveQuizAttempt);
 router.get('/attempt/:id', protect, getQuizAttempt);
