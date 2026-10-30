@@ -170,9 +170,9 @@ const persistGameShowSubmissions = async (submissions) => {
 
 const queueGameShowSubmissions = async (quizId, submissions, complete = false) => {
   await mkdir(gameShowOutboxDir, { recursive: true, mode: 0o700 });
-  const outboxPath = path.join(gameShowOutboxDir, `${quizId}-${randomUUID()}.json`);
+  const outboxPath = path.join(gameShowOutboxDir, `${quizId}-${Date.now()}-${randomUUID()}.json`);
   const tempPath = `${outboxPath}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tempPath, JSON.stringify({ quizId, submissions, complete }), { mode: 0o600 });
+  await writeFile(tempPath, JSON.stringify({ quizId, submissions, complete, createdAt: new Date().toISOString() }), { mode: 0o600 });
   await rename(tempPath, outboxPath);
   return outboxPath;
 };
@@ -189,6 +189,7 @@ const flushGameShowOutbox = async () => {
     }
   }
 
+  const records = [];
   for (const filename of filenames) {
     const outboxPath = path.join(gameShowOutboxDir, filename);
     try {
@@ -196,6 +197,17 @@ const flushGameShowOutbox = async () => {
       if (!record.quizId || !Array.isArray(record.submissions)) {
         throw new Error('Invalid Game Show result outbox record');
       }
+      records.push({ filename, outboxPath, record });
+    } catch (error) {
+      failed = true;
+      console.error(`Failed to read Game Show result outbox file ${filename}:`, error);
+    }
+  }
+
+  records.sort((a, b) => Number(a.record.complete) - Number(b.record.complete)
+    || Date.parse(a.record.createdAt || 0) - Date.parse(b.record.createdAt || 0));
+  for (const { filename, outboxPath, record } of records) {
+    try {
       await persistGameShowSubmissions(record.submissions);
       await unlink(outboxPath);
       if (record.complete) await removeActiveGameSnapshot(record.quizId);
