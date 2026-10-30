@@ -467,6 +467,7 @@ socket.on('pick_card', async ({ quizId, cardIndex }) => {
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `✅ ${exactPlayerName} got it right! (+${points} pts)` });
       
       game.activeCard = null;
+      await persistActiveGameSnapshot(game);
       if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
 
       // ✅ ENRICHED payload
@@ -487,6 +488,7 @@ socket.on('pick_card', async ({ quizId, cardIndex }) => {
           game.activeCard.attempt = 2;
           game.activeCard.stealPlayer = otherPlayer.name;
           game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed! ${otherPlayer.name} can STEAL for +${game.bonusMarks || 5} pts!` });
+          await persistActiveGameSnapshot(game);
 
           const stealTimeoutId = setTimeout(async () => {
             if (!game.activeCard || game.activeCard.index !== cardIndex || game.activeCard.attempt !== 2) return;
@@ -495,6 +497,7 @@ socket.on('pick_card', async ({ quizId, cardIndex }) => {
             game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `⏰ ${otherPlayer.name} ran out of time on Card ${cardIndex + 1}` });
             game.activeCard = null;
             cardTimers.delete(quizId);
+            await persistActiveGameSnapshot(game);
             if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
             io.to(quizId).emit('answer_result', {
               isCorrect: false,
@@ -530,6 +533,7 @@ socket.on('pick_card', async ({ quizId, cardIndex }) => {
       game.activityLog.push({ time: new Date().toLocaleTimeString(), message: `❌ ${exactPlayerName} missed it. Card closed.` });
       
       game.activeCard = null;
+      await persistActiveGameSnapshot(game);
       if (game.completedCards.length === game.questions.length) await saveGameShowResults(game);
 
       // ✅ ENRICHED payload
@@ -550,6 +554,7 @@ socket.on('pick_card', async ({ quizId, cardIndex }) => {
     for (const [quizId, game] of activeGames.entries()) {
       const player = game.players.find(p => p.id === socket.id);
       if (player && game.status === 'live') {
+        player.id = null;
         const playerResults = game.cardResults.filter(r => r.player === player.name);
         const totalScore = playerResults.reduce((sum, r) => sum + r.points, 0);
         const submissionAnswers = game.questions.map((q, idx) => {
@@ -559,15 +564,29 @@ socket.on('pick_card', async ({ quizId, cardIndex }) => {
 
         const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
         const maxScore = game.questions.length * (game.baseMarks || 10);
+        const submission = {
+          quiz: game.quizId,
+          studentName: player.name,
+          studentSurname: "GameShow",
+          studentClass: "Live Match",
+          accessCode: safeAccessCode,
+          answers: submissionAnswers,
+          score: totalScore,
+          totalQuestions: game.questions.length,
+          maxScore,
+          timeTaken: 0,
+          tabSwitchCount: 0,
+          gameMode: 'gameShow'
+        };
 
         try {
-          await QuizSubmission.findOneAndUpdate(
-            { quiz: game.quizId, accessCode: safeAccessCode },
-            { quiz: game.quizId, studentName: player.name, studentSurname: "GameShow", studentClass: "Live Match", accessCode: safeAccessCode, answers: submissionAnswers, score: totalScore, totalQuestions: game.questions.length, maxScore: maxScore, timeTaken: 0, tabSwitchCount: 0, gameMode: 'gameShow' },
-            { upsert: true, returnDocument: 'after' }
-          );
+          await persistActiveGameSnapshot(game);
+          const outboxPath = await queueGameShowSubmissions(game.quizId, [submission]);
+          await persistGameShowSubmissions([submission]);
+          await unlink(outboxPath);
         } catch (err) {
-          console.error("Failed to auto-save disconnected player result:", err);
+          console.error("Failed to auto-save disconnected player result; retaining it in the Game Show outbox:", err);
+          void flushGameShowOutbox();
         }
       }
     }
