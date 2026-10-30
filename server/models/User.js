@@ -44,6 +44,8 @@ const userSchema = new mongoose.Schema({
       opponentAnswers: { type: [String], default: [] },
       challengerSubmitted: { type: Boolean, default: false },
       opponentSubmitted: { type: Boolean, default: false },
+      challengerReady: { type: Boolean, default: false },
+      opponentReady: { type: Boolean, default: false },
       inviteCode: { type: String },
       createdAt: { type: Date, default: Date.now }
     }],

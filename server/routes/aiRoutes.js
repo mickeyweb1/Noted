@@ -6,7 +6,7 @@ import { completeFocusSession } from '../controllers/userController.js';
 import { 
   getClassmates, challengeClassmate, getMyBattles, 
   generateChallengeLink, acceptBattle, resolveBattle,
-  checkBattleStatus, startBattle 
+  checkBattleStatus, startBattle, markBattleReady
 } from '../controllers/battleController.js';
 import { 
   generateContent, 
@@ -57,6 +57,7 @@ router.get('/battle/pending', protect, getMyBattles);
 router.post('/battle/generate-link', protect, generateChallengeLink);
 router.post('/battle/accept', protect, acceptBattle);
 router.get('/battle/status', protect, checkBattleStatus);
+router.post('/battle/ready', protect, markBattleReady);
 router.post('/battle/start', protect, startBattle);
 router.post('/battle/resolve', protect, resolveBattle);
 

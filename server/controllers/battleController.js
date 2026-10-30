@@ -185,8 +185,10 @@ export const checkBattleStatus = async (req, res, next) => {
     const ownScore = isChallenger ? battle.challengerScore : battle.opponentScore;
     const opponentScore = isChallenger ? battle.opponentScore : battle.challengerScore;
     const ownSubmitted = isChallenger ? battle.challengerSubmitted : battle.opponentSubmitted;
+    const opponentReady = isChallenger ? battle.opponentReady : battle.challengerReady;
     res.status(200).json({ success: true, data: {
       status: battle.status,
+      opponentReady,
       submitted: ownSubmitted,
       result: battle.status === 'completed' ? {
         score: ownScore,
@@ -195,6 +197,24 @@ export const checkBattleStatus = async (req, res, next) => {
         won: ownScore > opponentScore,
       } : null,
     } });
+  } catch (error) { next(error); }
+};
+
+export const markBattleReady = async (req, res, next) => {
+  try {
+    const { battleId, ready } = req.body || {};
+    if (typeof ready !== 'boolean') return res.status(400).json({ success: false, message: "Ready must be true or false." });
+    const owner = await User.findOne({ 'pendingBattles._id': battleId });
+    const battle = owner?.pendingBattles.id(battleId);
+    if (!battle) return res.status(404).json({ success: false, message: "Battle not found." });
+    const isChallenger = String(battle.challengerId) === String(req.user._id);
+    const isOpponent = String(battle.opponentId) === String(req.user._id);
+    if (!isChallenger && !isOpponent) return res.status(403).json({ success: false, message: "You are not a participant in this battle." });
+    if (battle.status !== 'joined') return res.status(409).json({ success: false, message: "This battle is not ready for players yet." });
+    if (isChallenger) battle.challengerReady = ready;
+    else battle.opponentReady = ready;
+    await owner.save();
+    res.json({ success: true, data: { ready } });
   } catch (error) { next(error); }
 };
 
@@ -207,7 +227,7 @@ export const startBattle = async (req, res, next) => {
     const battle = user.pendingBattles ? user.pendingBattles.id(battleId) : null;
     if (!battle) return res.status(404).json({ success: false, message: "Battle not found" });
 
-    if (battle.status !== 'joined' || !battle.opponentId) {
+    if (battle.status !== 'joined' || !battle.opponentId || !battle.challengerReady || !battle.opponentReady) {
       return res.status(409).json({ success: false, message: "A player must join before the battle can start." });
     }
     battle.status = 'active';
