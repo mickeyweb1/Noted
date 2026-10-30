@@ -325,7 +325,6 @@ export function QuizResultsDashboard() {
             )}
           </div>
         </div>
-        </div>
 
         {quizzes.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card shadow-sm">
