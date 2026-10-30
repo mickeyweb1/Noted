@@ -397,8 +397,8 @@ export default function BattleArena() {
           })}
         </div>
         {isAnswered && (
-          <div className={`mt-4 p-3 rounded-lg text-sm border ${selectedOption === currentQ.correctAnswer ? "bg-green-500/10 border-green-500/25 text-green-700 dark:text-green-400" : "bg-destructive/10 border-destructive/25 text-destructive"}`}>
-            <span className="font-bold">{selectedOption === currentQ.correctAnswer ? "Correct! 🎉" : "Time's up or Wrong!"}</span> {currentQ.explanation}
+          <div className="mt-4 p-3 rounded-lg text-sm border bg-muted text-muted-foreground">
+            <span className="font-bold">Answer recorded.</span> Your score will be revealed when both players finish.
           </div>
         )}
       </div>
