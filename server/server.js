@@ -83,20 +83,27 @@ const cardTimers = new Map();
 const gameShowOutboxDir = process.env.GAME_SHOW_OUTBOX_DIR || path.join(__dirname, 'data', 'game-show-outbox');
 const activeGameSnapshotsDir = path.join(gameShowOutboxDir, 'active-games');
 let gameShowOutboxRetryTimer = null;
+const pendingResultWrites = new Map();
 
 const persistActiveGameSnapshot = async (game) => {
-  await mkdir(activeGameSnapshotsDir, { recursive: true, mode: 0o700 });
-  const snapshotPath = path.join(activeGameSnapshotsDir, `${game.quizId}.json`);
-  const tempPath = `${snapshotPath}.${process.pid}.${Date.now()}.tmp`;
-  const snapshot = {
-    ...game,
-    adminSocketId: null,
-    savingToDb: false,
-    saveRetryTimer: null,
-    players: game.players.map((player) => ({ ...player, id: null }))
-  };
-  await writeFile(tempPath, JSON.stringify(snapshot), { mode: 0o600 });
-  await rename(tempPath, snapshotPath);
+  try {
+    await mkdir(activeGameSnapshotsDir, { recursive: true, mode: 0o700 });
+    const snapshotPath = path.join(activeGameSnapshotsDir, `${game.quizId}.json`);
+    const tempPath = `${snapshotPath}.${process.pid}.${Date.now()}.tmp`;
+    const snapshot = {
+      ...game,
+      adminSocketId: null,
+      savingToDb: false,
+      saveRetryTimer: null,
+      players: game.players.map((player) => ({ ...player, id: null }))
+    };
+    await writeFile(tempPath, JSON.stringify(snapshot), { mode: 0o600 });
+    await rename(tempPath, snapshotPath);
+    return true;
+  } catch (error) {
+    console.error(`Failed to persist active Game Show snapshot for quiz ${game.quizId}:`, error);
+    return false;
+  }
 };
 
 const removeActiveGameSnapshot = async (quizId) => {
@@ -145,11 +152,19 @@ const loadActiveGameSnapshots = async () => {
 const persistGameShowSubmissions = async (submissions) => {
   for (const submission of submissions) {
     const { quiz, accessCode, ...values } = submission;
-    await QuizSubmission.findOneAndUpdate(
+    const key = `${quiz}:${accessCode}`;
+    const previous = pendingResultWrites.get(key) || Promise.resolve();
+    const write = previous.catch(() => {}).then(() => QuizSubmission.findOneAndUpdate(
       { quiz, accessCode },
       { quiz, accessCode, ...values },
       { upsert: true, returnDocument: 'after' }
-    );
+    ));
+    pendingResultWrites.set(key, write);
+    try {
+      await write;
+    } finally {
+      if (pendingResultWrites.get(key) === write) pendingResultWrites.delete(key);
+    }
   }
 };
 
