@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 temp_videos/
+server/data/game-show-outbox/
 *.local
 
 # Editor directories and files
