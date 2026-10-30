@@ -720,20 +720,6 @@ const handleRevokeShare = async (shareCode) => {
 
                 {/* ✅ NEW: Access Code History Section */}
         <section className="rounded-2xl border border-border bg-card shadow-sm">
-          <button 
-            onClick={() => setShowCodeHistory(!showCodeHistory)} 
-            className={`flex w-full items-center justify-between gap-3 rounded-2xl p-5 text-left sm:p-6 ${focusRing}`}
-          >
-            <span className="flex items-center gap-2 text-lg font-bold text-foreground">
-              <Clock className="h-5 w-5 text-brand" /> Manage Access Codes
-            </span>
-            <span className="flex items-center gap-1 text-sm text-muted-foreground">
-              {showCodeHistory ? "Hide" : "Show"} {showCodeHistory ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </span>
-            <span className="ml-auto rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand">
-              {quizData?.accessCodeHistory?.length || 0} Codes
-            </span>
-          </button>
 
           {showCodeHistory && (
             <div className="border-t border-border p-5 sm:p-6">
@@ -877,8 +863,7 @@ const handleRevokeShare = async (shareCode) => {
             </div>
             {topicMastery.filter((topic) => topic.studentCount >= 3).length === 0 ? (
               <p className="mt-4 rounded-xl bg-muted p-4 text-sm leading-6 text-muted-foreground">
-                No topic groups to show yet. Add topic labels to questions when creating a quiz, then collect at least 3 submissions to see class-level patterns here.
-              </p>
+                              </p>
             ) : (
               <ul className="mt-5 space-y-4">
                 {topicMastery.filter((topic) => topic.studentCount >= 3).map((topic) => {
