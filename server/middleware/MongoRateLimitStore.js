@@ -21,7 +21,7 @@ export class MongoRateLimitStore {
 
     try {
       const newWindowRecord = await RateLimitCounter.findOneAndUpdate(
-        { _id: key },
+        { _id: key, resetAt: { $lte: now } },
         { $set: { hits: 1, resetAt: new Date(now.getTime() + this.windowMs) } },
         { upsert: true, returnDocument: 'after' }
       );
