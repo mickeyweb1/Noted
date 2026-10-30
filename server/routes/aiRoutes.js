@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { getUserLibrary, getSingleContent, deleteContent } from '../controllers/contentController.js';
 import { saveQuizAttempt, getQuizAttempt } from '../controllers/quizController.js';
 import { protect } from '../middleware/protect.js';
+import { MongoRateLimitStore } from '../middleware/MongoRateLimitStore.js';
 import { cancelFocusSession, completeFocusSession, startFocusSession } from '../controllers/userController.js';
 import { 
   getClassmates, challengeClassmate, getMyBattles, 
@@ -26,6 +27,8 @@ const router = express.Router();
 const expensiveAiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 10,
+  keyGenerator: (req) => `user:${req.user._id}`,
+  store: new MongoRateLimitStore(),
   message: { success: false, message: 'AI media limit reached. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false
