@@ -1,4 +1,5 @@
 import path from 'path';
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
@@ -78,6 +79,64 @@ const io = new Server(server, {
 
 const activeGames = new Map();
 const cardTimers = new Map();
+const gameShowOutboxDir = process.env.GAME_SHOW_OUTBOX_DIR || path.join(__dirname, 'data', 'game-show-outbox');
+let gameShowOutboxRetryTimer = null;
+
+const persistGameShowSubmissions = async (submissions) => {
+  for (const submission of submissions) {
+    const { quiz, accessCode, ...values } = submission;
+    await QuizSubmission.findOneAndUpdate(
+      { quiz, accessCode },
+      { quiz, accessCode, ...values },
+      { upsert: true, returnDocument: 'after' }
+    );
+  }
+};
+
+const queueGameShowSubmissions = async (quizId, submissions) => {
+  await mkdir(gameShowOutboxDir, { recursive: true, mode: 0o700 });
+  const outboxPath = path.join(gameShowOutboxDir, `${quizId}.json`);
+  const tempPath = `${outboxPath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tempPath, JSON.stringify({ quizId, submissions }), { mode: 0o600 });
+  await rename(tempPath, outboxPath);
+  return outboxPath;
+};
+
+const flushGameShowOutbox = async () => {
+  let failed = false;
+  let filenames = [];
+  try {
+    filenames = (await readdir(gameShowOutboxDir)).filter((name) => name.endsWith('.json'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      failed = true;
+      console.error('Failed to read Game Show result outbox:', error);
+    }
+  }
+
+  for (const filename of filenames) {
+    const outboxPath = path.join(gameShowOutboxDir, filename);
+    try {
+      const record = JSON.parse(await readFile(outboxPath, 'utf8'));
+      if (!record.quizId || !Array.isArray(record.submissions)) {
+        throw new Error('Invalid Game Show result outbox record');
+      }
+      await persistGameShowSubmissions(record.submissions);
+      await unlink(outboxPath);
+      console.log(`✅ Recovered pending Game Show results for quiz ${record.quizId}`);
+    } catch (error) {
+      failed = true;
+      console.error(`Failed to flush Game Show result outbox file ${filename}:`, error);
+    }
+  }
+
+  if (failed && !gameShowOutboxRetryTimer) {
+    gameShowOutboxRetryTimer = setTimeout(() => {
+      gameShowOutboxRetryTimer = null;
+      void flushGameShowOutbox();
+    }, 30_000);
+  }
+};
 
 const saveGameShowResults = async (game) => {
   if (game.completedCards.length !== game.questions.length || game.savedToDb || game.savingToDb) return;
@@ -85,6 +144,7 @@ const saveGameShowResults = async (game) => {
   game.savingToDb = true;
   try {
     const maxScore = game.questions.length * (game.baseMarks || 10);
+    const submissions = [];
     
     for (const player of game.players) {
       if (player.name === "Admin" || player.name.toLowerCase() === "admin") continue;
@@ -103,25 +163,25 @@ const saveGameShowResults = async (game) => {
 
       const safeAccessCode = `GS_${game.quizId}_${player.name.replace(/[^a-zA-Z0-9]/g, '')}`;
 
-      await QuizSubmission.findOneAndUpdate(
-        { quiz: game.quizId, accessCode: safeAccessCode },
-        {
-          quiz: game.quizId,
-          studentName: player.name,
-          studentSurname: "GameShow",
-          studentClass: "Live Match",
-          accessCode: safeAccessCode,
-          answers: submissionAnswers,
-          score: totalScore,
-          totalQuestions: game.questions.length,
-          maxScore: maxScore,
-          timeTaken: 0,
-          tabSwitchCount: 0,
-          gameMode: 'gameShow'
-        },
-        { upsert: true, returnDocument: 'after' }
-      );
+      submissions.push({
+        quiz: game.quizId,
+        studentName: player.name,
+        studentSurname: "GameShow",
+        studentClass: "Live Match",
+        accessCode: safeAccessCode,
+        answers: submissionAnswers,
+        score: totalScore,
+        totalQuestions: game.questions.length,
+        maxScore,
+        timeTaken: 0,
+        tabSwitchCount: 0,
+        gameMode: 'gameShow'
+      });
     }
+
+    const outboxPath = await queueGameShowSubmissions(game.quizId, submissions);
+    await persistGameShowSubmissions(submissions);
+    await unlink(outboxPath);
     game.savedToDb = true;
     console.log(`✅ Game show results permanently saved to database for quiz ${game.quizId}`);
     if (activeGames.get(game.quizId) === game) activeGames.delete(game.quizId);
@@ -459,8 +519,9 @@ if (!MONGO_URI) {
 }
 
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 })
-  .then(() => {
+  .then(async () => {
     console.log('✅ Connected to MongoDB Atlas!');
+    await flushGameShowOutbox();
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🔌 Socket.io ready!`);
