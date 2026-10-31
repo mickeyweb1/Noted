@@ -143,6 +143,18 @@ export function UserContextProvider({ children }) {
     }));
   };
 
+  const refreshUser = async () => {
+  const currentToken = localStorage.getItem("userToken") || localStorage.getItem("token");
+  if (!currentToken) return null;
+  const response = await api.get("/auth/me", { headers: { Authorization: `Bearer ${currentToken}` } });
+  const data = response.data.data || response.data;
+  const clean = { ...data, role: data.role?.replace(/"/g, "") || data.role };
+  setUser(clean);
+  localStorage.setItem("userInfo", JSON.stringify(clean));
+  localStorage.setItem("user", JSON.stringify(clean));
+  return clean;
+};
+
   return (
     <UserContext.Provider
       value={{ 
@@ -153,6 +165,7 @@ export function UserContextProvider({ children }) {
         login, 
         logout, 
         updateUser, 
+         refreshUser,
         formState, 
         setPage, 
         updateUserField 
