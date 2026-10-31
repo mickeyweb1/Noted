@@ -5,6 +5,7 @@ import {
   Image as ImageIcon, Upload, AlertTriangle, ArrowLeft,
 } from "lucide-react";
 import api from "../utils/api";
+import useMyLimits from "../hooks/useMyLimits";
 import {
   focusRing, inputCls, card, primaryBtn, secondaryBtn, iconBtnDanger,
   Field, SelectField, NumberInput, ErrorNote, CodeChip, QuestionReviewList,
@@ -12,9 +13,11 @@ import {
 } from "../components/QuizFormKit";
 
 /* ------------------------------------------------------------------ */
-/* Limits. Keep these in sync with the backend validation.             */
+/* Hard caps. The user's PLAN limits (from /quiz/my-limits) can only   */
+/* make these smaller. Keep in sync with the backend validation.       */
 /* ------------------------------------------------------------------ */
-const MAX_QUESTIONS = 50;
+const MAX_QUESTIONS = 50;          // AI questions per request
+const MAX_MANUAL_QUESTIONS = 200;  // manual questions per quiz (backend caps at 200)
 const MAX_STUDENTS = 500;
 const MAX_TAB_SWITCHES = 100;
 const NOTES_MAX = 20000;
@@ -61,6 +64,7 @@ const readAsDataURL = (file) =>
 export default function AdminQuizGenerator() {
   const navigate = useNavigate();
   const { copy, copiedKey } = useClipboard();
+  const { limits, refresh: refreshLimits } = useMyLimits();
 
   const [activeTab, setActiveTab] = useState("ai");
   const [errorMessage, setErrorMessage] = useState("");
@@ -81,6 +85,23 @@ export default function AdminQuizGenerator() {
   const [uploadingCid, setUploadingCid] = useState(null);
 
   const tabRefs = useRef({});
+
+  /* ---------------- plan limits ---------------- */
+  // Real maximums for THIS user. Before limits load we fall back to the hard caps (the server still enforces).
+  const maxQ = Math.min(MAX_QUESTIONS, limits?.maxQuestionsPerQuiz ?? MAX_QUESTIONS);
+  const maxS = Math.min(MAX_STUDENTS, limits?.maxStudents ?? MAX_STUDENTS);
+  const creditsLeft = limits?.credits?.remaining ?? null; // null = unlimited / not loaded
+  const planLocked = Boolean(limits?.locked);
+
+  // Pre-fill the form with values the plan allows (the default of 30 students failed on Free).
+  useEffect(() => {
+    if (!limits) return;
+    setMetadata((prev) => ({
+      ...prev,
+      numStudents: String(Math.min(Number(prev.numStudents) || 1, maxS)),
+      numQuestions: String(Math.min(Number(prev.numQuestions) || 1, maxQ)),
+    }));
+  }, [limits, maxQ, maxS]);
 
   const setField = (field) => (value) => {
     setErrorMessage("");
@@ -106,9 +127,9 @@ export default function AdminQuizGenerator() {
     const maxTime = metadata.timeUnit === "minutes" ? 600 : 3600;
     const minTime = metadata.timeUnit === "minutes" ? 1 : 5;
     const numQuestions = needQuestionCount
-      ? readInt(metadata.numQuestions, "Number of questions", 1, MAX_QUESTIONS)
+      ? readInt(metadata.numQuestions, "Number of questions", 1, maxQ)
       : { value: 0 };
-    const numStudents = readInt(metadata.numStudents, "Number of students", 1, MAX_STUDENTS);
+    const numStudents = readInt(metadata.numStudents, "Number of students", 1, maxS);
     const timeLimit = readInt(metadata.timeLimit, "Time limit", minTime, maxTime);
     const bad = [numQuestions, numStudents, timeLimit].find((r) => r.error);
     if (bad) return { error: bad.error };
@@ -206,6 +227,12 @@ export default function AdminQuizGenerator() {
     if (notes.length > NOTES_MAX) {
       return setErrorMessage(`Your notes are too long. Keep them under ${NOTES_MAX.toLocaleString()} characters.`);
     }
+    // Friendly early check; the server is still the real gate.
+    if (creditsLeft !== null && s.value.numQuestions > creditsLeft) {
+      return setErrorMessage(
+        `You only have ${creditsLeft} AI credit${creditsLeft === 1 ? "" : "s"} left this month. Ask for fewer questions or upgrade your plan.`
+      );
+    }
 
     setIsGenerating(true);
     setErrorMessage("");
@@ -227,6 +254,7 @@ export default function AdminQuizGenerator() {
       setErrorMessage(err.response?.data?.message || "Couldn't generate questions. Try again.");
     } finally {
       setIsGenerating(false);
+      refreshLimits(); // credits changed (spent, or refunded after a failure)
     }
   };
 
@@ -244,7 +272,7 @@ export default function AdminQuizGenerator() {
         numQuestions: questions.length,
         maxTabSwitches: settings.maxTabSwitches,
         layoutMode: settings.layoutMode,
-              showAnswersAfterSubmission: settings.showAnswersAfterSubmission,
+        showAnswersAfterSubmission: settings.showAnswersAfterSubmission,
         questions,
         useAIAutocomplete: false,
       });
@@ -267,7 +295,7 @@ export default function AdminQuizGenerator() {
     await createQuiz(s.value, previewQuestions.map(toPayloadQuestion));
   };
 
-  // ✅ NEW: Add a blank custom question to the AI review list
+  // Add a blank custom question to the AI review list
   const addQuestionToPreview = () => {
     setPreviewQuestions((prev) => [
       ...prev,
@@ -315,8 +343,10 @@ export default function AdminQuizGenerator() {
     setRequestedCount(null);
     setManualQuestions([emptyQuestion()]);
     setNotes("");
+    setFocusTopics("");
     setIsReviewing(false);
     setErrorMessage("");
+    refreshLimits();
   };
 
   const switchTab = (id) => {
@@ -337,6 +367,7 @@ export default function AdminQuizGenerator() {
 
   const locked = !!generatedQuiz || isGenerating;
   const isAI = activeTab === "ai";
+  const outOfCredits = creditsLeft !== null && creditsLeft <= 0;
 
   return (
     <div className="min-h-dvh bg-background p-4 md:p-8">
@@ -352,6 +383,7 @@ export default function AdminQuizGenerator() {
         </div>
 
         <ErrorNote>{errorMessage}</ErrorNote>
+        {planLocked && <ErrorNote>{limits.locked}</ErrorNote>}
 
         {!generatedQuiz && (
           <div role="tablist" aria-label="How to add questions" onKeyDown={onTabKeyDown} className="flex w-full gap-1 rounded-xl border border-border bg-card p-1 sm:w-fit">
@@ -401,7 +433,7 @@ export default function AdminQuizGenerator() {
               </Field>
 
               {isAI ? (
-                <Field label="Number of questions" htmlFor="quiz-questions" hint={`1 to ${MAX_QUESTIONS}. The AI may return fewer.`}>
+                <Field label="Number of questions" htmlFor="quiz-questions" hint={`1 to ${maxQ} on your plan. The AI may return fewer.`}>
                   <NumberInput id="quiz-questions" aria-describedby="quiz-questions-hint" value={metadata.numQuestions} onChange={setField("numQuestions")} placeholder="e.g., 5" />
                 </Field>
               ) : (
@@ -413,14 +445,15 @@ export default function AdminQuizGenerator() {
                 </div>
               )}
 
-              <Field label="Number of students (codes)" htmlFor="quiz-students" hint={`1 to ${MAX_STUDENTS}. One access code is created per student.`}>
+              <Field label="Number of students (codes)" htmlFor="quiz-students" hint={`1 to ${maxS} on your plan. One access code is created per student.`}>
                 <NumberInput id="quiz-students" aria-describedby="quiz-students-hint" value={metadata.numStudents} onChange={setField("numStudents")} placeholder="e.g., 30" />
               </Field>
 
               <Field label="Max tab switches (optional)" htmlFor="quiz-tabs" hint="Leave blank to turn this off.">
                 <NumberInput id="quiz-tabs" aria-describedby="quiz-tabs-hint" value={metadata.maxTabSwitches} onChange={setField("maxTabSwitches")} placeholder="e.g., 6" />
               </Field>
-                            <Field label="Question layout" htmlFor="quiz-layout">
+
+              <Field label="Question layout" htmlFor="quiz-layout">
                 <SelectField id="quiz-layout" value={metadata.layoutMode} onChange={(e) => setField("layoutMode")(e.target.value)}>
                   <option value="scroll">Scroll (All questions at once)</option>
                   <option value="paginated">One by one (Paginated)</option>
@@ -474,10 +507,10 @@ export default function AdminQuizGenerator() {
               {requestedCount !== null && previewQuestions.length !== requestedCount && <> You asked for {requestedCount}.</>}
             </p>
 
-            {/* ✅ NEW: Add Custom Question Button */}
             <button
               onClick={addQuestionToPreview}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand/50 bg-brand/5 py-3 text-sm font-semibold text-brand transition hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              disabled={previewQuestions.length >= MAX_MANUAL_QUESTIONS}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-brand/50 bg-brand/5 py-3 text-sm font-semibold text-brand transition hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50"
             >
               <Plus className="h-4 w-4" /> Add Custom Question
             </button>
@@ -488,7 +521,7 @@ export default function AdminQuizGenerator() {
               <button onClick={() => { setIsReviewing(false); setErrorMessage(""); }} disabled={isGenerating} className={`${secondaryBtn} flex-1`}>
                 Back to notes
               </button>
-              <button onClick={handleFinalizeQuiz} disabled={isGenerating || previewQuestions.length === 0} className={`${primaryBtn} flex-1`}>
+              <button onClick={handleFinalizeQuiz} disabled={isGenerating || planLocked || previewQuestions.length === 0} className={`${primaryBtn} flex-1`}>
                 {isGenerating ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
                 Create quiz and get codes
               </button>
@@ -498,9 +531,20 @@ export default function AdminQuizGenerator() {
 
         {isAI && !isReviewing && !generatedQuiz && (
           <div role="tabpanel" id="panel-ai" aria-labelledby="tab-ai" className={`${card} space-y-4`}>
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-              <Sparkles className="h-5 w-5 text-brand" /> AI question generator
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Sparkles className="h-5 w-5 text-brand" /> AI question generator
+              </h2>
+              {limits?.credits?.total != null && (
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    outOfCredits ? "bg-destructive/10 text-destructive" : "bg-brand-soft text-brand"
+                  }`}
+                >
+                  {creditsLeft} / {limits.credits.total} AI credits left
+                </span>
+              )}
+            </div>
             <div>
               <input
                 type="file"
@@ -553,18 +597,23 @@ export default function AdminQuizGenerator() {
               {notes.length.toLocaleString()} / {NOTES_MAX.toLocaleString()} characters
             </p>
             <Field label="Specific Topics to Focus On (Optional)" htmlFor="quiz-topics" hint="e.g., Photosynthesis, Chapter 3. Leave blank to use the whole note.">
-  <input
-    id="quiz-topics"
-    type="text"
-    placeholder="e.g., Topic 1, Topic 2"
-    value={focusTopics}
-    onChange={(e) => setFocusTopics(e.target.value)}
-    className={inputCls}
-  />
-</Field>
-            <button onClick={handleAIGenerate} disabled={isGenerating || isUploadingNotes || !notes.trim()} className={`${primaryBtn} w-full`}>
+              <input
+                id="quiz-topics"
+                type="text"
+                maxLength={200}
+                placeholder="e.g., Topic 1, Topic 2"
+                value={focusTopics}
+                onChange={(e) => setFocusTopics(e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+            <button
+              onClick={handleAIGenerate}
+              disabled={isGenerating || isUploadingNotes || planLocked || outOfCredits || !notes.trim() || notes.length > NOTES_MAX}
+              className={`${primaryBtn} w-full`}
+            >
               {isGenerating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
-              {isGenerating ? "Generating…" : "Generate questions for review"}
+              {isGenerating ? "Generating…" : outOfCredits ? "Out of AI credits" : "Generate questions for review"}
             </button>
           </div>
         )}
@@ -687,12 +736,16 @@ export default function AdminQuizGenerator() {
 
             <button
               onClick={() => setManualQuestions((prev) => [...prev, emptyQuestion()])}
-              disabled={manualQuestions.length >= MAX_QUESTIONS}
+              disabled={manualQuestions.length >= MAX_MANUAL_QUESTIONS}
               className={`flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-4 font-semibold text-muted-foreground transition hover:border-brand/50 hover:text-brand disabled:opacity-50 ${focusRing}`}
             >
               <Plus className="h-4 w-4" /> Add question
             </button>
-            <button onClick={handleCreateManualQuiz} disabled={isGenerating || uploadingCid !== null} className={`${primaryBtn} w-full py-4 text-lg`}>
+            <button
+              onClick={handleCreateManualQuiz}
+              disabled={isGenerating || planLocked || uploadingCid !== null}
+              className={`${primaryBtn} w-full py-4 text-lg`}
+            >
               {isGenerating && <Loader2 className="h-5 w-5 animate-spin" />}
               {uploadingCid !== null ? "Uploading image…" : "Create quiz and get codes"}
             </button>
