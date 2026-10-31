@@ -78,6 +78,20 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 /* ------------------------------------------------------------------ */
 const CODE_LIFETIME_DAYS = 30;
 
+// Helper to check if a teacher's school owner has an active subscription
+const checkSchoolOwnerSubscription = async (user) => {
+  if (user.role === 'teacher' && user.schoolOwnerId) {
+    const schoolOwner = await User.findById(user.schoolOwnerId).select('subscriptionStatus');
+    if (!schoolOwner || schoolOwner.subscriptionStatus !== 'active') {
+      return { 
+        allowed: false, 
+        message: 'Upgrade Required: This feature is locked because your school admin has not upgraded the subscription yet. Please contact your admin to unlock full access.' 
+      };
+    }
+  }
+  return { allowed: true };
+};
+
 // Plan limits (this was missing from the last version, so nothing was being enforced)
 const getLimits = (user) => {
   const active = !user.subscriptionStatus || user.subscriptionStatus === 'active';
@@ -85,7 +99,13 @@ const getLimits = (user) => {
     return { maxQuestions: 9999, maxStudents: 9999, maxGameShows: 9999, isUnlimited: true };
   }
   if (active && user.subscriptionTier === 'pro') return { maxQuestions: 60, maxStudents: 40, maxGameShows: 12, isUnlimited: false };
-  if (user.role === 'teacher' && user.schoolOwnerId) return { maxQuestions: 50, maxStudents: 30, maxGameShows: 8, isUnlimited: false };
+  if (user.role === 'teacher' && user.schoolOwnerId) {
+  // Check if school owner has active subscription
+  const schoolOwner = await User.findById(user.schoolOwnerId).select('subscriptionStatus');
+  if (schoolOwner?.subscriptionStatus === 'active') {
+    return { maxQuestions: 50, maxStudents: 30, maxGameShows: 8, isUnlimited: false };
+  }
+}
   return { maxQuestions: 40, maxStudents: 25, maxGameShows: 0, isUnlimited: false };
 };
 
@@ -176,6 +196,7 @@ const normalizeQuestion = (q) => {
 /* ------------------------------------------------------------------ */
 /* 1. AI preview                                                       */
 /* ------------------------------------------------------------------ */
+
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, focusTopics, difficulty, numQuestions } = req.body || {};
@@ -185,6 +206,13 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
 
     const limits = getLimits(req.user);
+    
+    // ✅ NEW: Check if the teacher's school owner has paid
+    const subCheck = await checkSchoolOwnerSubscription(req.user);
+    if (!subCheck.allowed) {
+      return res.status(403).json({ success: false, message: subCheck.message });
+    }
+
     if (count > limits.maxQuestions) {
       return res.status(403).json({ success: false, message: `Your plan allows up to ${limits.maxQuestions} AI questions per quiz. Upgrade to generate more!` });
     }
@@ -233,6 +261,26 @@ Required JSON format:
   } catch (error) { next(error); }
 });
 
+// Add to create-manual route
+const monthlyQuizzes = await Quiz.countDocuments({
+  createdBy: req.user._id,
+  createdAt: { $gte: new Date(Date.now() - 30 * 86400000) }
+});
+
+const monthlyLimits = {
+  free: 10,
+  pro: 50,
+  teacher: 30,
+  school_owner: 9999
+};
+
+if (monthlyQuizzes >= monthlyLimits[req.user.subscriptionTier]) {
+  return res.status(403).json({ 
+    success: false, 
+    message: 'Monthly quiz limit reached. Upgrade to create more!' 
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* 2. Finalize quiz                                                    */
 /* ------------------------------------------------------------------ */
@@ -246,6 +294,7 @@ router.post('/create-manual', protect, async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Pass mark must be a whole number from 0 to 100.' });
     }
     if (!Array.isArray(questions) || questions.length === 0) return res.status(400).json({ success: false, message: 'A quiz needs at least one question.' });
+    
 
     const cleanQuestions = questions.slice(0, 200).map(normalizeQuestion);
     if (cleanQuestions.some((q) => !q)) {
@@ -255,6 +304,12 @@ router.post('/create-manual', protect, async (req, res, next) => {
     const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
     const studentCount = Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
     const limits = getLimits(req.user);
+
+     // ✅ NEW: Check if the teacher's school owner has paid
+    const subCheck = await checkSchoolOwnerSubscription(req.user);
+    if (!subCheck.allowed) {
+      return res.status(403).json({ success: false, message: subCheck.message });
+    }
 
     if (studentCount > limits.maxStudents) {
       return res.status(403).json({ success: false, message: `Your plan allows up to ${limits.maxStudents} student codes per test. Upgrade to add more!` });
