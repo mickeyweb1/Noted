@@ -93,20 +93,25 @@ const checkSchoolOwnerSubscription = async (user) => {
 };
 
 // Plan limits (this was missing from the last version, so nothing was being enforced)
-const getLimits = (user) => {
+// Plan limits
+const getLimits = async (user) => { // ✅ Made async to safely check school owner
   const active = !user.subscriptionStatus || user.subscriptionStatus === 'active';
+  
   if (user.role === 'super_admin' || (active && user.subscriptionTier === 'school_owner')) {
     return { maxQuestions: 9999, maxStudents: 9999, maxGameShows: 9999, isUnlimited: true };
   }
-  if (active && user.subscriptionTier === 'pro') return { maxQuestions: 60, maxStudents: 40, maxGameShows: 12, isUnlimited: false };
-  if (user.role === 'teacher' && user.schoolOwnerId) {
-  // Check if school owner has active subscription
-  const schoolOwner = await User.findById(user.schoolOwnerId).select('subscriptionStatus');
-  if (schoolOwner?.subscriptionStatus === 'active') {
-    return { maxQuestions: 50, maxStudents: 30, maxGameShows: 8, isUnlimited: false };
+  if (active && user.subscriptionTier === 'pro') {
+    return { maxQuestions: 60, maxStudents: 40, maxGameShows: 12, isUnlimited: false };
   }
-}
-  return { maxQuestions: 40, maxStudents: 25, maxGameShows: 0, isUnlimited: false };
+  if (user.role === 'teacher' && user.schoolOwnerId) {
+    const schoolOwner = await User.findById(user.schoolOwnerId).select('subscriptionStatus');
+    if (schoolOwner?.subscriptionStatus === 'active') {
+      return { maxQuestions: 50, maxStudents: 30, maxGameShows: 8, isUnlimited: false };
+    }
+  }
+  
+  // ✅ FREE TIER LIMITS: Changed to 30 questions and 20 students
+  return { maxQuestions: 30, maxStudents: 20, maxGameShows: 0, isUnlimited: false };
 };
 
 const generateAccessCode = (mode = 'test') => {
@@ -205,7 +210,7 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     }
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
 
-    const limits = getLimits(req.user);
+    const limits = await getLimits(req.user);
     
     // ✅ NEW: Check if the teacher's school owner has paid
     const subCheck = await checkSchoolOwnerSubscription(req.user);
@@ -274,13 +279,6 @@ const monthlyLimits = {
   school_owner: 9999
 };
 
-if (monthlyQuizzes >= monthlyLimits[req.user.subscriptionTier]) {
-  return res.status(403).json({ 
-    success: false, 
-    message: 'Monthly quiz limit reached. Upgrade to create more!' 
-  });
-}
-
 /* ------------------------------------------------------------------ */
 /* 2. Finalize quiz                                                    */
 /* ------------------------------------------------------------------ */
@@ -303,7 +301,15 @@ router.post('/create-manual', protect, async (req, res, next) => {
 
     const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
     const studentCount = Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
-    const limits = getLimits(req.user);
+   const limits = await getLimits(req.user);
+
+    const userTier = req.user.subscriptionTier || 'free';
+    if (monthlyQuizzes >= monthlyLimits[userTier]) {
+      return res.status(403).json({ 
+        success: false, 
+        message: `Monthly quiz creation limit reached (${monthlyLimits[userTier]} per month). Upgrade your plan to create more!` 
+      });
+    }
 
      // ✅ NEW: Check if the teacher's school owner has paid
     const subCheck = await checkSchoolOwnerSubscription(req.user);
@@ -556,7 +562,7 @@ router.post('/:id/regenerate-code', protect, async (req, res, next) => {
     const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // ✅ Allow creator OR school owner
     if (!quiz) return;
 
-    const limits = getLimits(req.user);
+    const limits = await getLimits(req.user); // ✅ Added await
     if (!limits.isUnlimited && quiz.accessCodes.length >= limits.maxStudents) {
       return res.status(403).json({ success: false, message: `Your plan allows up to ${limits.maxStudents} access codes per quiz. Upgrade to add more!` });
     }
