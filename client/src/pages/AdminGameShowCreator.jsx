@@ -5,6 +5,7 @@ import {
   AlertTriangle, ArrowLeft, Trophy, Play, RefreshCw,
 } from "lucide-react";
 import api from "../utils/api";
+import useMyLimits from "../hooks/useMyLimits";
 import {
   focusRing, inputCls, card, primaryBtn, secondaryBtn,
   Field, SelectField, NumberInput, ErrorNote, CodeChip, QuestionReviewList,
@@ -12,7 +13,8 @@ import {
 } from "../components/QuizFormKit";
 
 /* ------------------------------------------------------------------ */
-/* Limits. Keep these in sync with the backend validation.             */
+/* Hard caps. The user's PLAN limits (from /quiz/my-limits) can only   */
+/* make these smaller. Keep in sync with the backend validation.       */
 /* ------------------------------------------------------------------ */
 const MAX_QUESTIONS = 50;
 const NOTES_MAX = 20000;
@@ -37,6 +39,7 @@ const INITIAL = {
 export default function AdminGameShowCreator() {
   const navigate = useNavigate();
   const { copy, copiedKey } = useClipboard();
+  const { limits, refresh: refreshLimits } = useMyLimits();
 
   const [errorMessage, setErrorMessage] = useState("");
   const [metadata, setMetadata] = useState(INITIAL);
@@ -48,6 +51,29 @@ export default function AdminGameShowCreator() {
   const [previewQuestions, setPreviewQuestions] = useState([]);
   const [requestedCount, setRequestedCount] = useState(null);
   const [isReviewing, setIsReviewing] = useState(false);
+
+  /* ---------------- plan limits ---------------- */
+  const maxQ = Math.min(MAX_QUESTIONS, limits?.maxQuestionsPerQuiz ?? MAX_QUESTIONS);
+  const creditsLeft = limits?.credits?.remaining ?? null; // null = unlimited / not loaded
+  const outOfCredits = creditsLeft !== null && creditsLeft <= 0;
+  const planLocked = Boolean(limits?.locked);
+
+  // Game Show access: 0 = not on this plan, null = unlimited, number = per-month cap.
+  const perMonth = limits?.gameShowsPerMonth; // undefined until loaded
+  const notOnPlan = limits != null && perMonth === 0;
+  const gameShowsLeft =
+    limits == null || perMonth === null ? null : Math.max(perMonth - (limits.gameShowsUsed ?? 0), 0);
+  const quotaReached = limits != null && perMonth > 0 && gameShowsLeft <= 0;
+  const blocked = planLocked || notOnPlan || quotaReached;
+
+  // Keep the default question count inside what the plan allows.
+  useEffect(() => {
+    if (!limits) return;
+    setMetadata((prev) => ({
+      ...prev,
+      numQuestions: String(Math.min(Number(prev.numQuestions) || 1, maxQ)),
+    }));
+  }, [limits, maxQ]);
 
   const setField = (field) => (value) => {
     setErrorMessage("");
@@ -72,7 +98,7 @@ export default function AdminGameShowCreator() {
     const title = metadata.title.trim();
     if (!title) return { error: "Enter a game show title." };
     const numQuestions = needQuestionCount
-      ? readInt(metadata.numQuestions, "Number of questions", 1, MAX_QUESTIONS)
+      ? readInt(metadata.numQuestions, "Number of questions", 1, maxQ)
       : { value: 0 };
     const timeLimit = readInt(metadata.timeLimit, "Time per question", 5, 600);
     const baseMarks = readInt(metadata.baseMarks, "Base marks", 1, 1000);
@@ -93,11 +119,26 @@ export default function AdminGameShowCreator() {
 
   /* ---------------- actions ---------------- */
   const handleAIGenerate = async () => {
+    if (blocked) {
+      return setErrorMessage(
+        planLocked
+          ? limits.locked
+          : notOnPlan
+            ? "Game Show mode needs Teacher Pro or a School plan."
+            : "You've used all your Game Shows for this month."
+      );
+    }
     const s = readSettings(true);
     if (s.error) return setErrorMessage(s.error);
     if (!notes.trim()) return setErrorMessage("Enter the topic or notes for the AI to write questions from.");
     if (notes.length > NOTES_MAX) {
       return setErrorMessage(`Your notes are too long. Keep them under ${NOTES_MAX.toLocaleString()} characters.`);
+    }
+    // Friendly early check; the server is still the real gate.
+    if (creditsLeft !== null && s.value.numQuestions > creditsLeft) {
+      return setErrorMessage(
+        `You only have ${creditsLeft} AI credit${creditsLeft === 1 ? "" : "s"} left this month. Ask for fewer questions or upgrade your plan.`
+      );
     }
 
     setIsGenerating(true);
@@ -107,6 +148,7 @@ export default function AdminGameShowCreator() {
         notes,
         difficulty: s.value.difficulty,
         numQuestions: s.value.numQuestions,
+        gameMode: "gameShow", // lets the server block plans without Game Shows before spending credits
       });
       const questions = normalizeQuestions(res.data?.data?.questions);
       if (questions.length === 0) {
@@ -119,10 +161,12 @@ export default function AdminGameShowCreator() {
       setErrorMessage(err.response?.data?.message || "Couldn't generate questions. Try again.");
     } finally {
       setIsGenerating(false);
+      refreshLimits(); // credits changed (spent, or refunded after a failure)
     }
   };
 
   const handleFinalizeQuiz = async () => {
+    if (blocked) return setErrorMessage(planLocked ? limits.locked : "Your plan can't create another Game Show right now.");
     const s = readSettings(false);
     if (s.error) return setErrorMessage(s.error);
     if (previewQuestions.length === 0) return setErrorMessage("There are no questions to create the game with.");
@@ -149,6 +193,7 @@ export default function AdminGameShowCreator() {
       setGeneratedQuiz(res.data.data);
       setAccessCodes(codes);
       setIsReviewing(false);
+      refreshLimits(); // Game Shows used this month changed
       if (codes.length < 2) {
         setErrorMessage("The game was created, but fewer than 2 team codes came back. Check the server before starting.");
       }
@@ -159,10 +204,13 @@ export default function AdminGameShowCreator() {
     }
   };
 
+  const codeLimitReached = limits != null && accessCodes.length >= limits.maxStudents;
+
   const handleAddReplacementCode = async () => {
     const quizId = generatedQuiz?._id ?? generatedQuiz?.quizId;
     if (!quizId || isAddingCode) return;
     setIsAddingCode(true);
+    setErrorMessage("");
     try {
       const res = await api.post(`/quiz/${quizId}/regenerate-code`);
       setAccessCodes((prev) => [...prev, res.data.newCode]);
@@ -181,6 +229,7 @@ export default function AdminGameShowCreator() {
     setNotes("");
     setIsReviewing(false);
     setErrorMessage("");
+    refreshLimits();
   };
 
   const locked = !!generatedQuiz || isGenerating;
@@ -205,6 +254,40 @@ export default function AdminGameShowCreator() {
         </div>
 
         <ErrorNote>{errorMessage}</ErrorNote>
+        {planLocked && <ErrorNote>{limits.locked}</ErrorNote>}
+        {notOnPlan && !planLocked && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand-soft p-4">
+            <p className="text-sm font-medium text-foreground">
+              Game Show mode is available on Teacher Pro and School plans.
+            </p>
+            <button onClick={() => navigate("/pricing")} className={`${primaryBtn} py-2 text-sm`}>
+              See plans
+            </button>
+          </div>
+        )}
+        {quotaReached && !planLocked && (
+          <ErrorNote>{`You've used all ${perMonth} Game Shows for this month. Upgrade for more.`}</ErrorNote>
+        )}
+
+        {/* Plan usage */}
+        {limits && !notOnPlan && (
+          <div className="flex flex-wrap gap-2 text-xs font-medium">
+            {perMonth !== null && (
+              <span className="rounded-full bg-brand-soft px-2.5 py-1 text-brand">
+                {limits.gameShowsUsed} / {perMonth} Game Shows this month
+              </span>
+            )}
+            {limits.credits?.total != null && (
+              <span
+                className={`rounded-full px-2.5 py-1 ${
+                  outOfCredits ? "bg-destructive/10 text-destructive" : "bg-brand-soft text-brand"
+                }`}
+              >
+                {creditsLeft} / {limits.credits.total} AI credits left
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Settings */}
         <div className={`${card} space-y-5`}>
@@ -237,7 +320,7 @@ export default function AdminGameShowCreator() {
                 </SelectField>
               </Field>
 
-              <Field label="Number of questions" htmlFor="quiz-questions" hint={`1 to ${MAX_QUESTIONS}. Each question becomes one card.`}>
+              <Field label="Number of questions" htmlFor="quiz-questions" hint={`1 to ${maxQ} on your plan. Each question becomes one card.`}>
                 <NumberInput id="quiz-questions" aria-describedby="quiz-questions-hint" value={metadata.numQuestions} onChange={setField("numQuestions")} placeholder="e.g., 10" />
               </Field>
 
@@ -269,7 +352,7 @@ export default function AdminGameShowCreator() {
         </div>
 
         {/* Review */}
-        {isReviewing && (
+        {isReviewing && !generatedQuiz && (
           <div className="space-y-4 rounded-2xl border border-brand/30 bg-card p-5 shadow-sm motion-safe:animate-in motion-safe:fade-in sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
@@ -292,7 +375,7 @@ export default function AdminGameShowCreator() {
               <button onClick={() => { setIsReviewing(false); setErrorMessage(""); }} disabled={isGenerating} className={`${secondaryBtn} flex-1`}>
                 Back to notes
               </button>
-              <button onClick={handleFinalizeQuiz} disabled={isGenerating || previewQuestions.length === 0} className={`${primaryBtn} flex-1`}>
+              <button onClick={handleFinalizeQuiz} disabled={isGenerating || blocked || previewQuestions.length === 0} className={`${primaryBtn} flex-1`}>
                 {isGenerating ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
                 Create game and get codes
               </button>
@@ -327,9 +410,13 @@ export default function AdminGameShowCreator() {
             <p className={`text-right text-xs ${notes.length > NOTES_MAX ? "text-destructive" : "text-muted-foreground"}`}>
               {notes.length.toLocaleString()} / {NOTES_MAX.toLocaleString()} characters
             </p>
-            <button onClick={handleAIGenerate} disabled={isGenerating || !notes.trim()} className={`${primaryBtn} w-full`}>
+            <button
+              onClick={handleAIGenerate}
+              disabled={isGenerating || blocked || outOfCredits || !notes.trim() || notes.length > NOTES_MAX}
+              className={`${primaryBtn} w-full`}
+            >
               {isGenerating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
-              {isGenerating ? "Generating…" : "Generate questions for review"}
+              {isGenerating ? "Generating…" : outOfCredits ? "Out of AI credits" : "Generate questions for review"}
             </button>
           </div>
         )}
@@ -359,7 +446,7 @@ export default function AdminGameShowCreator() {
 
             <div>
               <button
-                onClick={() => navigate(`/game-show?code=${accessCodes[0]}`)}
+                onClick={() => navigate(`/game-show?code=${encodeURIComponent(accessCodes[0])}`)}
                 disabled={!accessCodes[0]}
                 className={`${primaryBtn} w-full py-4 text-lg`}
               >
@@ -378,7 +465,8 @@ export default function AdminGameShowCreator() {
                 <div className="flex gap-2">
                   <button
                     onClick={handleAddReplacementCode}
-                    disabled={isAddingCode}
+                    disabled={isAddingCode || codeLimitReached}
+                    title={codeLimitReached ? "Your plan's code limit for this game is reached" : undefined}
                     className={`inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent disabled:opacity-60 ${focusRing}`}
                   >
                     {isAddingCode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -398,7 +486,7 @@ export default function AdminGameShowCreator() {
                 {accessCodes.slice(0, 2).map((code, i) => {
                   const t = TEAM_STYLES[i];
                   return (
-                    <div key={i} className={`rounded-2xl border-2 p-4 ${t.border} ${t.soft}`}>
+                    <div key={code} className={`rounded-2xl border-2 p-4 ${t.border} ${t.soft}`}>
                       <p className={`mb-2 flex items-center gap-2 font-semibold ${t.text}`}>
                         <span className={`h-3 w-3 rounded-full ${t.dot}`} aria-hidden="true" />
                         {t.name} access code
