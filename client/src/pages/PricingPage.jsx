@@ -48,7 +48,7 @@ const teacherTiers = [
       "120 AI question credits per month",
       "Up to 30 AI questions per quiz",
       "Up to 15 student codes per test",
-      "Unlimited manual questions",
+      "Up to 200 manual questions per quiz",
       "Basic tab-switch activity logs",
       "Basic CSV export",
       "Noted AI branding on quizzes",
@@ -193,7 +193,7 @@ const schoolTiers = [
 ];
 
 const compareRows = [
-  ["AI question credits per month", "120", "600", "1,500"],
+["AI question credits per month", "120", "400", "800"],
   ["Maximum AI questions per quiz", "30", "60", "100"],
   ["Student codes per test", "15", "40", "100"],
   ["Game Shows per month", "—", "12", "30"],
