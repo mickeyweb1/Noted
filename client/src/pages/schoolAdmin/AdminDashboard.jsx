@@ -1,19 +1,23 @@
-import { useState, useEffect, useCallback } from "react"; // ✅ Added useCallback
-import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock, Copy, Check, MessageSquare, Shield, GraduationCap, FileText, Trophy } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom"; // ✅ ADDED
+import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock, Copy, Check, MessageSquare, Shield, GraduationCap, FileText, Trophy, CheckCircle2 } from "lucide-react"; // ✅ ADDED CheckCircle2
 import { NavLink } from "react-router-dom";
 import { useUserContext } from "../../context/userContext"; 
 import api from "../../utils/api";
  
 export default function AdminDashboard() {
   const { user, isAuthLoading } = useUserContext(); 
+  const [searchParams, setSearchParams] = useSearchParams(); // ✅ ADDED
+  const [showSuccessModal, setShowSuccessModal] = useState(false); // ✅ ADDED
+  
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
  
-const fetchData = useCallback(async () => { // ✅ CHANGED to useCallback
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
-    setError(""); // ✅ ADDED
+    setError("");
     try {
       const response = await api.get("/admin/stats");
       if (response.data.success) {
@@ -21,15 +25,25 @@ const fetchData = useCallback(async () => { // ✅ CHANGED to useCallback
       }
     } catch (error) {
       console.error("❌ Failed to fetch admin stats:", error);
-      setError("Couldn't load your dashboard. Please try again."); // ✅ ADDED
+      setError("Couldn't load your dashboard. Please try again.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // ✅ ADDED: Check for successful payment redirect
+  useEffect(() => {
+    if (searchParams.get("payment") === "success") {
+      setShowSuccessModal(true);
+      // Clean the URL so it doesn't show again on refresh
+      searchParams.delete("payment");
+      setSearchParams(searchParams);
+    }
+  }, [searchParams, setSearchParams]);
  
   const handleCopyCode = () => {
     if (data?.inviteCode) {
@@ -51,14 +65,13 @@ const fetchData = useCallback(async () => { // ✅ CHANGED to useCallback
     );
   }
  
-  // ✅ CONDITIONAL STATS: Show different stats for Teachers vs School Owners
   const stats = data?.stats?.isTeacher ? [
     { title: "Total Quizzes", value: data.stats.totalQuizzes || 0, change: "All time", trend: "up", icon: FileText, color: "text-brand", bg: "bg-brand-soft" },
     { title: "Quiz Submissions", value: data.stats.totalQuizSubmissions || 0, change: "Across all quizzes", trend: "up", icon: Users, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
     { title: "Active Game Shows", value: data.stats.activeGameShows || 0, change: "Currently running", trend: "up", icon: Trophy, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/10" },
   ] : [
     { title: "Total Teachers", value: data?.stats?.totalTeachers || 0, change: "All time", trend: "up", icon: GraduationCap, color: "text-brand", bg: "bg-brand-soft" },
-       { title: "Active Teachers", value: data?.stats?.activeTeachers || 0, change: "Activated", trend: "up", icon: UserCheck, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
+    { title: "Active Teachers", value: data?.stats?.activeTeachers || 0, change: "Activated", trend: "up", icon: UserCheck, color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
     { title: "Pending Invites", value: data?.stats?.inactiveTeachers || 0, change: "Needs attention", trend: "down", icon: UserX, color: "text-destructive", bg: "bg-destructive/10" },
   ];
 
@@ -68,12 +81,13 @@ const fetchData = useCallback(async () => { // ✅ CHANGED to useCallback
  
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-3 py-5 sm:space-y-7 sm:px-5 sm:py-6 lg:space-y-8 lg:px-8">
-        {error && (
+      {error && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
           <span>{error}</span>
           <button onClick={fetchData} className="rounded-lg border border-destructive/30 px-3 py-1.5 font-medium hover:bg-destructive/10">Try again</button>
         </div>
       )}
+      
       {/* HEADER */}
       <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
         <div className="min-w-0">
@@ -118,7 +132,7 @@ const fetchData = useCallback(async () => { // ✅ CHANGED to useCallback
  
       {/* MAIN CONTENT GRID */}
       <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
-        {/* LEFT: Recent Activity (Quizzes for teachers, Teachers for admins) */}
+        {/* LEFT: Recent Activity */}
         <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
@@ -209,6 +223,28 @@ const fetchData = useCallback(async () => { // ✅ CHANGED to useCallback
           </div>
         </div>
       </div>
+
+      {/* ✅ ADDED: SUCCESS PAYMENT MODAL */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-green-500/30 bg-card p-6 text-center shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+              <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground">Payment Successful! 🎉</h2>
+            <p className="mt-2 text-muted-foreground">
+              Your account has been upgraded to <strong className="text-foreground capitalize">{user?.subscriptionTier?.replace('_', ' ')}</strong>. 
+              Your AI credits have been reset and your new limits are now active.
+            </p>
+            <button 
+              onClick={() => setShowSuccessModal(false)}
+              className="mt-6 w-full rounded-xl bg-brand px-4 py-3 font-semibold text-brand-foreground hover:bg-brand/90 transition"
+            >
+              Awesome, let's go!
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
