@@ -44,12 +44,28 @@ const allowedOrigins = [
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true, allowedHeaders: ['Content-Type', 'Authorization', 'X-Auth-Session'] }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl.startsWith('/api/payment/webhook')) req.rawBody = buf;
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 15, message: { success: false, message: "Too many sign-in attempts. Please wait 15 minutes and try again." }, standardHeaders: true, legacyHeaders: false });
-const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, message: { success: false, message: "AI limit reached." }, standardHeaders: true, legacyHeaders: false });
+const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyGenerator: (req) => {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const id = token ? jwt.decode(token)?.id : null; 
+    return id ? `user:${id}` : req.ip;
+  },
+  message: { success: false, message: "AI limit reached. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 const registrationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { success: false, message: "Too many registration attempts." }, standardHeaders: true, legacyHeaders: false });
 const claimLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { success: false, message: "Too many activation attempts." }, standardHeaders: true, legacyHeaders: false });
 
