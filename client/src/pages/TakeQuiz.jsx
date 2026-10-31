@@ -979,21 +979,39 @@ export default function TakeQuiz() {
 
         <div className="mx-auto max-w-3xl space-y-4">
           <header className="sticky top-2 z-10 overflow-hidden rounded-2xl border border-border bg-card/95 shadow-lg backdrop-blur">
-            <div className="flex items-center justify-between gap-3 p-3 sm:p-4">
-              <div className="min-w-0">
-                <h1 className="truncate text-base font-bold text-foreground sm:text-xl">{quizData.title}</h1>
-                <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                  {answeredCount}/{totalQuestions} answered<span className="hidden sm:inline"> · {studentInfo.name} {studentInfo.surname}</span>
-                </p>
-              </div>
-              <div role="timer" className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-base font-bold sm:gap-2 sm:px-4 sm:py-2 sm:text-lg ${lowTime ? "bg-destructive/10 text-destructive motion-safe:animate-pulse" : "bg-brand-soft text-brand"}`}>
-                <Clock className="h-4 w-4 sm:h-5 sm:w-5" /> {formatTime(timeLeft)}
-              </div>
-            </div>
-            <div className="h-1.5 w-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={totalQuestions} aria-valuenow={answeredCount} aria-label="Questions answered">
-              <div className="h-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
-            </div>
-          </header>
+  <div className="flex items-center justify-between gap-3 p-3 sm:p-4">
+    <div className="min-w-0">
+      <h1 className="truncate text-base font-bold text-foreground sm:text-xl">{quizData.title}</h1>
+      <p className="truncate text-xs text-muted-foreground sm:text-sm">
+        {answeredCount}/{totalQuestions} answered<span className="hidden sm:inline"> · {studentInfo.name} {studentInfo.surname}</span>
+      </p>
+    </div>
+    <div role="timer" className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-base font-bold sm:gap-2 sm:px-4 sm:py-2 sm:text-lg ${lowTime ? "bg-destructive/10 text-destructive motion-safe:animate-pulse" : "bg-brand-soft text-brand"}`}>
+      <Clock className="h-4 w-4 sm:h-5 sm:w-5" /> {formatTime(timeLeft)}
+    </div>
+  </div>
+  <div className="h-1.5 w-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={totalQuestions} aria-valuenow={answeredCount} aria-label="Questions answered">
+    <div className="h-full bg-brand transition-all duration-300" style={{ width: `${progress}%` }} />
+  </div>
+  {/* ✅ NEW: Prominent Free Tier Watermark */}
+  {quizData?.isFreeTier && (
+    <div className="border-t border-border/50 bg-gradient-to-r from-brand/5 via-brand/10 to-brand/5 px-4 py-2.5 text-center">
+      <p className="text-sm font-medium text-foreground">
+        Powered by{" "}
+        <a 
+          href="https://www.usenotedai.com/signup/personal" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 font-bold text-brand underline decoration-brand/50 underline-offset-2 transition hover:text-brand/80 hover:decoration-brand"
+        >
+          Noted AI 
+          <ArrowRight className="h-3.5 w-3.5" />
+        </a>
+        <span className="ml-1 text-xs text-muted-foreground">(Free Plan)</span>
+      </p>
+    </div>
+  )}
+</header>
 
           <QuestionChips questions={quizData.questions} answers={answers} currentIndex={isPaginated ? currentIndex : -1} onJump={jumpToQuestion} />
 
@@ -1059,14 +1077,7 @@ export default function TakeQuiz() {
             </div>
           </div>
         )}
-          {/* ✅ NEW: Free Tier Watermark */}
-          {quizData?.isFreeTier && (
-            <div className="mt-8 text-center pb-4">
-              <p className="text-xs font-medium text-muted-foreground/60">
-                Powered by <span className="font-bold text-brand">Noted AI</span>
-              </p>
-            </div>
-          )}
+  
       </div>
     );
   }
