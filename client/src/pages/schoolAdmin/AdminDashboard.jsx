@@ -12,8 +12,14 @@ export default function AdminDashboard() {
   
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+ const { user, isAuthLoading, refreshUser } = useUserContext(); 
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+
+   const PLAN_LABELS = {
+    free: "Free", pro: "Teacher Pro", premium: "Teacher Premium",
+    school_owner: "School Starter", school_pro: "School Pro", school_premium: "School Premium",
+  };
  
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -35,15 +41,14 @@ export default function AdminDashboard() {
     fetchData();
   }, [fetchData]);
 
-  // ✅ ADDED: Check for successful payment redirect
-  useEffect(() => {
-    if (searchParams.get("payment") === "success") {
-      setShowSuccessModal(true);
-      // Clean the URL so it doesn't show again on refresh
-      searchParams.delete("payment");
-      setSearchParams(searchParams);
-    }
-  }, [searchParams, setSearchParams]);
+ useEffect(() => {
+  if (searchParams.get("payment") !== "success") return;
+  setShowSuccessModal(true);
+  refreshUser?.().catch(() => {});
+  const next = new URLSearchParams(searchParams);
+  next.delete("payment");
+  setSearchParams(next, { replace: true });
+}, [searchParams, setSearchParams, refreshUser]);
  
   const handleCopyCode = () => {
     if (data?.inviteCode) {
@@ -232,10 +237,16 @@ export default function AdminDashboard() {
               <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
             <h2 className="text-2xl font-bold text-foreground">Payment Successful! 🎉</h2>
-            <p className="mt-2 text-muted-foreground">
-              Your account has been upgraded to <strong className="text-foreground capitalize">{user?.subscriptionTier?.replace('_', ' ')}</strong>. 
-              Your AI credits have been reset and your new limits are now active.
-            </p>
+            {user?.subscriptionTier && user.subscriptionTier !== "free" ? (
+  <p className="mt-2 text-muted-foreground">
+    Your account is now on <strong className="text-foreground">{PLAN_LABELS[user.subscriptionTier] ?? user.subscriptionTier}</strong>.
+    Your new limits are active.
+  </p>
+) : (
+  <p className="mt-2 text-muted-foreground">
+    We've received your payment and are activating your plan. This usually takes under a minute. Refresh the page if you don't see it.
+  </p>
+)}
             <button 
               onClick={() => setShowSuccessModal(false)}
               className="mt-6 w-full rounded-xl bg-brand px-4 py-3 font-semibold text-brand-foreground hover:bg-brand/90 transition"
