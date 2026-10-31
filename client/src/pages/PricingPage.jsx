@@ -194,7 +194,7 @@ const schoolTiers = [
 
 const compareRows = [
   ["AI question credits per month", "120", "600", "1,500"],
-  ["Maximum AI questions per quiz", "20", "60", "100"],
+  ["Maximum AI questions per quiz", "30", "60", "100"],
   ["Student codes per test", "15", "40", "100"],
   ["Game Shows per month", "—", "12", "30"],
   ["Secure result sharing", false, true, true],
