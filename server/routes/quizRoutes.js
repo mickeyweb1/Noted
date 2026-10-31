@@ -784,35 +784,56 @@ router.post('/shared-regenerate', async (req, res, next) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* 6. Duplicate Quiz                                                  */
+/* 6. Duplicate / Edit & Duplicate Quiz                               */
 /* ------------------------------------------------------------------ */
 router.post('/:id/duplicate', protect, async (req, res, next) => {
   try {
-    const quiz = await loadQuiz(req, res); // Must be owner
-    if (!quiz) return;
+    const originalQuiz = await loadQuiz(req, res); // Must be owner
+    if (!originalQuiz) return;
 
-    // Create a copy of the quiz with "(Copy)" in the title
+    const { title, questions } = req.body;
+
+    // If questions are provided, validate and format them (Edit & Duplicate)
+    // Otherwise, just copy the original questions (Simple Duplicate)
+    let newQuestions;
+    if (questions && Array.isArray(questions)) {
+      newQuestions = questions.map(q => {
+        const correctIdx = parseInt(q.correctOptionIndex, 10);
+        const correctAnswer = (q.options && q.options[correctIdx]) ? q.options[correctIdx].trim() : (q.correctAnswer || "").trim();
+        
+        return {
+          question: (q.question || "").trim(),
+          topic: (q.topic || "").trim(),
+          options: (q.options || ["", "", "", ""]).map(opt => (opt || "").trim()),
+          correctAnswer: correctAnswer,
+          explanation: (q.explanation || "").trim(),
+          imageUrl: q.imageUrl || ""
+        };
+      });
+    } else {
+      newQuestions = originalQuiz.questions;
+    }
+
+    // Generate fresh access codes based on the original student count
+    const used = new Set();
+    const newCodes = Array.from({ length: originalQuiz.numberOfStudents }, () => ({ 
+      code: uniqueCode(originalQuiz.gameMode || 'test', used), 
+      createdAt: new Date() 
+    }));
+
+    // Create the new quiz
     const newQuiz = await Quiz.create({
-      ...quiz.toObject(),
+      ...originalQuiz.toObject(),
       _id: undefined, // Let MongoDB generate a new ID
-      title: `${quiz.title} (Copy)`,
-      accessCodes: [], // We will generate fresh codes
+      title: title || `${originalQuiz.title} (Copy)`,
+      questions: newQuestions,
+      accessCodes: newCodes,
       createdBy: req.user._id,
     });
 
-    // Generate new access codes for the duplicated quiz
-    const used = new Set();
-    const newCodes = Array.from({ length: quiz.numberOfStudents }, () => ({ 
-      code: uniqueCode(quiz.gameMode || 'test', used), 
-      createdAt: new Date() 
-    }));
-    
-    newQuiz.accessCodes = newCodes;
-    await newQuiz.save();
-
     res.json({ 
       success: true, 
-      message: 'Quiz duplicated successfully!',
+      message: title ? 'New quiz created successfully!' : 'Quiz duplicated successfully!',
       data: { 
         newQuizId: newQuiz._id, 
         accessCodes: codesOf(newQuiz) 
@@ -821,6 +842,5 @@ router.post('/:id/duplicate', protect, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-export default router;
 
 export default router;

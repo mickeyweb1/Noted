@@ -465,13 +465,20 @@ export default function QuizResultsPage() {
   const { copy, copiedKey } = useClipboard();
 
   const [quizData, setQuizData] = useState(null);
+  
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showQualityInsights, setShowQualityInsights] = useState(false);
     const [showCodeHistory, setShowCodeHistory] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicatedData, setDuplicatedData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+    const [isEditingQuestions, setIsEditingQuestions] = useState(false);
+  const [editableQuestions, setEditableQuestions] = useState([]);
+  const [isSavingDuplicate, setIsSavingDuplicate] = useState(false);
+  const [newDuplicateData, setNewDuplicateData] = useState(null);
   const [showShareManager, setShowShareManager] = useState(false);
 const [activeShares, setActiveShares] = useState([]);
 const [isRevoking, setIsRevoking] = useState(false);
@@ -505,6 +512,77 @@ const [isRevoking, setIsRevoking] = useState(false);
     }
   }, [quizId]);
   useEffect(() => { fetchResults(); }, [fetchResults]);
+
+    const handleStartEditing = () => {
+    // Format questions for the editor (add correctOptionIndex for radio buttons)
+    const formatted = questions.map(q => {
+      const correctIdx = q.options.findIndex(opt => opt === q.correctAnswer);
+      return {
+        ...q,
+        correctOptionIndex: correctIdx >= 0 ? correctIdx : 0,
+      };
+    });
+    setEditableQuestions(formatted);
+    setIsEditingQuestions(true);
+    setNewDuplicateData(null);
+  };
+
+  const handleUpdateEditableQuestion = (index, field, value) => {
+    const updated = [...editableQuestions];
+    updated[index] = { ...updated[index], [field]: value };
+    setEditableQuestions(updated);
+  };
+
+  const handleUpdateOption = (qIndex, optIndex, value) => {
+    const updated = [...editableQuestions];
+    const newOptions = [...updated[qIndex].options];
+    newOptions[optIndex] = value;
+    updated[qIndex] = { ...updated[qIndex], options: newOptions };
+    setEditableQuestions(updated);
+  };
+
+  const handleAddQuestion = () => {
+    setEditableQuestions([...editableQuestions, {
+      question: "",
+      topic: "",
+      options: ["", "", "", ""],
+      correctOptionIndex: 0,
+      explanation: "",
+      imageUrl: ""
+    }]);
+  };
+
+  const handleRemoveQuestion = (index) => {
+    if (editableQuestions.length <= 1) return alert("A quiz must have at least one question.");
+    const updated = [...editableQuestions];
+    updated.splice(index, 1);
+    setEditableQuestions(updated);
+  };
+
+  const handleSaveAsNewQuiz = async () => {
+    // Basic validation
+    for (let i = 0; i < editableQuestions.length; i++) {
+      if (!editableQuestions[i].question.trim()) {
+        return alert(`Question ${i + 1} text is empty.`);
+      }
+    }
+
+    setIsSavingDuplicate(true);
+    try {
+      const res = await api.post(`/quiz/${quizId}/duplicate`, {
+        title: `${quizData.title} (Copy)`,
+        questions: editableQuestions
+      });
+      if (res.data.success) {
+        setNewDuplicateData(res.data.data);
+        setIsEditingQuestions(false); // Exit edit mode to show the success/new codes view
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to save new quiz.");
+    } finally {
+      setIsSavingDuplicate(false);
+    }
+  };
 
     const handleDuplicateQuiz = async () => {
     if (!window.confirm(`Create a copy of "${quizData?.title}"? A new set of access codes will be generated.`)) return;
@@ -714,11 +792,7 @@ const handleRevokeShare = async (shareCode) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => fetchResults({ silent: true })} disabled={refreshing} aria-label="Refresh results" className={`${secondaryBtn} px-3`}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /></button>
-               <button onClick={handleDuplicateQuiz} disabled={isDuplicating} className={secondaryBtn}>
-              {isDuplicating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 
-              {isDuplicating ? "Duplicating..." : "Duplicate"}
-            </button>
+            
               <button onClick={() => { setShowShareManager(true); fetchActiveShares(); }} className={secondaryBtn}>
     <Share2 className="h-4 w-4" /> Manage Shares
   </button>
@@ -1210,35 +1284,141 @@ const handleRevokeShare = async (shareCode) => {
           </div>
         </Modal>
       )}
+
       {showQuestions && quizData && (
-        <Modal title={`All questions (${questions.length})`} icon={<Eye className="h-5 w-5 shrink-0 text-brand" />} size="max-w-3xl" onClose={() => setShowQuestions(false)}>
-          <div className="space-y-4">
-            {questions.map((q, idx) => {
-              const correct = q.correctAnswer?.trim();
-              return (
-                <div key={q._id ?? idx} className="min-w-0 rounded-xl border border-border bg-muted/30 p-4 sm:p-5">
-                  <p className="mb-3 break-words font-semibold text-foreground"><span className="mr-2 text-brand">Q{idx + 1}.</span><MathRenderer>{q.question}</MathRenderer></p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {(q.options ?? []).map((opt, i) => {
-                      const text = opt?.trim() || "";
-                      const isCorrect = !!correct && text === correct;
-                      return (
-                        <div key={i} className={`flex min-w-0 items-start gap-2 rounded-lg border p-3 text-sm ${isCorrect ? "border-green-500/30 bg-green-500/10 font-semibold text-green-700 dark:text-green-400" : "border-border bg-card text-foreground"}`}>
-                          <span className="shrink-0 font-bold">{String.fromCharCode(65 + i)}.</span>
-                          <span className="min-w-0 flex-1 break-words"><MathRenderer>{text}</MathRenderer></span>
-                          {isCorrect && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-label="Correct answer" />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {q.explanation && (
-                    <div className="mt-3 rounded-lg border border-brand/10 bg-brand-soft/50 p-3">
-                      <p className="break-words text-xs text-muted-foreground"><span className="font-semibold text-foreground">Explanation:</span> <MathRenderer>{q.explanation}</MathRenderer></p>
-                    </div>
-                  )}
+        <Modal 
+          title={isEditingQuestions ? "Edit & Duplicate Quiz" : `All Questions (${questions.length})`} 
+          icon={<Eye className="h-5 w-5 shrink-0 text-brand" />} 
+          size="max-w-4xl" 
+          onClose={() => {
+            setShowQuestions(false);
+            setIsEditingQuestions(false);
+            setNewDuplicateData(null);
+          }}
+        >
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+            
+            {/* VIEW: Show New Duplicate Success */}
+            {newDuplicateData && !isEditingQuestions && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-5 text-center">
+                <CheckCircle2 className="mx-auto h-10 w-10 text-green-600 dark:text-green-400" />
+                <h3 className="mt-2 text-lg font-bold text-foreground">New Quiz Created!</h3>
+                <p className="text-sm text-muted-foreground">Your edited questions have been saved as a new quiz.</p>
+                <div className="mt-4 grid max-h-40 grid-cols-2 gap-2 overflow-y-auto rounded-xl border border-border bg-background p-2 sm:grid-cols-4">
+                  {newDuplicateData.accessCodes.map((code, idx) => (
+                    <div key={idx} className="rounded-lg bg-muted px-2 py-1 text-center text-xs font-mono">{code}</div>
+                  ))}
                 </div>
-              );
-            })}
+                <button 
+                  onClick={() => navigate(`/admin/quiz/${newDuplicateData.newQuizId}/results`)} 
+                  className={`${primaryBtn} mt-4 w-full`}
+                >
+                  View New Quiz Results
+                </button>
+              </div>
+            )}
+
+            {/* VIEW: Read-Only Questions */}
+            {!isEditingQuestions && !newDuplicateData && (
+              <>
+                <div className="flex justify-end">
+                  <button onClick={handleStartEditing} className={`${secondaryBtn} w-full sm:w-auto`}>
+                    <Plus className="h-4 w-4" /> Edit Questions & Duplicate
+                  </button>
+                </div>
+                {questions.map((q, idx) => {
+                  const correct = q.correctAnswer?.trim();
+                  return (
+                    <div key={q._id ?? idx} className="rounded-xl border border-border bg-muted/30 p-4">
+                      <p className="mb-3 font-semibold text-foreground"><span className="mr-2 text-brand">Q{idx + 1}.</span><MathRenderer>{q.question}</MathRenderer></p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {(q.options ?? []).map((opt, i) => {
+                          const text = opt?.trim() || "";
+                          const isCorrect = !!correct && text === correct;
+                          return (
+                            <div key={i} className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${isCorrect ? "border-green-500/30 bg-green-500/10 font-semibold text-green-700 dark:text-green-400" : "border-border bg-card"}`}>
+                              <span className="shrink-0 font-bold">{String.fromCharCode(65 + i)}.</span>
+                              <span className="flex-1"><MathRenderer>{text}</MathRenderer></span>
+                              {isCorrect && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {q.explanation && (
+                        <div className="mt-3 rounded-lg border border-brand/10 bg-brand-soft/50 p-3 text-xs text-muted-foreground">
+                          <span className="font-semibold text-foreground">Explanation:</span> <MathRenderer>{q.explanation}</MathRenderer>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {/* VIEW: Editable Questions */}
+            {isEditingQuestions && !newDuplicateData && (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={handleAddQuestion} className={`${secondaryBtn} flex-1`}>
+                    <Plus className="h-4 w-4" /> Add Question
+                  </button>
+                  <button onClick={() => setIsEditingQuestions(false)} className={`${secondaryBtn} flex-1`}>
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveAsNewQuiz} disabled={isSavingDuplicate} className={`${primaryBtn} flex-1`}>
+                    {isSavingDuplicate ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {isSavingDuplicate ? "Saving..." : "Save as New Quiz"}
+                  </button>
+                </div>
+
+                {editableQuestions.map((q, idx) => (
+                  <div key={idx} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-brand">Question {idx + 1}</span>
+                      <button onClick={() => handleRemoveQuestion(idx)} className="text-xs text-destructive hover:underline">Remove</button>
+                    </div>
+                    
+                    <input
+                      type="text"
+                      placeholder="Question text..."
+                      value={q.question}
+                      onChange={(e) => handleUpdateEditableQuestion(idx, "question", e.target.value)}
+                      className={inputCls}
+                    />
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Options (Select the radio button for the correct answer):</p>
+                      {q.options.map((opt, optIdx) => (
+                        <div key={optIdx} className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`correct-${idx}`}
+                            checked={q.correctOptionIndex === optIdx}
+                            onChange={() => handleUpdateEditableQuestion(idx, "correctOptionIndex", optIdx)}
+                            className="h-4 w-4 accent-brand"
+                          />
+                          <input
+                            type="text"
+                            placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
+                            value={opt}
+                            onChange={(e) => handleUpdateOption(idx, optIdx, e.target.value)}
+                            className={`${inputCls} flex-1 py-2 text-sm`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Explanation (optional)"
+                      value={q.explanation}
+                      onChange={(e) => handleUpdateEditableQuestion(idx, "explanation", e.target.value)}
+                      className={`${inputCls} text-sm`}
+                    />
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </Modal>
       )}
