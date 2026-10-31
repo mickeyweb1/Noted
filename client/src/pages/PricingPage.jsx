@@ -18,6 +18,7 @@ import {
 import { useNavigate, Link } from "react-router-dom";
 import { useUserContext } from "../context/userContext";
 import MarketingLayout from "./marketing/MarketingLayout";
+import useMyLimits from "../hooks/useMyLimits";
 
 const teacherTiers = [
   {
@@ -317,7 +318,8 @@ export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState("monthly");
   const [showCompare, setShowCompare] = useState(false);
 
-  const currentTier = user ? user.subscriptionTier || "free" : null;
+const { limits } = useMyLimits();
+const currentTier = user ? (limits?.plan ?? user.subscriptionTier ?? "free") : null;
   const tiers = audience === "teachers" ? teacherTiers : schoolTiers;
 
   const handleChoose = (tier) => {
