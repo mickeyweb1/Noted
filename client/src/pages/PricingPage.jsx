@@ -46,7 +46,7 @@ const teacherTiers = [
     description: "Try Noted AI with a real class before upgrading.",
     features: [
       "120 AI question credits per month",
-      "Up to 20 AI questions per quiz",
+      "Up to 30 AI questions per quiz",
       "Up to 15 student codes per test",
       "Unlimited manual questions",
       "Basic tab-switch activity logs",
@@ -75,7 +75,7 @@ const teacherTiers = [
     description: "For teachers who regularly create and run quizzes.",
     features: [
       "All Free features, plus higher limits:",
-      "600 AI question credits per month",
+      "400 AI question credits per month",
       "Up to 60 AI questions per quiz",
       "Up to 40 student codes per test",
       "12 Game Shows per month",
@@ -101,7 +101,7 @@ const teacherTiers = [
     description: "For teachers who need higher limits and more control.",
     features: [
       "All Teacher Pro features, plus higher limits:",
-      "1,500 AI question credits per month",
+      "800 AI question credits per month",
       "Up to 100 AI questions per quiz",
       "Up to 100 student codes per test",
       "Up to 30 Game Shows per month",
