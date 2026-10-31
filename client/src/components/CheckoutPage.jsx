@@ -1,8 +1,14 @@
 import { useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { CreditCard, Lock, ShieldCheck, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
+import { Lock, ShieldCheck, ArrowLeft, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import api from "../utils/api";
 import { useUserContext } from "../context/userContext";
 
+/*
+ * Display prices only. The server checks every payment against its own price table
+ * (backend/config/prices.js), so changing a number here cannot lower what a user is charged.
+ * Keep both in sync with the pricing page.
+ */
 const PLAN_PRICES = {
   teacher_pro: { monthly: 2000, termly: 5000, label: "Teacher Pro" },
   teacher_premium: { monthly: 4000, termly: 10000, label: "Teacher Premium" },
@@ -11,115 +17,195 @@ const PLAN_PRICES = {
   school_premium: { monthly: 40000, termly: 100000, label: "School Premium" },
 };
 
+const PAYSTACK_SRC = "https://js.paystack.co/v1/inline.js";
+
+// Loads the Paystack script once, however many times the button is clicked.
+const loadPaystack = () =>
+  new Promise((resolve, reject) => {
+    if (window.PaystackPop) return resolve();
+    let script = document.querySelector(`script[src="${PAYSTACK_SRC}"]`);
+    const created = !script;
+    if (created) {
+      script = document.createElement("script");
+      script.src = PAYSTACK_SRC;
+      script.async = true;
+    }
+    script.addEventListener("load", () => resolve(), { once: true });
+    script.addEventListener("error", () => reject(new Error("Paystack failed to load")), { once: true });
+    if (created) document.body.appendChild(script);
+  });
+
 export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useUserContext();
+  const { user, refreshUser } = useUserContext();
 
   const planKey = searchParams.get("plan") || "teacher_pro";
-  const billingCycle = searchParams.get("billing") || "monthly";
-  
-  const planDetails = PLAN_PRICES[planKey] || PLAN_PRICES.teacher_pro;
-  const amountInNaira = planDetails[billingCycle];
-  const amountInKobo = amountInNaira * 100; 
+  const billingCycle = searchParams.get("billing") === "termly" ? "termly" : "monthly";
+  const planDetails = PLAN_PRICES[planKey]; // undefined = unknown plan
+  const amountInNaira = planDetails?.[billingCycle];
+  const amountInKobo = amountInNaira ? amountInNaira * 100 : 0;
 
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [status, setStatus] = useState("idle"); // idle | opening | confirming
+  const [error, setError] = useState("");
+  const [pendingRef, setPendingRef] = useState("");
 
-  const handlePayment = (e) => {
-    e.preventDefault();
-    if (!user?._id) {
-      alert("Please log in to complete your purchase.");
-      navigate("/login");
+  const userId = user?._id ?? user?.id;
+  const coveredBySchool = Boolean(user?.schoolOwnerId); // a school teacher's plan comes from the school
+  const busy = status !== "idle";
+
+  const confirmPayment = async (reference) => {
+    setStatus("confirming");
+    setPendingRef(reference);
+    try {
+      await api.post("/payment/verify", { reference });
+    } catch (err) {
+      // The webhook may still activate the plan, so don't tell the user they lost their money.
+      setStatus("idle");
+      setError(
+        err.response?.data?.message
+          ? `We received your payment but couldn't confirm it yet (${err.response.data.message}). Your plan should activate within a few minutes. If it doesn't, contact support with reference ${reference}.`
+          : `We received your payment but couldn't confirm it yet. Your plan should activate within a few minutes. If it doesn't, contact support with reference ${reference}.`
+      );
       return;
     }
-    
-    setIsProcessing(true);
+    try { await refreshUser?.(); } catch { /* the dashboard refreshes again */ }
+    navigate("/admin/dashboard?payment=success", { replace: true });
+  };
 
-    const script = document.createElement("script");
-    script.src = "https://js.paystack.co/v1/inline.js";
-    script.async = true;
-    script.onload = () => {
+  const handlePayment = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!userId) {
+      navigate("/login", { state: { from: `/checkout?plan=${planKey}&billing=${billingCycle}` } });
+      return;
+    }
+    if (!planDetails || !amountInKobo) return setError("That plan doesn't exist. Please pick one from the pricing page.");
+    if (coveredBySchool) return setError("Your plan is provided by your school, so you don't need to pay here.");
+
+    const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+    if (!publicKey) return setError("Payments aren't set up yet. Please contact support.");
+
+    setStatus("opening");
+    try {
+      await loadPaystack();
+      const reference = `noted_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
       const handler = window.PaystackPop.setup({
-        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY, 
+        key: publicKey,
         email: user.email,
         amount: amountInKobo,
         currency: "NGN",
-        ref: new Date().getTime().toString(),
-        metadata: {
-          userId: user._id,
-          plan: planKey,
-          billingCycle: billingCycle,
-        },
+        ref: reference,
+        metadata: { userId, plan: planKey, billingCycle },
+        // Paystack's v1 popup wants a plain function here, so the async work lives in confirmPayment.
         callback: function (response) {
-          setIsProcessing(false);
-          navigate("/admin/dashboard?payment=success");
+          confirmPayment(response?.reference || reference);
         },
         onClose: function () {
-          setIsProcessing(false);
+          setStatus((current) => (current === "confirming" ? current : "idle"));
         },
       });
       handler.openIframe();
-    };
-    document.body.appendChild(script);
+    } catch {
+      setStatus("idle");
+      setError("Couldn't load the payment window. Check your connection and try again.");
+    }
   };
+
+  if (!planDetails) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+          <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
+          <h1 className="text-lg font-semibold text-foreground">That plan doesn't exist</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Please choose a plan from the pricing page.</p>
+          <Link to="/pricing" className="mt-5 inline-flex rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
+            Back to pricing
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-8">
-          <button onClick={() => navigate("/pricing")} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Pricing Plans
+          <button onClick={() => navigate("/pricing")} disabled={status === "confirming"} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">
+            <ArrowLeft className="h-4 w-4" /> Back to Pricing Plans
           </button>
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mt-4">Secure Checkout</h1>
-          <p className="text-muted-foreground mt-1">Complete your subscription to unlock all features.</p>
+          <h1 className="mt-4 text-2xl font-bold text-foreground md:text-3xl">Secure Checkout</h1>
+          <p className="mt-1 text-muted-foreground">Complete your subscription to unlock all features.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          <div className="lg:col-span-3 space-y-6">
-            <form onSubmit={handlePayment} className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-5">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+          <div className="space-y-6 lg:col-span-3">
+            <form onSubmit={handlePayment} className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-foreground">Card Payment via Paystack</h2>
+
+              {error && (
+                <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="break-words">{error}</p>
+                    {pendingRef && (
+                      <Link to="/admin/dashboard" className="mt-2 inline-block font-semibold underline">Go to dashboard</Link>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {coveredBySchool && (
+                <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">
+                  Your plan is provided by your school. Ask your school admin to upgrade it.
+                </p>
+              )}
+
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Email Address</label>
-                <input type="email" value={user?.email || ""} disabled className="flex h-11 w-full rounded-xl border border-input bg-muted px-4 text-sm text-muted-foreground cursor-not-allowed" />
+                <label htmlFor="checkout-email" className="text-sm font-medium text-foreground">Email Address</label>
+                <input id="checkout-email" type="email" value={user?.email || ""} disabled className="flex h-11 w-full cursor-not-allowed rounded-xl border border-input bg-muted px-4 text-sm text-muted-foreground" />
               </div>
-              <button type="submit" disabled={isProcessing} className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-brand text-brand-foreground font-semibold text-base shadow-lg shadow-brand/20 hover:bg-brand/90 transition-all disabled:opacity-70 disabled:cursor-not-allowed mt-4">
-                {isProcessing ? (
-                  <><span className="w-5 h-5 border-2 border-brand-foreground/30 border-t-brand-foreground rounded-full animate-spin" /> Opening Secure Payment...</>
-                ) : (
-                  <><Lock className="w-4 h-4" /> Pay Securely ₦{amountInNaira.toLocaleString()}</>
-                )}
+
+              <button
+                type="submit"
+                disabled={busy || coveredBySchool}
+                className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-base font-semibold text-brand-foreground shadow-lg shadow-brand/20 transition-all hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {status === "opening" && (<><Loader2 className="h-5 w-5 animate-spin" /> Opening secure payment…</>)}
+                {status === "confirming" && (<><Loader2 className="h-5 w-5 animate-spin" /> Confirming your payment…</>)}
+                {status === "idle" && (<><Lock className="h-4 w-4" /> Pay securely ₦{amountInNaira.toLocaleString()}</>)}
               </button>
+
               <div className="flex items-center justify-center gap-4 pt-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" /> 256-bit SSL Encrypted</span>
-                <span className="flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Secured by Paystack</span>
+                <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> 256-bit SSL Encrypted</span>
+                <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Secured by Paystack</span>
               </div>
             </form>
           </div>
 
           <div className="lg:col-span-2">
-            <div className="sticky top-24 rounded-2xl border border-border bg-card p-6 shadow-sm space-y-5">
+            <div className="sticky top-24 space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-foreground">Order Summary</h2>
-              <div className="rounded-xl bg-muted/30 border border-border p-4 space-y-3">
-                <div className="flex justify-between items-start">
+              <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex items-start justify-between">
                   <div>
                     <p className="font-semibold text-foreground">{planDetails.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 capitalize">{billingCycle} Billing</p>
+                    <p className="mt-0.5 text-xs capitalize text-muted-foreground">{billingCycle} billing{billingCycle === "termly" ? " (3 months)" : ""}</p>
                   </div>
                   <p className="font-bold text-foreground">₦{amountInNaira.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between pt-3 border-t border-border">
-                  <span className="text-base font-semibold text-foreground">Total Due Today</span>
-                  <span className="text-xl font-display font-bold text-brand">₦{amountInNaira.toLocaleString()}</span>
-                </div>
+              <div className="flex justify-between border-t border-border pt-3 text-sm">
+                <span className="text-base font-semibold text-foreground">Total Due Today</span>
+                <span className="text-xl font-bold text-brand">₦{amountInNaira.toLocaleString()}</span>
               </div>
-              <div className="pt-4 border-t border-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Your Access Includes:</p>
+              <div className="border-t border-border pt-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Access Includes:</p>
                 <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> Higher AI question limits</li>
-                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> Remove "Noted AI" branding</li>
-                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> Secure result sharing & Offline support</li>
+                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Higher AI question limits</li>
+                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Remove "Noted AI" branding</li>
+                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Secure result sharing &amp; Offline support</li>
                 </ul>
               </div>
             </div>
