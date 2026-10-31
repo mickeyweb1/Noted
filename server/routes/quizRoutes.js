@@ -13,6 +13,15 @@ import { Content } from '../models/Content.js';
 import { applyReview } from '../utils/sm2.js';
 import { QuizShare } from '../models/QuizShare.js';
 import crypto from 'crypto';
+import {
+  PLAN_FIELDS,
+  resolvePlan,
+  getCreditsInfo,
+  spendCredits,
+  refundCredits,
+  gameShowQuotaError,
+  countGameShowsThisMonth,
+} from '../config/plans.js';
 
 const router = express.Router();
 
@@ -77,57 +86,13 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 const CODE_LIFETIME_DAYS = 30;
-
-// Helper to check if a teacher's school owner has an active subscription
-const checkSchoolOwnerSubscription = async (user) => {
-  if (user.role === 'teacher' && user.schoolOwnerId) {
-    const schoolOwner = await User.findById(user.schoolOwnerId).select('subscriptionStatus');
-    if (!schoolOwner || schoolOwner.subscriptionStatus !== 'active') {
-      return { 
-        allowed: false, 
-        message: 'Upgrade Required: This feature is locked because your school admin has not upgraded the subscription yet. Please contact your admin to unlock full access.' 
-      };
-    }
-  }
-  return { allowed: true };
-};
-
-// Plan limits (Aligned with new Nigerian Launch Pricing)
-const getLimits = async (user) => {
-  const active = !user.subscriptionStatus || user.subscriptionStatus === 'active';
-  
-  // School Owners & Super Admins get unlimited
-  if (user.role === 'super_admin' || (active && user.subscriptionTier?.startsWith('school_'))) {
-    return { maxQuestions: 9999, maxStudents: 9999, maxGameShows: 9999, isUnlimited: true };
-  }
-  
-  // Teacher Pro
-  if (active && user.subscriptionTier === 'pro') {
-    return { maxQuestions: 60, maxStudents: 40, maxGameShows: 12, isUnlimited: false };
-  }
-  
-  // Teacher Premium (NEW)
-  if (active && user.subscriptionTier === 'premium') {
-    return { maxQuestions: 100, maxStudents: 100, maxGameShows: 30, isUnlimited: false };
-  }
-  
-  // Teachers under an active School Owner
-  if (user.role === 'teacher' && user.schoolOwnerId) {
-    const schoolOwner = await User.findById(user.schoolOwnerId).select('subscriptionStatus');
-    if (schoolOwner?.subscriptionStatus === 'active') {
-      return { maxQuestions: 50, maxStudents: 30, maxGameShows: 8, isUnlimited: false };
-    }
-  }
-  
-  // FREE TIER (Aligned with your new frontend)
-  return { maxQuestions: 30, maxStudents: 15, maxGameShows: 0, isUnlimited: false };
-};
+const NOTES_MAX = 20000; // keep in sync with the frontend
 
 const generateAccessCode = (mode = 'test') => {
   const prefix = mode === 'gameShow' ? 'G-' : 'T-';
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = prefix;
-  for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 8; i++) code += chars.charAt(crypto.randomInt(chars.length));
   return code;
 };
 
@@ -141,7 +106,7 @@ const getAccessCodeHistory = (quiz) => {
     .map((ac) => {
       const code = typeof ac === 'string' ? ac : ac.code;
       const createdAt = typeof ac === 'string' ? quiz.createdAt : ac.createdAt;
-      const expiresAt = new Date(new Date(createdAt).getTime() + 30 * 86400000); // 30 days
+      const expiresAt = new Date(new Date(createdAt).getTime() + CODE_LIFETIME_DAYS * 86400000);
       return { code, createdAt, expiresAt };
     })
     .filter((ac) => ac.code);
@@ -160,6 +125,13 @@ const uniqueCode = (mode, existing) => {
   while (existing.has(code)) code = generateAccessCode(mode);
   existing.add(code);
   return code;
+};
+
+// True if the quiz creator's plan removes the "Noted AI" branding. Missing creator = keep branding.
+const hasBranding = async (creatorId) => {
+  const creator = await User.findById(creatorId).select(PLAN_FIELDS);
+  if (!creator) return true;
+  return (await resolvePlan(creator)).branding;
 };
 
 // Is `user` the school owner of the teacher who created a quiz?
@@ -208,36 +180,72 @@ const normalizeQuestion = (q) => {
 };
 
 /* ------------------------------------------------------------------ */
+/* 0. My limits (the frontend uses this to show/prefill real limits)   */
+/* ------------------------------------------------------------------ */
+router.get('/my-limits', protect, async (req, res, next) => {
+  try {
+    const plan = await resolvePlan(req.user);
+    const finite = (v) => (Number.isFinite(v) ? v : null); // null = unlimited
+    const gameShowsUsed = await countGameShowsThisMonth(req.user._id);
+    res.json({
+      success: true,
+      data: {
+        plan: plan.key,
+        planLabel: plan.label,
+        locked: plan.locked,
+        maxQuestionsPerQuiz: plan.maxQ,
+        maxStudents: plan.codes,
+        gameShowsPerMonth: finite(plan.gameShows),
+        gameShowsUsed,
+        credits: getCreditsInfo(req.user, plan),
+        features: {
+          share: plan.share,
+          duplicate: plan.duplicate,
+          insights: plan.insights,
+          removeBranding: !plan.branding,
+        },
+      },
+    });
+  } catch (error) { next(error); }
+});
+
+/* ------------------------------------------------------------------ */
 /* 1. AI preview                                                       */
 /* ------------------------------------------------------------------ */
 
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
-    const { notes, focusTopics, difficulty, numQuestions } = req.body || {};
+    const { notes, focusTopics, difficulty, numQuestions, gameMode } = req.body || {};
     if (typeof notes !== 'string' || !notes.trim()) {
       return res.status(400).json({ success: false, message: 'Please provide some notes.' });
     }
+    if (notes.length > NOTES_MAX) {
+      return res.status(400).json({ success: false, message: `Your notes are too long. Keep them under ${NOTES_MAX.toLocaleString()} characters.` });
+    }
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
 
-    const limits = await getLimits(req.user);
-    
-    // ✅ NEW: Check if the teacher's school owner has paid
-    const subCheck = await checkSchoolOwnerSubscription(req.user);
-    if (!subCheck.allowed) {
-      return res.status(403).json({ success: false, message: subCheck.message });
+    const plan = await resolvePlan(req.user);
+    if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
+
+    if (count > plan.maxQ) {
+      return res.status(403).json({ success: false, message: `Your plan allows up to ${plan.maxQ} AI questions per quiz. Upgrade to generate more!` });
     }
 
-    if (count > limits.maxQuestions) {
-      return res.status(403).json({ success: false, message: `Your plan allows up to ${limits.maxQuestions} AI questions per quiz. Upgrade to generate more!` });
+    // Game Show previews are blocked up front, so free users don't burn credits on something they can't create.
+    if (gameMode === 'gameShow') {
+      const quotaError = await gameShowQuotaError(req.user, plan);
+      if (quotaError) return res.status(403).json({ success: false, message: quotaError });
     }
 
-    // Free users: 5 AI tests per week (teachers added under a school owner are exempt)
-    if (!limits.isUnlimited && req.user.subscriptionTier === 'free' && !req.user.schoolOwnerId) {
-      const weekAgo = new Date(Date.now() - 7 * 86400000);
-      const weekly = await Quiz.countDocuments({ createdBy: req.user._id, createdAt: { $gte: weekAgo }, gameMode: 'test' });
-      if (weekly >= 5) {
-        return res.status(403).json({ success: false, message: 'Free plan limit reached: max 5 AI tests per week. Upgrade to Pro for unlimited tests!' });
-      }
+    // Charge credits BEFORE calling the AI (atomic). Refunded below if the AI fails.
+    const charged = await spendCredits(req.user, plan, count);
+    if (!charged) {
+      const fresh = await User.findById(req.user._id).select('aiCreditsUsed creditsPeriodStart');
+      const info = getCreditsInfo(fresh || req.user, plan);
+      return res.status(403).json({
+        success: false,
+        message: `Not enough AI credits this month (${info.remaining} left, this quiz needs ${count}). Upgrade your plan or wait for your credits to refresh.`,
+      });
     }
 
     const topics = typeof focusTopics === 'string' ? focusTopics.trim().slice(0, 200) : '';
@@ -256,20 +264,23 @@ IMPORTANT FORMATTING RULES:
 Required JSON format:
 { "questions": [ { "question": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "exact option text", "explanation": "..." } ] }`;
 
-    const response = await generateWithGroq(
-      [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes.slice(0, 8000)}` }],
-      { max_tokens: Math.min(250 * count + 500, 8000), json: true }
-    );
-
     let questions;
     try {
+      const response = await generateWithGroq(
+        [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes}` }],
+        { max_tokens: Math.min(250 * count + 500, 8000), json: true }
+      );
       const parsed = JSON.parse(response.slice(response.indexOf('{'), response.lastIndexOf('}') + 1));
       questions = (parsed.questions || []).map(normalizeQuestion).filter(Boolean);
       if (questions.length === 0) throw new Error('No usable questions');
-    } catch (parseError) {
-      console.error('❌ AI JSON Parse Error:', parseError.message);
-      return res.status(502).json({ success: false, message: 'The AI returned an unusable response. Please try again with fewer notes or fewer questions.' });
+    } catch (aiError) {
+      await refundCredits(req.user._id, count);
+      console.error('❌ AI generation failed:', aiError.message);
+      return res.status(502).json({ success: false, message: 'The AI could not generate usable questions. No credits were used. Try again with fewer notes or fewer questions.' });
     }
+
+    // Only charge for questions actually returned.
+    if (questions.length < count) await refundCredits(req.user._id, count - questions.length);
 
     res.json({ success: true, data: { questions } });
   } catch (error) { next(error); }
@@ -296,53 +307,19 @@ router.post('/create-manual', protect, async (req, res, next) => {
     }
 
     const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
-    const studentCount = Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
-    
-    // ✅ 1. Get Limits
-    const limits = await getLimits(req.user);
+    // Game Show is always a 1v1 (2 team codes); a client can't ask for more.
+    const studentCount = mode === 'gameShow' ? 2 : Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
 
-    // ✅ 2. Check Monthly Quiz Creation Limit (MOVED INSIDE THE ROUTE)
-    const monthlyQuizzes = await Quiz.countDocuments({
-      createdBy: req.user._id,
-      createdAt: { $gte: new Date(Date.now() - 30 * 86400000) }
-    });
-    const monthlyLimits = {
-      free: 5,       // Keeps it tight, encourages upgrades
-      pro: 50,
-      premium: 9999,
-      school_owner: 9999,
-      school_pro: 9999,
-      school_premium: 9999
-    };
-    const userTier = req.user.subscriptionTier || 'free';
-    if (monthlyQuizzes >= monthlyLimits[userTier]) {
-      return res.status(403).json({ 
-        success: false, 
-        message: `Monthly quiz creation limit reached (${monthlyLimits[userTier]} per month). Upgrade your plan to create more!` 
-      });
+    const plan = await resolvePlan(req.user);
+    if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
+
+    if (studentCount > plan.codes) {
+      return res.status(403).json({ success: false, message: `Your plan allows up to ${plan.codes} student codes per test. Upgrade to add more!` });
     }
 
-    // ✅ 3. Check School Owner Subscription
-    const subCheck = await checkSchoolOwnerSubscription(req.user);
-    if (!subCheck.allowed) {
-      return res.status(403).json({ success: false, message: subCheck.message });
-    }
-
-    // ✅ 4. Check Student Limit
-    if (studentCount > limits.maxStudents) {
-      return res.status(403).json({ success: false, message: `Your plan allows up to ${limits.maxStudents} student codes per test. Upgrade to add more!` });
-    }
-
-    // ✅ 5. Check Game Show Limit
-    if (mode === 'gameShow' && !limits.isUnlimited) {
-      if (limits.maxGameShows === 0) {
-        return res.status(403).json({ success: false, message: 'Game Show mode is available on Teacher Pro and School plans. Upgrade to unlock it!' });
-      }
-      const monthAgo = new Date(Date.now() - 30 * 86400000);
-      const monthly = await Quiz.countDocuments({ createdBy: req.user._id, createdAt: { $gte: monthAgo }, gameMode: 'gameShow' });
-      if (monthly >= limits.maxGameShows) {
-        return res.status(403).json({ success: false, message: `Your plan allows ${limits.maxGameShows} Game Shows per month. Upgrade for more!` });
-      }
+    if (mode === 'gameShow') {
+      const quotaError = await gameShowQuotaError(req.user, plan);
+      if (quotaError) return res.status(403).json({ success: false, message: quotaError });
     }
 
     const used = new Set();
@@ -379,13 +356,12 @@ router.post('/session/start', async (req, res, next) => {
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
 
-    // ✅ FIX: Moved this AFTER quiz is defined so it doesn't crash
-    const creator = await User.findById(quiz.createdBy).select('subscriptionTier');
-    const isFreeTier = creator?.subscriptionTier === 'free';
+    // Branding follows the creator's REAL plan (school teachers inherit their school's plan)
+    const isFreeTier = await hasBranding(quiz.createdBy);
 
     let session = await QuizSession.findOne({ code });
     const resumed = Boolean(session);
-    
+
     if (!session && isCodeExpired(quiz, code)) {
       return res.status(400).json({ success: false, message: `This access code has expired (older than ${CODE_LIFETIME_DAYS} days).` });
     }
@@ -425,7 +401,7 @@ router.post('/session/start', async (req, res, next) => {
         currentQuestionIndex: session.currentQuestionIndex || 0,
         savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null,
         resumed,
-        isFreeTier // ✅ Sent to frontend for the watermark
+        isFreeTier, // true = show the Noted AI watermark
       },
     });
   } catch (error) { next(error); }
@@ -569,14 +545,27 @@ router.post('/submit', async (req, res, next) => {
 /* ------------------------------------------------------------------ */
 /* 4. Teacher / admin endpoints                                        */
 /* ------------------------------------------------------------------ */
+
+// Loads the plan of whoever CREATED the quiz (a school owner adding a code uses the teacher's limits, not unlimited).
+const planOfQuizCreator = async (req, quiz) => {
+  const creator = String(quiz.createdBy) === String(req.user._id)
+    ? req.user
+    : await User.findById(quiz.createdBy).select(PLAN_FIELDS);
+  if (!creator) return null;
+  return resolvePlan(creator);
+};
+
 router.post('/:id/regenerate-code', protect, async (req, res, next) => {
   try {
-    const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // ✅ Allow creator OR school owner
+    const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // creator OR school owner
     if (!quiz) return;
 
-    const limits = await getLimits(req.user); // ✅ Added await
-    if (!limits.isUnlimited && quiz.accessCodes.length >= limits.maxStudents) {
-      return res.status(403).json({ success: false, message: `Your plan allows up to ${limits.maxStudents} access codes per quiz. Upgrade to add more!` });
+    const plan = await planOfQuizCreator(req, quiz);
+    if (!plan) return res.status(404).json({ success: false, message: 'Quiz creator not found.' });
+    if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
+
+    if (quiz.accessCodes.length >= plan.codes) {
+      return res.status(403).json({ success: false, message: `Your plan allows up to ${plan.codes} access codes per quiz. Upgrade to add more!` });
     }
 
     const newCode = uniqueCode(quiz.gameMode || 'test', new Set(codesOf(quiz)));
@@ -590,17 +579,17 @@ router.get('/:id/results', protect, async (req, res, next) => {
     const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // creator OR the teacher's school owner
     if (!quiz) return;
     const submissions = await QuizSubmission.find({ quiz: quiz._id }).sort({ submittedAt: -1 });
-    
-    res.json({ 
-      success: true, 
-      data: { 
-        quiz: { 
-          ...quiz.toObject(), 
-          accessCodes: codesOf(quiz), 
-          accessCodeHistory: getAccessCodeHistory(quiz) // ✅ THIS FIXES THE UNDEFINED ERROR
-        }, 
-        submissions 
-      } 
+
+    res.json({
+      success: true,
+      data: {
+        quiz: {
+          ...quiz.toObject(),
+          accessCodes: codesOf(quiz),
+          accessCodeHistory: getAccessCodeHistory(quiz),
+        },
+        submissions
+      }
     });
   } catch (error) { next(error); }
 });
@@ -650,9 +639,7 @@ router.post('/validate-code', async (req, res, next) => {
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
 
-    // ✅ FIX: Moved this AFTER quiz is defined so it doesn't crash
-    const creator = await User.findById(quiz.createdBy).select('subscriptionTier');
-    const isFreeTier = creator?.subscriptionTier === 'free';
+    const isFreeTier = await hasBranding(quiz.createdBy);
 
     if (isCodeExpired(quiz, code)) {
       return res.status(400).json({ success: false, message: `This access code has expired (older than ${CODE_LIFETIME_DAYS} days).` });
@@ -679,7 +666,7 @@ router.post('/validate-code', async (req, res, next) => {
         showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
         passMark: quiz.passMark ?? 50,
         hasActiveSession,
-        isFreeTier, // ✅ Sent to frontend
+        isFreeTier, // true = show the Noted AI watermark
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
       },
     });
@@ -728,31 +715,42 @@ router.delete('/:id', protect, async (req, res, next) => {
 /* 5. Quiz Sharing Management                                         */
 /* ------------------------------------------------------------------ */
 
-// Teacher A: Generate a share code for selected quizzes
+// Teacher A: Generate a share code for selected quizzes (paid plans only)
 router.post('/share', protect, async (req, res, next) => {
   try {
-    const { quizIds, daysValid = 7 } = req.body || {};
-    if (!Array.isArray(quizIds) || quizIds.length === 0) {
-      return res.status(400).json({ success: false, message: 'Please select at least one quiz to share.' });
+    const plan = await resolvePlan(req.user);
+    if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
+    if (!plan.share) {
+      return res.status(403).json({ success: false, message: 'Secure result sharing is available on Teacher Pro and School plans. Upgrade to unlock it!' });
     }
 
+    const { quizIds, daysValid = 7 } = req.body || {};
+    const ids = Array.isArray(quizIds) ? [...new Set(quizIds.map(String))] : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please select at least one quiz to share.' });
+    }
+    if (ids.length > 50 || ids.some((id) => !mongoose.isValidObjectId(id))) {
+      return res.status(400).json({ success: false, message: 'One or more selected quizzes are invalid.' });
+    }
+    const days = Math.min(Math.max(parseInt(daysValid, 10) || 7, 1), 30);
+
     // Verify the user owns these quizzes
-    const ownedQuizzes = await Quiz.find({ _id: { $in: quizIds }, createdBy: req.user._id });
-    if (ownedQuizzes.length !== quizIds.length) {
+    const ownedCount = await Quiz.countDocuments({ _id: { $in: ids }, createdBy: req.user._id });
+    if (ownedCount !== ids.length) {
       return res.status(403).json({ success: false, message: 'You can only share quizzes you created.' });
     }
 
-    // Generate a unique share code
+    // Generate a unique share code (cryptographically random)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let shareCode = 'SHARE-';
-    for (let i = 0; i < 8; i++) shareCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < 8; i++) shareCode += chars.charAt(crypto.randomInt(chars.length));
 
-    const expiresAt = new Date(Date.now() + daysValid * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
     const share = await QuizShare.create({
       shareCode,
       ownerId: req.user._id,
-      quizIds,
+      quizIds: ids,
       expiresAt,
       isActive: true
     });
@@ -765,11 +763,11 @@ router.get('/:id/shares', protect, async (req, res, next) => {
   try {
     const quiz = await loadQuiz(req, res); // Must be owner
     if (!quiz) return;
-    
+
     const shares = await QuizShare.find({ quizIds: { $in: [quiz._id] }, isActive: true })
       .select('shareCode expiresAt createdAt')
       .sort({ createdAt: -1 });
-      
+
     res.json({ success: true, data: shares });
   } catch (error) { next(error); }
 });
@@ -779,25 +777,27 @@ router.delete('/share/:code', protect, async (req, res, next) => {
   try {
     const share = await QuizShare.findOne({ shareCode: req.params.code.toUpperCase(), ownerId: req.user._id });
     if (!share) return res.status(404).json({ success: false, message: 'Share code not found or you do not own it.' });
-    
+
     share.isActive = false;
     await share.save();
-    
+
     res.json({ success: true, message: 'Share code revoked successfully.' });
   } catch (error) { next(error); }
 });
 
 // Teacher B: Get shared quiz results using the share code
+// NOTE: still public (anyone with the code can read student results). Add `protect` here if your
+// shared-results page is only used by logged-in teachers.
 router.get('/shared-results', async (req, res, next) => {
   try {
     const { shareCode } = req.query;
-    if (!shareCode) return res.status(400).json({ success: false, message: 'Share code is required.' });
+    if (!shareCode || typeof shareCode !== 'string') return res.status(400).json({ success: false, message: 'Share code is required.' });
 
     const share = await QuizShare.findOne({ shareCode: shareCode.trim().toUpperCase(), isActive: true });
     if (!share) return res.status(404).json({ success: false, message: 'Invalid, expired, or revoked share code.' });
-    
+
     if (new Date() > share.expiresAt) {
-      share.isActive = false; 
+      share.isActive = false;
       await share.save();
       return res.status(400).json({ success: false, message: 'This share code has expired.' });
     }
@@ -808,9 +808,9 @@ router.get('/shared-results', async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        quizzes: quizzes.map(q => ({ 
-          ...q.toObject(), 
-          accessCodes: (q.accessCodes || []).map(ac => typeof ac === 'string' ? ac : ac.code) 
+        quizzes: quizzes.map(q => ({
+          ...q.toObject(),
+          accessCodes: (q.accessCodes || []).map(ac => typeof ac === 'string' ? ac : ac.code)
         })),
         submissions
       }
@@ -818,35 +818,35 @@ router.get('/shared-results', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Teacher B: Generate a new student access code for a specific shared quiz
-router.post('/shared-regenerate', async (req, res, next) => {
+// Teacher B: Generate a new student access code for a specific shared quiz.
+// Now requires login, and is capped by the quiz CREATOR's plan (it was unlimited before).
+router.post('/shared-regenerate', protect, async (req, res, next) => {
   try {
-    const { shareCode, quizId } = req.body;
-    if (!shareCode || !quizId) return res.status(400).json({ success: false, message: 'Share code and quiz ID are required.' });
+    const { shareCode, quizId } = req.body || {};
+    if (typeof shareCode !== 'string' || !shareCode || !mongoose.isValidObjectId(quizId)) {
+      return res.status(400).json({ success: false, message: 'Share code and quiz ID are required.' });
+    }
 
     const share = await QuizShare.findOne({ shareCode: shareCode.trim().toUpperCase(), isActive: true });
     if (!share || new Date() > share.expiresAt) {
       return res.status(400).json({ success: false, message: 'Invalid or expired share code.' });
     }
 
-    // ✅ FIX: Verify the quizId is actually in the shared list
-    if (!share.quizIds.includes(quizId)) {
+    if (!share.quizIds.some((id) => String(id) === String(quizId))) {
       return res.status(403).json({ success: false, message: 'You do not have access to generate codes for this quiz.' });
     }
 
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found.' });
 
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    const prefix = quiz.gameMode === 'gameShow' ? 'G-' : 'T-';
-    let newCode = prefix;
-    for (let i = 0; i < 8; i++) newCode += chars.charAt(Math.floor(Math.random() * chars.length));
-
-    while ((quiz.accessCodes || []).some(ac => (typeof ac === 'string' ? ac : ac.code) === newCode)) {
-      newCode = prefix;
-      for (let i = 0; i < 8; i++) newCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    const plan = await planOfQuizCreator(req, quiz);
+    if (!plan) return res.status(404).json({ success: false, message: 'Quiz creator not found.' });
+    if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
+    if (quiz.accessCodes.length >= plan.codes) {
+      return res.status(403).json({ success: false, message: `This quiz already has the maximum of ${plan.codes} access codes for its plan.` });
     }
 
+    const newCode = uniqueCode(quiz.gameMode || 'test', new Set(codesOf(quiz)));
     await Quiz.updateOne(
       { _id: quizId },
       { $push: { accessCodes: { code: newCode, createdAt: new Date() } }, $inc: { numberOfStudents: 1 } }
@@ -857,59 +857,72 @@ router.post('/shared-regenerate', async (req, res, next) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* 6. Duplicate / Edit & Duplicate Quiz                               */
+/* 6. Duplicate / Edit & Duplicate Quiz (Premium plans only)          */
 /* ------------------------------------------------------------------ */
 router.post('/:id/duplicate', protect, async (req, res, next) => {
   try {
     const originalQuiz = await loadQuiz(req, res); // Must be owner
     if (!originalQuiz) return;
 
-    const { title, questions } = req.body;
-
-    // If questions are provided, validate and format them (Edit & Duplicate)
-    // Otherwise, just copy the original questions (Simple Duplicate)
-    let newQuestions;
-    if (questions && Array.isArray(questions)) {
-      newQuestions = questions.map(q => {
-        const correctIdx = parseInt(q.correctOptionIndex, 10);
-        const correctAnswer = (q.options && q.options[correctIdx]) ? q.options[correctIdx].trim() : (q.correctAnswer || "").trim();
-        
-        return {
-          question: (q.question || "").trim(),
-          topic: (q.topic || "").trim(),
-          options: (q.options || ["", "", "", ""]).map(opt => (opt || "").trim()),
-          correctAnswer: correctAnswer,
-          explanation: (q.explanation || "").trim(),
-          imageUrl: q.imageUrl || ""
-        };
-      });
-    } else {
-      newQuestions = originalQuiz.questions;
+    const plan = await resolvePlan(req.user);
+    if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
+    if (!plan.duplicate) {
+      return res.status(403).json({ success: false, message: 'Duplicate quiz is available on Teacher Premium and School Premium. Upgrade to unlock it!' });
     }
 
-    // Generate fresh access codes based on the original student count
+    const isGameShow = originalQuiz.gameMode === 'gameShow';
+    if (isGameShow) {
+      const quotaError = await gameShowQuotaError(req.user, plan);
+      if (quotaError) return res.status(403).json({ success: false, message: quotaError });
+    }
+
+    const { title, questions } = req.body || {};
+
+    // Edited questions go through the same validation as a new quiz; otherwise copy the originals.
+    let newQuestions;
+    if (Array.isArray(questions) && questions.length > 0) {
+      newQuestions = questions.slice(0, 200).map((q) => {
+        const correctIdx = parseInt(q?.correctOptionIndex, 10);
+        const fromIndex = Array.isArray(q?.options) && Number.isInteger(correctIdx) ? q.options[correctIdx] : undefined;
+        return normalizeQuestion({ ...q, correctAnswer: fromIndex ?? q?.correctAnswer });
+      });
+      if (newQuestions.some((q) => !q)) {
+        return res.status(400).json({ success: false, message: 'Every question needs text, at least 2 options, and a correct answer that matches one option.' });
+      }
+    } else {
+      newQuestions = originalQuiz.questions.map((q) => normalizeQuestion(q.toObject())).filter(Boolean);
+    }
+
+    // Fresh access codes, never more than the plan allows
+    const codeCount = isGameShow ? 2 : Math.min(originalQuiz.numberOfStudents || 1, plan.codes);
     const used = new Set();
-    const newCodes = Array.from({ length: originalQuiz.numberOfStudents }, () => ({ 
-      code: uniqueCode(originalQuiz.gameMode || 'test', used), 
-      createdAt: new Date() 
+    const newCodes = Array.from({ length: codeCount }, () => ({
+      code: uniqueCode(originalQuiz.gameMode || 'test', used),
+      createdAt: new Date(),
     }));
 
-    // Create the new quiz
+    const base = originalQuiz.toObject();
+    delete base._id;
+    delete base.__v;
+    delete base.createdAt; // so the copy counts toward monthly Game Show limits
+    delete base.updatedAt;
+
     const newQuiz = await Quiz.create({
-      ...originalQuiz.toObject(),
-      _id: undefined, // Let MongoDB generate a new ID
-      title: title || `${originalQuiz.title} (Copy)`,
+      ...base,
+      title: (typeof title === 'string' && title.trim() ? title.trim() : `${originalQuiz.title} (Copy)`).slice(0, 160),
       questions: newQuestions,
       accessCodes: newCodes,
+      numberOfStudents: codeCount,
       createdBy: req.user._id,
+      createdAt: new Date(),
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: title ? 'New quiz created successfully!' : 'Quiz duplicated successfully!',
-      data: { 
-        newQuizId: newQuiz._id, 
-        accessCodes: codesOf(newQuiz) 
+      data: {
+        newQuizId: newQuiz._id,
+        accessCodes: codesOf(newQuiz)
       }
     });
   } catch (error) { next(error); }
