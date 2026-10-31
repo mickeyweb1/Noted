@@ -6,16 +6,16 @@ const userSchema = new mongoose.Schema({
     email: { type: String, required: [true, 'Email is required'], unique: true, lowercase: true, trim: true },
     password: { type: String, required: [true, 'Password is required'], minlength: [6, 'Password must be at least 6 characters'], select: false },
     role: { type: String, enum: ['student', 'school_admin', 'personal_user', 'teacher', 'super_admin'], default: 'personal_user' },
-      claimedAt: { type: Date, default: null },
-    schoolName: { type: String, default: 'Global' }, 
-    favoriteSubject: { type: String, default: '' }, 
-    bio: { type: String, default: '' }, 
+    claimedAt: { type: Date, default: null },
+    schoolName: { type: String, default: 'Global' },
+    favoriteSubject: { type: String, default: '' },
+    bio: { type: String, default: '' },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', default: null },
-    className: { type: String, default: '' },  
-    phone: { type: String, default: '' },     
+    className: { type: String, default: '' },
+    phone: { type: String, default: '' },
     isActive: { type: Boolean, default: true },
-    uniqueInviteCode: { type: String, unique: true, sparse: true }, 
-    
+    uniqueInviteCode: { type: String, unique: true, sparse: true },
+
     xp: { type: Number, default: 0, min: 0 },
     level: { type: Number, default: 1, min: 1 },
     focusSessionsToday: { type: Number, default: 0 },
@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
     revisionActivityDates: { type: [String], default: [] },
     totalFocusHours: { type: Number, default: 0 },
     dailyFocusLog: { type: Map, of: Number, default: {} },
-    
+
     pendingBattles: [{
       challengerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       opponentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
@@ -50,25 +50,35 @@ const userSchema = new mongoose.Schema({
       createdAt: { type: Date, default: Date.now }
     }],
 
-    // ✅ NEW: Subscription & Billing Fields
-    subscriptionTier: { 
-        type: String, 
-        enum: ['free', 'pro', 'school_owner'], 
-        default: 'free' 
+    // ---- Subscription & billing ----
+    // Must match the keys in config/plans.js
+    subscriptionTier: {
+        type: String,
+        enum: ['free', 'pro', 'premium', 'school_owner', 'school_pro', 'school_premium'],
+        default: 'free'
     },
+    subscriptionStatus: {
+        type: String,
+        enum: ['active', 'canceled', 'past_due'],
+        default: 'active'
+    },
+    // Set this in your Paystack webhook: now + 1 month (monthly) or now + 3 months (termly).
+    // When it passes, the plan stops counting even if nothing else changed.
+    subscriptionEndsAt: { type: Date, default: null },
+    billingCycle: { type: String, enum: ['monthly', 'termly'], default: 'monthly' },
+
     isSchoolOwner: { type: Boolean, default: false },
-    maxTeachersAllowed: { type: Number, default: 0 }, // e.g., 4 for the base $20 plan
+    maxTeachersAllowed: { type: Number, default: 0 }, // 4 / 13 / 30 depending on school tier (+ paid extras)
     currentTeachersCount: { type: Number, default: 0 },
-    subscriptionStatus: { 
-        type: String, 
-        enum: ['active', 'canceled', 'past_due'], 
-        default: 'active' 
-    },
-    schoolOwnerId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User', 
-        default: null 
-    } // Links a teacher to a school owner's account
+    schoolOwnerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    }, // Links a teacher to a school owner's account
+
+    // ---- AI credits (30-day rolling period) ----
+    aiCreditsUsed: { type: Number, default: 0, min: 0 },
+    creditsPeriodStart: { type: Date, default: null },
 
 }, { timestamps: true });
 
