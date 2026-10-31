@@ -275,18 +275,6 @@ Required JSON format:
   } catch (error) { next(error); }
 });
 
-// Add to create-manual route
-const monthlyQuizzes = await Quiz.countDocuments({
-  createdBy: req.user._id,
-  createdAt: { $gte: new Date(Date.now() - 30 * 86400000) }
-});
-
-const monthlyLimits = {
-  free: 10,
-  pro: 50,
-  teacher: 30,
-  school_owner: 9999
-};
 
 /* ------------------------------------------------------------------ */
 /* 2. Finalize quiz                                                    */
@@ -301,7 +289,6 @@ router.post('/create-manual', protect, async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Pass mark must be a whole number from 0 to 100.' });
     }
     if (!Array.isArray(questions) || questions.length === 0) return res.status(400).json({ success: false, message: 'A quiz needs at least one question.' });
-    
 
     const cleanQuestions = questions.slice(0, 200).map(normalizeQuestion);
     if (cleanQuestions.some((q) => !q)) {
@@ -310,8 +297,23 @@ router.post('/create-manual', protect, async (req, res, next) => {
 
     const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
     const studentCount = Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
-   const limits = await getLimits(req.user);
+    
+    // ✅ 1. Get Limits
+    const limits = await getLimits(req.user);
 
+    // ✅ 2. Check Monthly Quiz Creation Limit (MOVED INSIDE THE ROUTE)
+    const monthlyQuizzes = await Quiz.countDocuments({
+      createdBy: req.user._id,
+      createdAt: { $gte: new Date(Date.now() - 30 * 86400000) }
+    });
+    const monthlyLimits = {
+      free: 5,       // Keeps it tight, encourages upgrades
+      pro: 50,
+      premium: 9999,
+      school_owner: 9999,
+      school_pro: 9999,
+      school_premium: 9999
+    };
     const userTier = req.user.subscriptionTier || 'free';
     if (monthlyQuizzes >= monthlyLimits[userTier]) {
       return res.status(403).json({ 
@@ -320,16 +322,18 @@ router.post('/create-manual', protect, async (req, res, next) => {
       });
     }
 
-     // ✅ NEW: Check if the teacher's school owner has paid
+    // ✅ 3. Check School Owner Subscription
     const subCheck = await checkSchoolOwnerSubscription(req.user);
     if (!subCheck.allowed) {
       return res.status(403).json({ success: false, message: subCheck.message });
     }
 
+    // ✅ 4. Check Student Limit
     if (studentCount > limits.maxStudents) {
       return res.status(403).json({ success: false, message: `Your plan allows up to ${limits.maxStudents} student codes per test. Upgrade to add more!` });
     }
 
+    // ✅ 5. Check Game Show Limit
     if (mode === 'gameShow' && !limits.isUnlimited) {
       if (limits.maxGameShows === 0) {
         return res.status(403).json({ success: false, message: 'Game Show mode is available on Teacher Pro and School plans. Upgrade to unlock it!' });
@@ -360,7 +364,6 @@ router.post('/create-manual', protect, async (req, res, next) => {
       createdBy: req.user._id,
     });
 
-    // `accessCodes` in the response is a list of plain strings (what the frontend pages expect)
     res.json({ success: true, data: quiz, accessCodes: codesOf(quiz) });
   } catch (error) { next(error); }
 });
