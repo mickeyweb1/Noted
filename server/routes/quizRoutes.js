@@ -92,17 +92,26 @@ const checkSchoolOwnerSubscription = async (user) => {
   return { allowed: true };
 };
 
-// Plan limits (this was missing from the last version, so nothing was being enforced)
-// Plan limits
-const getLimits = async (user) => { // ✅ Made async to safely check school owner
+// Plan limits (Aligned with new Nigerian Launch Pricing)
+const getLimits = async (user) => {
   const active = !user.subscriptionStatus || user.subscriptionStatus === 'active';
   
-  if (user.role === 'super_admin' || (active && user.subscriptionTier === 'school_owner')) {
+  // School Owners & Super Admins get unlimited
+  if (user.role === 'super_admin' || (active && user.subscriptionTier?.startsWith('school_'))) {
     return { maxQuestions: 9999, maxStudents: 9999, maxGameShows: 9999, isUnlimited: true };
   }
+  
+  // Teacher Pro
   if (active && user.subscriptionTier === 'pro') {
     return { maxQuestions: 60, maxStudents: 40, maxGameShows: 12, isUnlimited: false };
   }
+  
+  // Teacher Premium (NEW)
+  if (active && user.subscriptionTier === 'premium') {
+    return { maxQuestions: 100, maxStudents: 100, maxGameShows: 30, isUnlimited: false };
+  }
+  
+  // Teachers under an active School Owner
   if (user.role === 'teacher' && user.schoolOwnerId) {
     const schoolOwner = await User.findById(user.schoolOwnerId).select('subscriptionStatus');
     if (schoolOwner?.subscriptionStatus === 'active') {
@@ -110,8 +119,8 @@ const getLimits = async (user) => { // ✅ Made async to safely check school own
     }
   }
   
-  // ✅ FREE TIER LIMITS: Changed to 30 questions and 20 students
-  return { maxQuestions: 30, maxStudents: 20, maxGameShows: 0, isUnlimited: false };
+  // FREE TIER (Aligned with your new frontend)
+  return { maxQuestions: 30, maxStudents: 15, maxGameShows: 0, isUnlimited: false };
 };
 
 const generateAccessCode = (mode = 'test') => {
