@@ -6,13 +6,12 @@ import { useUserContext } from "../../context/userContext";
 import api from "../../utils/api";
  
 export default function AdminDashboard() {
-  const { user, isAuthLoading } = useUserContext(); 
-  const [searchParams, setSearchParams] = useSearchParams(); // ✅ ADDED
-  const [showSuccessModal, setShowSuccessModal] = useState(false); // ✅ ADDED
+  const { user, isAuthLoading, refreshUser } = useUserContext(); // ✅ ONLY ONE CALL
+  const [searchParams, setSearchParams] = useSearchParams(); 
+  const [showSuccessModal, setShowSuccessModal] = useState(false); 
   
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
- const { user, isAuthLoading, refreshUser } = useUserContext(); 
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
