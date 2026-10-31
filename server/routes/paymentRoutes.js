@@ -1,71 +1,150 @@
 import express from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { User } from '../models/User.js';
+import { protect } from '../middleware/protect.js';
+import { PLANS } from '../config/plans.js';
+import { PRICES } from '../config/prices.js';
 
 const router = express.Router();
 
-// Paystack Webhook Endpoint
-// NOTE: Paystack requires this endpoint to be accessible via HTTPS in production.
-// For local testing, use a tool like ngrok to expose your localhost.
-router.post('/webhook', express.json(), async (req, res) => {
-  try {
-    // 1. Verify the Paystack signature
-    const hash = crypto
-      .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
-      .update(JSON.stringify(req.body))
-      .digest('hex');
+// Calendar-safe month add (Jan 31 + 1 month = Feb 28/29, not Mar 3).
+const addMonths = (date, n) => {
+  const d = new Date(date);
+  const day = d.getDate();
+  d.setMonth(d.getMonth() + n);
+  if (d.getDate() < day) d.setDate(0);
+  return d;
+};
 
-    if (hash !== req.headers['x-paystack-signature']) {
+const reject = (reason) => ({ status: 'rejected', reason });
+
+/**
+ * Turns a successful Paystack transaction into a subscription.
+ * Used by BOTH the webhook and /verify, so it must be safe to run more than once:
+ *  - the amount is checked against the server price table (the browser can't be trusted)
+ *  - each Paystack reference is applied only once
+ *  - renewing the same plan early extends from the current end date instead of losing days
+ */
+export const activateFromTransaction = async (tx) => {
+  if (!tx || tx.status !== 'success') return reject('Transaction was not successful.');
+  if (typeof tx.reference !== 'string' || !tx.reference) return reject('Transaction has no reference.');
+
+  const meta = tx.metadata || {};
+  const plan = PRICES[meta.plan];
+  const cycle = meta.billingCycle === 'termly' ? 'termly' : 'monthly';
+  if (!plan || !mongoose.isValidObjectId(meta.userId)) return reject('Unknown plan or user in the payment metadata.');
+
+  const expectedKobo = plan[cycle] * 100;
+  if (tx.currency !== 'NGN' || Number(tx.amount) !== expectedKobo) {
+    return reject(`Amount mismatch: paid ${tx.amount} ${tx.currency}, expected ${expectedKobo} NGN kobo for ${meta.plan} (${cycle}).`);
+  }
+
+  const user = await User.findById(meta.userId).select('subscriptionTier subscriptionStatus subscriptionEndsAt maxTeachersAllowed');
+  if (!user) return reject('User not found.');
+
+  const now = new Date();
+  const stillLive = user.subscriptionStatus === 'active' && user.subscriptionEndsAt && user.subscriptionEndsAt > now;
+  const sameTier = Boolean(stillLive) && user.subscriptionTier === plan.tier;
+  const endsAt = addMonths(sameTier ? user.subscriptionEndsAt : now, cycle === 'termly' ? 3 : 1);
+
+  const set = {
+    subscriptionTier: plan.tier,
+    subscriptionStatus: 'active',
+    billingCycle: cycle,
+    subscriptionEndsAt: endsAt,
+  };
+  // New plan (or a lapsed one) starts with fresh credits. An early renewal keeps the current usage.
+  if (!sameTier) {
+    set.aiCreditsUsed = 0;
+    set.creditsPeriodStart = now;
+  }
+  if (plan.tier.startsWith('school_')) {
+    set.isSchoolOwner = true;
+    set.maxTeachersAllowed = Math.max(user.maxTeachersAllowed || 0, PLANS[plan.tier].teachers);
+  }
+
+  // The `$ne` filter makes this atomic: a repeated reference matches nothing and is skipped.
+  const updated = await User.findOneAndUpdate(
+    { _id: user._id, paymentReferences: { $ne: tx.reference } },
+    { $set: set, $addToSet: { paymentReferences: tx.reference } },
+    { new: true, runValidators: true }
+  );
+
+  if (!updated) return { status: 'duplicate', tier: user.subscriptionTier };
+  return { status: 'activated', tier: updated.subscriptionTier, endsAt };
+};
+
+/* ------------------------------------------------------------------ */
+/* Paystack webhook (server to server)                                 */
+/* ------------------------------------------------------------------ */
+// Needs req.rawBody: see the express.json({ verify }) change in server.js.
+router.post('/webhook', async (req, res) => {
+  try {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) {
+      console.error('❌ PAYSTACK_SECRET_KEY is not set; cannot verify webhooks.');
+      return res.status(500).json({ success: false, message: 'Payments are not configured.' });
+    }
+
+    const raw = req.rawBody ?? Buffer.from(JSON.stringify(req.body));
+    const expected = Buffer.from(crypto.createHmac('sha512', secret).update(raw).digest('hex'));
+    const received = Buffer.from(String(req.headers['x-paystack-signature'] || ''));
+    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
       return res.status(401).json({ success: false, message: 'Invalid signature' });
     }
 
-    const event = req.body.event;
-
-    // 2. Handle successful charge
-    if (event === 'charge.success') {
-      const data = req.body.data;
-      const metadata = data.metadata || {};
-      
-      const userId = metadata.userId;
-      const plan = metadata.plan; // e.g., 'teacher_pro', 'school_owner'
-      const billingCycle = metadata.billingCycle || 'monthly';
-
-      if (!userId || !plan) {
-        return res.status(400).json({ success: false, message: 'Missing metadata' });
+    if (req.body?.event === 'charge.success') {
+      const result = await activateFromTransaction(req.body.data);
+      if (result.status === 'rejected') {
+        // Answer 200 anyway: retrying a bad payment won't fix it. Check the logs and refund/fix by hand.
+        console.error(`⚠️ Payment not applied (${req.body.data?.reference}): ${result.reason}`);
+      } else {
+        console.log(`✅ Payment ${result.status}: ${req.body.data?.reference} -> ${result.tier}`);
       }
-
-      // 3. Calculate subscription end date
-      const monthsToAdd = billingCycle === 'termly' ? 3 : 1;
-      const subscriptionEndsAt = new Date();
-      subscriptionEndsAt.setMonth(subscriptionEndsAt.getMonth() + monthsToAdd);
-
-      // 4. Update the user's subscription in the database
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        {
-          subscriptionTier: plan,
-          subscriptionStatus: 'active',
-          billingCycle: billingCycle,
-          subscriptionEndsAt: subscriptionEndsAt,
-          aiCreditsUsed: 0, // Reset credits for the new period
-          creditsPeriodStart: new Date(),
-        },
-        { new: true }
-      );
-
-      if (!updatedUser) {
-        return res.status(404).json({ success: false, message: 'User not found' });
-      }
-
-      console.log(`✅ Payment successful! Upgraded user ${userId} to ${plan} (${billingCycle})`);
     }
 
-    // Always return 200 OK to Paystack so they know you received it
     return res.status(200).json({ success: true, message: 'Webhook received' });
   } catch (error) {
+    // 500 makes Paystack retry later, which is what we want for temporary DB errors.
     console.error('❌ Webhook error:', error);
     return res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
+});
+
+/* ------------------------------------------------------------------ */
+/* Verify right after checkout, so the plan is live without waiting    */
+/* for the webhook. Safe to call alongside the webhook (idempotent).   */
+/* ------------------------------------------------------------------ */
+router.post('/verify', protect, async (req, res, next) => {
+  try {
+    const reference = typeof req.body?.reference === 'string' ? req.body.reference.trim() : '';
+    if (!reference || reference.length > 100) {
+      return res.status(400).json({ success: false, message: 'A payment reference is required.' });
+    }
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(500).json({ success: false, message: 'Payments are not configured.' });
+    }
+
+    const psRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+    });
+    const body = await psRes.json().catch(() => null);
+    if (!psRes.ok || !body?.status || !body.data) {
+      return res.status(400).json({ success: false, message: 'Paystack could not confirm this payment yet.' });
+    }
+
+    const tx = body.data;
+    // You can only claim your own payment.
+    if (String(tx.metadata?.userId) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'This payment belongs to a different account.' });
+    }
+
+    const result = await activateFromTransaction(tx);
+    if (result.status === 'rejected') return res.status(400).json({ success: false, message: result.reason });
+
+    res.json({ success: true, activated: true, tier: result.tier });
+  } catch (error) { next(error); }
 });
 
 export default router;
