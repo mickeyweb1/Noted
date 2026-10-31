@@ -79,6 +79,8 @@ const userSchema = new mongoose.Schema({
     // ---- AI credits (30-day rolling period) ----
     aiCreditsUsed: { type: Number, default: 0, min: 0 },
     creditsPeriodStart: { type: Date, default: null },
+      // Paystack references already applied. Stops a repeated webhook from upgrading twice.
+  paymentReferences: { type: [String], default: [], select: false },
 
 }, { timestamps: true });
 
