@@ -16,7 +16,7 @@ import {
 /* Hard caps. The user's PLAN limits (from /quiz/my-limits) can only   */
 /* make these smaller. Keep in sync with the backend validation.       */
 /* ------------------------------------------------------------------ */
-const MAX_QUESTIONS = 50;          // AI questions per request
+const MAX_QUESTIONS = 150;          // AI questions per request
 const MAX_MANUAL_QUESTIONS = 200;  // manual questions per quiz (backend caps at 200)
 const MAX_STUDENTS = 500;
 const MAX_TAB_SWITCHES = 100;

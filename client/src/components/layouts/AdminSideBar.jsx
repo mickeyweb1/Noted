@@ -12,7 +12,8 @@ import {
   MessageSquare,
   Trophy,
   Share2,
-  GraduationCap // ✅ Added for Teachers
+  GraduationCap,
+  Crown // ✅ Added for Upgrade button
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -28,13 +29,14 @@ export default function AdminSideBar({ isOpen, onClose }) {
   };
 
   const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
+  const isFree = user?.subscriptionTier === 'free' || !user?.subscriptionTier; // ✅ Check if user is on free plan
+
   const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
-        { to: "/admin/join-shared-quiz", icon: Share2, label: "Join Shared Quiz" },
+    { to: "/admin/join-shared-quiz", icon: Share2, label: "Join Shared Quiz" },
     ...(isOwner ? [
       { to: "/admin/teachers", icon: GraduationCap, label: "My Teachers" },
       { to: "/admin/add-teacher", icon: UserPlus, label: "Add Teacher" },
-      // ✅ REMOVED: "My Students" and "Add Student" to keep it clean
     ] : []),
     { to: "/admin/quizzes", icon: Brain, label: "Formal Test" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
@@ -99,7 +101,21 @@ export default function AdminSideBar({ isOpen, onClose }) {
         ))}
       </nav>
 
-      {/* 3. USER PROFILE FOOTER */}
+      {/* 3. UPGRADE BANNER (Only for Free users) */}
+      {isFree && (
+        <div className="px-4 pb-2">
+          <NavLink
+            to="/pricing"
+            onClick={onClose}
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand/80 px-4 py-3 text-sm font-semibold text-brand-foreground shadow-md transition-all hover:scale-[1.02] hover:shadow-lg"
+          >
+            <Crown className="w-4 h-4" />
+            <span>Upgrade to Pro</span>
+          </NavLink>
+        </div>
+      )}
+
+      {/* 4. USER PROFILE FOOTER */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2 shrink-0">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
           <div className="flex items-center justify-center w-9 h-9 rounded-full bg-brand/10 text-brand shrink-0">

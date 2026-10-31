@@ -1,7 +1,8 @@
 import { useRef, useEffect } from "react";
-import { PanelLeft, Search, Sun, Moon } from "lucide-react";
-import { useLocation } from "react-router-dom";
-import { useTheme } from "../../hooks/useTheme"; // Adjust path if needed
+import { PanelLeft, Search, Sun, Moon, Crown } from "lucide-react"; // ✅ Added Crown
+import { useLocation, NavLink } from "react-router-dom"; // ✅ Added NavLink
+import { useTheme } from "../../hooks/useTheme";
+import { useUserContext } from "../../context/userContext"; // ✅ Added User Context
 
 const pageTitles = {
   "/admin/dashboard": "Dashboard",
@@ -14,8 +15,11 @@ const pageTitles = {
 export default function AdminTopBar({ onToggleSidebar }) {
   const searchInputRef = useRef(null);
   const { pathname } = useLocation();
+  const { user } = useUserContext(); // ✅ Get user data to check plan
   const pageTitle = pageTitles[pathname] || "Admin Dashboard";
-   const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
+
+  const isFree = user?.subscriptionTier === 'free' || !user?.subscriptionTier; // ✅ Check if free
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -62,7 +66,18 @@ export default function AdminTopBar({ onToggleSidebar }) {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* ✅ FIXED: Use toggleTheme here */}
+        {/* ✅ NEW: Upgrade Button for Free Users */}
+        {isFree && (
+          <NavLink
+            to="/pricing"
+            className="hidden md:inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-brand-foreground shadow-sm transition-colors hover:bg-brand/90"
+          >
+            <Crown className="w-4 h-4" />
+            Upgrade
+          </NavLink>
+        )}
+        
+        {/* Theme Toggle */}
         <button 
           onClick={toggleTheme}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
