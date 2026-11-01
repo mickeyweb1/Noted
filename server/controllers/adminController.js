@@ -2,6 +2,7 @@ import { User } from '../models/User.js';
 import { Organization } from '../models/Organization.js';
 import { Quiz } from '../models/Quiz.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
+import { SCHOOL_PLAN_TIERS } from '../config/plans.js';
 import crypto from 'crypto'; 
 
 // Helper to generate a unique SCHOOL code
@@ -302,15 +303,22 @@ export const addTeacher = async (req, res, next) => {
       await User.findByIdAndUpdate(req.user._id, { schoolName: org.name, schoolId: org._id });
     }
     
-    // Reserve a slot atomically (super admins AND school admins skip the limit for testing)
-    if (req.user.role !== 'super_admin' && req.user.role !== 'school_admin') {
+    const hasDevelopmentLimitBypass =
+      req.user.role === 'school_admin' && ['development', 'test'].includes(process.env.NODE_ENV);
+    if (req.user.role !== 'super_admin' && !hasDevelopmentLimitBypass) {
       const owner = await User.findOneAndUpdate(
-        { _id: req.user._id, subscriptionTier: 'school_owner', $expr: { $lt: ['$currentTeachersCount', '$maxTeachersAllowed'] } },
+        {
+          _id: req.user._id,
+          subscriptionTier: { $in: SCHOOL_PLAN_TIERS },
+          subscriptionStatus: 'active',
+          $or: [{ subscriptionEndsAt: null }, { subscriptionEndsAt: { $gt: new Date() } }],
+          $expr: { $lt: ['$currentTeachersCount', '$maxTeachersAllowed'] },
+        },
         { $inc: { currentTeachersCount: 1 } }, 
         { new: true }
       );
       if (!owner) {
-        return res.status(403).json({ success: false, message: 'Teachers need the School Owner plan, or you have reached your teacher limit. Upgrade to add more.' });
+        return res.status(403).json({ success: false, message: 'An active School plan with available teacher slots is required to add a teacher.' });
       }
       reserved = true;
     }

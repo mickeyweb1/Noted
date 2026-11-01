@@ -20,6 +20,8 @@ export const PLANS = {
   school_premium: { label: 'School Premium',  credits: 600, maxQ: 150, codes: 100, gameShows: 30, teachers: 30, branding: false, share: true,  duplicate: true,  insights: true  },
 };
 
+export const SCHOOL_PLAN_TIERS = Object.keys(PLANS).filter((tier) => tier.startsWith('school_'));
+
 const DAY = 86400000;
 export const CREDIT_PERIOD_DAYS = 30;
 

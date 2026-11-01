@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { Organization } from '../models/Organization.js';
+import { SCHOOL_PLAN_TIERS } from '../config/plans.js';
 
 dotenv.config();
 
@@ -91,7 +92,13 @@ if (finalRole === 'teacher' && !code) {
       if (finalRole === 'teacher') {
         // Same limits as "Add Teacher": the owner must be on the School plan and have a free slot
         const owner = await User.findOneAndUpdate(
-          { _id: org.adminId, subscriptionTier: 'school_owner', $expr: { $lt: ['$currentTeachersCount', '$maxTeachersAllowed'] } },
+          {
+            _id: org.adminId,
+            subscriptionTier: { $in: SCHOOL_PLAN_TIERS },
+            subscriptionStatus: 'active',
+            $or: [{ subscriptionEndsAt: null }, { subscriptionEndsAt: { $gt: new Date() } }],
+            $expr: { $lt: ['$currentTeachersCount', '$maxTeachersAllowed'] },
+          },
           { $inc: { currentTeachersCount: 1 } },
           { new: true }
         );
