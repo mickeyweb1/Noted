@@ -33,6 +33,17 @@ const buildAccessibleSetQuery = (user) => {
   return query;
 };
 
+export const sanitizeSharedStudySet = (studySet) => {
+  const data = typeof studySet?.toObject === 'function' ? studySet.toObject() : studySet;
+  if (!data || typeof data !== 'object') throw new TypeError('A Study Set is required.');
+  const sharedSet = { ...data };
+  delete sharedSet.sourceText;
+  delete sharedSet.tutorMessages;
+  delete sharedSet.userId;
+  delete sharedSet.schoolId;
+  return { ...sharedSet, canEdit: false };
+};
+
 const buildShareUrl = (shareCode) => {
   const base = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
   return `${base}/study-sets/shared/${shareCode}`;
@@ -194,8 +205,7 @@ export const getSharedStudySet = async (req, res, next) => {
     const studySet = await StudySet.findOne({ 'share.isEnabled': true, 'share.shareCode': shareCode }).lean();
     if (!studySet) throw httpError('This shared Study Set could not be found.', 404);
 
-    const { sourceText, tutorMessages, ...publicSet } = studySet;
-    return res.json({ success: true, data: publicSet });
+    return res.json({ success: true, data: sanitizeSharedStudySet(studySet) });
   } catch (error) {
     return next(error);
   }
@@ -344,7 +354,11 @@ export const getStudySet = async (req, res, next) => {
       ],
     });
     if (!studySet) throw httpError('Study Set not found.', 404);
-    return res.json({ success: true, data: studySet });
+    const isOwner = String(studySet.userId) === String(req.user._id);
+    const data = isOwner
+      ? { ...studySet.toObject(), canEdit: true }
+      : sanitizeSharedStudySet(studySet);
+    return res.json({ success: true, data });
   } catch (error) {
     return next(error);
   }

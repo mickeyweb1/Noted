@@ -1,7 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { Lock, ShieldCheck, ArrowLeft, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
-import { useFlutterwave, closePaymentModal } from "flutterwave-react-v3";
+import { Lock, ShieldCheck, ArrowLeft, AlertTriangle, Loader2 } from "lucide-react";
 import api from "../utils/api";
 import { useUserContext } from "../context/userContext";
 
@@ -22,56 +21,44 @@ export default function CheckoutPage() {
   const billingCycle = searchParams.get("billing") === "termly" ? "termly" : "monthly";
   const planDetails = PLAN_PRICES[planKey];
   const amountInNaira = planDetails?.[billingCycle];
+  const paymentReference = searchParams.get("reference") || searchParams.get("trxref");
 
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const processedReference = useRef("");
 
   const userId = user?._id ?? user?.id;
   const coveredBySchool = Boolean(user?.schoolOwnerId);
-  const busy = status === "confirming";
+  const busy = status !== "idle";
 
-  // This function runs AFTER the user successfully pays on Flutterwave
-  const handleFlutterwavePayment = useCallback(
-    async (response) => {
-      setStatus("confirming");
-      try {
-        // Send the Flutterwave transaction ID to our backend to verify and activate
-        await api.post("/payment/verify", { 
-          reference: response.transaction_id,
-          tx_ref: response.tx_ref
-        });
-        await refreshUser?.();
-        navigate("/admin/dashboard?payment=success", { replace: true });
-      } catch (err) {
-        setStatus("idle");
-        setError(
-          err.response?.data?.message || 
-          `Payment was successful, but we couldn't activate your plan yet. Please contact support with Transaction ID: ${response.transaction_id}`
-        );
-      }
-    },
-    [navigate, refreshUser]
-  );
+  const verifyPayment = useCallback(async (reference) => {
+    setStatus("confirming");
+    setError("");
+    try {
+      await api.post("/payment/verify", { reference });
+      const refreshedUser = await refreshUser?.();
+      const role = refreshedUser?.role || user?.role;
+      const destination = ["school_admin", "super_admin", "teacher"].includes(role)
+        ? "/admin/dashboard?payment=success"
+        : "/dashboard?payment=success";
+      navigate(destination, { replace: true });
+    } catch (requestError) {
+      setStatus("idle");
+      setError(
+        requestError.response?.data?.message ||
+        `We couldn't verify this payment yet. Please retry or contact support with reference: ${reference}`,
+      );
+    }
+  }, [navigate, refreshUser, user?.role]);
 
-  const config = {
-    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
-    tx_ref: `noted_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    amount: amountInNaira || 0,
-    currency: "NGN",
-    payment_options: "card, mobilemoneyghana, ussd",
-    customer: {
-      email: user?.email || "",
-      name: user?.fullName || "Customer",
-    },
-    customizations: {
-      title: "Noted AI Subscription",
-      description: `Payment for ${planDetails?.label} (${billingCycle})`,
-      logo: "https://www.usenotedai.com/logo.png", // Replace with your actual logo URL
-    },
-  };
+  useEffect(() => {
+    if (isAuthLoading || !paymentReference || processedReference.current === paymentReference) return;
+    processedReference.current = paymentReference;
+    void verifyPayment(paymentReference);
+  }, [isAuthLoading, paymentReference, verifyPayment]);
 
-  const handlePayment = (e) => {
-    e.preventDefault();
+  const handlePayment = useCallback(async (event) => {
+    event.preventDefault();
     setError("");
 
     if (!userId) {
@@ -81,16 +68,20 @@ export default function CheckoutPage() {
     if (!planDetails || !amountInNaira) return setError("That plan doesn't exist. Please pick one from the pricing page.");
     if (coveredBySchool) return setError("Your plan is provided by your school, so you don't need to pay here.");
 
-    // Trigger the Flutterwave modal
-    const handleFlutterwave = useFlutterwave(config);
-    handleFlutterwave({
-      callback: handleFlutterwavePayment,
-      onClose: () => {
-        setStatus("idle");
-        closePaymentModal();
-      },
-    });
-  };
+    setStatus("initializing");
+    try {
+      const response = await api.post("/payment/initialize", { plan: planKey, billingCycle });
+      const authorizationUrl = response.data?.data?.authorizationUrl;
+      const checkoutUrl = typeof authorizationUrl === "string" ? new URL(authorizationUrl) : null;
+      if (checkoutUrl?.protocol !== "https:" || checkoutUrl.hostname !== "checkout.paystack.com") {
+        throw new Error("Paystack returned an invalid checkout URL.");
+      }
+      window.location.assign(checkoutUrl.href);
+    } catch (requestError) {
+      setStatus("idle");
+      setError(requestError.response?.data?.message || requestError.message || "Secure checkout could not be opened.");
+    }
+  }, [billingCycle, coveredBySchool, navigate, planDetails, planKey, amountInNaira, userId]);
 
   if (!planDetails) {
     return (
@@ -121,13 +112,18 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
           <div className="space-y-6 lg:col-span-3">
             <form onSubmit={handlePayment} className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground">Secure payment via Flutterwave</h2>
+              <h2 className="text-lg font-semibold text-foreground">Secure payment via Paystack</h2>
 
               {error && (
                 <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div className="min-w-0">
                     <p className="break-words">{error}</p>
+                    {paymentReference && (
+                      <button type="button" onClick={() => void verifyPayment(paymentReference)} className="mt-2 font-semibold underline">
+                        Verify payment again
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -148,12 +144,12 @@ export default function CheckoutPage() {
                 disabled={busy || coveredBySchool}
                 className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-base font-semibold text-brand-foreground shadow-lg shadow-brand/20 transition-all hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {busy ? (<><Loader2 className="h-5 w-5 animate-spin" /> Activating your plan…</>) : (<><Lock className="h-4 w-4" /> Pay securely ₦{amountInNaira.toLocaleString()}</>)}
+                {busy ? (<><Loader2 className="h-5 w-5 animate-spin" /> {status === "initializing" ? "Opening secure checkout…" : "Verifying your payment…"}</>) : (<><Lock className="h-4 w-4" /> Pay securely ₦{amountInNaira.toLocaleString()}</>)}
               </button>
 
               <div className="flex items-center justify-center gap-4 pt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> 256-bit SSL Encrypted</span>
-                <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Secured by Flutterwave</span>
+                <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Secured by Paystack</span>
               </div>
             </form>
           </div>

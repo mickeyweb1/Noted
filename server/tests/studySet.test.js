@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getYoutubeVideoId, validateGeneratedSet } from '../controllers/studySetController.js';
+import { getYoutubeVideoId, sanitizeSharedStudySet, validateGeneratedSet } from '../controllers/studySetController.js';
 
 const generatedSet = () => ({
   title: 'Cell Biology',
@@ -39,4 +39,23 @@ test('accepts supported YouTube URL forms and rejects other hosts', () => {
   assert.equal(getYoutubeVideoId('https://youtu.be/abcdefghijk'), 'abcdefghijk');
   assert.equal(getYoutubeVideoId('https://youtube.com/shorts/abcdefghijk'), 'abcdefghijk');
   assert.throws(() => getYoutubeVideoId('https://youtube.com.attacker.example/watch?v=abcdefghijk'), { status: 400 });
+});
+
+test('sanitizes shared Study Sets without exposing source text or tutor history', () => {
+  const sharedSet = sanitizeSharedStudySet({
+    _id: 'set-id',
+    userId: 'owner-id',
+    schoolId: 'school-id',
+    sourceText: 'Private uploaded source',
+    tutorMessages: [{ role: 'user', content: 'Private tutor question' }],
+    notes: { summarized: 'Shared notes' },
+    flashcards: [{ front: 'Question', back: 'Answer' }],
+  });
+
+  assert.equal(sharedSet.canEdit, false);
+  assert.equal(sharedSet.notes.summarized, 'Shared notes');
+  assert.equal('sourceText' in sharedSet, false);
+  assert.equal('tutorMessages' in sharedSet, false);
+  assert.equal('userId' in sharedSet, false);
+  assert.equal('schoolId' in sharedSet, false);
 });

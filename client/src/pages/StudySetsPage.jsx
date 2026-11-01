@@ -99,6 +99,7 @@ export default function StudySetsPage() {
     ? Math.round((masteredCount / studySet.flashcards.length) * 100)
     : 0;
   const currentCard = studySet?.flashcards?.[cardIndex];
+  const canEditStudySet = studySet?.canEdit !== false;
   const notes = notesMode === 'comprehensive' ? studySet?.notes?.comprehensive : studySet?.notes?.summarized;
 
   const chooseFile = (event) => {
@@ -361,7 +362,7 @@ export default function StudySetsPage() {
               <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${studySet.flashcards.length ? masteredCount / studySet.flashcards.length * 100 : 0}%` }} />
             </div>
           </div>
-          {!shareCode && (
+          {!shareCode && canEditStudySet && (
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => toggleStudySetShare(!studySet.share?.isEnabled)} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent">
                 {studySet.share?.isEnabled ? <Link2 size={16} /> : <Share2 size={16} />}
@@ -387,7 +388,7 @@ export default function StudySetsPage() {
         </div>
       </header>
       <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Study modes">
-        {tabs.map(({ id: tabId, label, icon: Icon }) => (
+        {tabs.filter(({ id: tabId }) => tabId !== 'tutor' || canEditStudySet).map(({ id: tabId, label, icon: Icon }) => (
           <button key={tabId} type="button" onClick={() => setActiveTab(tabId)} aria-pressed={activeTab === tabId}
             className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${activeTab === tabId ? 'border-brand bg-brand text-brand-foreground' : 'border-border bg-card text-muted-foreground hover:bg-accent'}`}>
             <Icon size={16} />{label}
@@ -418,10 +419,14 @@ export default function StudySetsPage() {
             <span className="mb-3 text-xs font-semibold uppercase tracking-wide text-brand">{showAnswer ? 'Answer' : 'Question'} · click to flip</span>
             {showAnswer ? currentCard.back : currentCard.front}
           </button>
-          <div className="flex flex-wrap justify-center gap-3">
-            <button type="button" className="rounded-xl border border-border px-4 py-2.5 font-semibold hover:bg-accent" disabled={busy || !showAnswer} onClick={() => reviewCurrentCard(false)}>Review again</button>
-            <button type="button" className={buttonClass} disabled={busy || !showAnswer} onClick={() => reviewCurrentCard(true)}><Check size={17} /> I know this</button>
-          </div>
+          {canEditStudySet ? (
+            <div className="flex flex-wrap justify-center gap-3">
+              <button type="button" className="rounded-xl border border-border px-4 py-2.5 font-semibold hover:bg-accent" disabled={busy || !showAnswer} onClick={() => reviewCurrentCard(false)}>Review again</button>
+              <button type="button" className={buttonClass} disabled={busy || !showAnswer} onClick={() => reviewCurrentCard(true)}><Check size={17} /> I know this</button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">This shared Study Set is read-only. Your reviews are not saved to the owner's progress.</p>
+          )}
           <div className="flex justify-center gap-3 text-sm">
             <button type="button" className="text-brand" onClick={() => { setCardIndex((index) => (index + studySet.flashcards.length - 1) % studySet.flashcards.length); setShowAnswer(false); }}>Previous</button>
             <button type="button" className="text-brand" onClick={() => { setCardIndex((index) => (index + 1) % studySet.flashcards.length); setShowAnswer(false); }}>Next</button>
