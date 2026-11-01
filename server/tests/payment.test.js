@@ -74,6 +74,19 @@ test('rejects invalid checkout plans and school-plan purchases by non-admins', a
     }),
     { status: 400 },
   );
+  await assert.rejects(
+    initializePaystackTransaction({
+      user: {
+        _id: userId,
+        email: 'learner@example.test',
+        role: 'student',
+        schoolId: '65b123456789012345678903',
+      },
+      planKey: 'teacher_pro',
+      billingCycle: 'monthly',
+    }),
+    { status: 403 },
+  );
 });
 
 test('activates only a verified exact-amount payment and atomically rejects duplicate references', async () => {

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { User } from '../models/User.js';
-import { getCreditsInfo, refundCredits, spendCredits } from '../config/plans.js';
+import { Organization } from '../models/Organization.js';
+import { getCreditsInfo, refundCredits, resolvePlan, spendCredits } from '../config/plans.js';
 
 const userId = '65b123456789012345678901';
 
@@ -66,4 +67,36 @@ test('reports credit rollover and remaining credits from the active period', () 
   assert.equal(expired.used, 0);
   assert.equal(expired.remaining, 10);
   assert.equal(expired.resetsAt, null);
+});
+
+test('resolves an existing school student plan through their school organization', async () => {
+  const originalOrganizationFindById = Organization.findById;
+  const originalUserFindById = User.findById;
+  const ownerId = '65b123456789012345678902';
+  Organization.findById = () => ({
+    select: async () => ({ adminId: ownerId }),
+  });
+  User.findById = (id) => ({
+    select: async () => {
+      assert.equal(String(id), ownerId);
+      return {
+        subscriptionTier: 'school_pro',
+        subscriptionStatus: 'active',
+        subscriptionEndsAt: new Date(Date.now() + 86400000),
+      };
+    },
+  });
+
+  try {
+    const plan = await resolvePlan({
+      role: 'student',
+      schoolId: '65b123456789012345678903',
+      schoolOwnerId: null,
+    });
+    assert.equal(plan.key, 'school_pro');
+    assert.equal(plan.locked, null);
+  } finally {
+    Organization.findById = originalOrganizationFindById;
+    User.findById = originalUserFindById;
+  }
 });
