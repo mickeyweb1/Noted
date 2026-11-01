@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useLocation } from "react-router-dom";
 import { useWebVitals } from "../hooks/useWebVitals";
 
-const SITE_URL = (import.meta.env.VITE_SITE_URL || "https://usenotedai.com").replace(/\/+$/, "");
+export const SITE_URL = (import.meta.env.VITE_SITE_URL || "https://usenotedai.com").replace(/\/+$/, "");
+export const GOOGLE_SITE_VERIFICATION = import.meta.env.VITE_GOOGLE_SITE_VERIFICATION || "";
 const DEFAULT_TITLE = "Noted | AI-Powered Study Tools for Students";
 const DEFAULT_DESCRIPTION = "Turn class notes into clear summaries, quizzes, flashcards, and audio lessons with Noted's AI-powered learning platform.";
 const DEFAULT_METADATA = { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, robots: "noindex,nofollow" };
@@ -128,7 +129,7 @@ function SEOHead({ metadata, pathname }) {
     document.title = title;
     setMeta('meta[name="description"]', "name", "description", description);
     setMeta('meta[name="robots"]', "name", "robots", robots);
-    setMeta('meta[name="google-site-verification"]', "name", "google-site-verification", googleSiteVerification || import.meta.env.VITE_GOOGLE_SITE_VERIFICATION);
+    setMeta('meta[name="google-site-verification"]', "name", "google-site-verification", googleSiteVerification || GOOGLE_SITE_VERIFICATION);
     setMeta('meta[name="keywords"]', "name", "keywords", keywords);
     setMeta('meta[property="og:title"]', "property", "og:title", title);
     setMeta('meta[property="og:description"]', "property", "og:description", description);

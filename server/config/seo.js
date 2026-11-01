@@ -1,4 +1,6 @@
-export const SITE_URL = (process.env.SEO_SITE_URL || process.env.CLIENT_URL || 'https://usenotedai.com').replace(/\/+$/, '');
+export function getSiteUrl() {
+  return (process.env.SEO_SITE_URL || process.env.CLIENT_URL || 'https://usenotedai.com').replace(/\/+$/, '');
+}
 
 export const PUBLIC_SEO_PAGES = [
   { path: '/', priority: '1.0' },
@@ -26,7 +28,7 @@ export function getAdditionalPublicPaths(rawPaths = process.env.SEO_PUBLIC_PATHS
   return paths.map((path) => ({ path, priority: '0.6' }));
 }
 
-export function buildSitemapXml(siteUrl = SITE_URL, pages = PUBLIC_SEO_PAGES) {
+export function buildSitemapXml(siteUrl = getSiteUrl(), pages = PUBLIC_SEO_PAGES) {
   const uniquePages = new Map(pages.map((page) => [page.path, page]));
   const urls = [...uniquePages.values()].map(({ path, priority }) => {
     const loc = new URL(path, `${siteUrl}/`).href

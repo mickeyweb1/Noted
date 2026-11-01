@@ -15,7 +15,7 @@ The site has no public study-set, note, or quiz-detail routes today. User librar
 
 ## Add SEO to a page
 
-Use the reusable component for a new public page. Canonicals are absolute URLs on `VITE_SITE_URL`; the default canonical uses the current pathname and omits query/filter parameters.
+Known marketing routes (`/`, `/about`, `/school`, `/student`, `/personal`, `/pricing`, and `/contact`) get route-specific titles and descriptions and are prerendered during the production build. Use the reusable component for new or dynamic pages. Canonicals are absolute URLs on `VITE_SITE_URL`; the default canonical uses the current pathname and omits query/filter parameters.
 
 ```jsx
 import SEO from "../components/SEO";
@@ -54,6 +54,66 @@ export default function StudySetPage({ studySet }) {
   );
 }
 ```
+
+For a quiz, use a `LearningResource` schema and publish only information intended to be public:
+
+```jsx
+<SEO
+  title={`${quiz.title} practice quiz | Noted`}
+  description={quiz.description}
+  canonical={`/quizzes/${quiz.slug}`}
+  structuredData={{
+    "@context": "https://schema.org",
+    "@type": "LearningResource",
+    name: quiz.title,
+    description: quiz.description,
+    learningResourceType: "Quiz",
+    educationalLevel: quiz.educationalLevel,
+    inLanguage: "en",
+  }}
+/>
+```
+
+For a blog or editorial article:
+
+```jsx
+<SEO
+  title={`${article.title} | Noted`}
+  description={article.summary}
+  canonical={`/articles/${article.slug}`}
+  type="article"
+  structuredData={{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: article.title,
+    description: article.summary,
+    datePublished: article.publishedAt,
+    dateModified: article.updatedAt,
+    author: { "@type": "Person", name: article.authorName },
+    mainEntityOfPage: `https://usenotedai.com/articles/${article.slug}`,
+  }}
+/>
+```
+
+For an article, include truthful authorship and publication dates. For an actual school detail page, use `EducationalOrganization` only for public institution information:
+
+```jsx
+<SEO
+  title={`${school.name} | Noted`}
+  description={school.publicDescription}
+  canonical={`/schools/${school.slug}`}
+  type="article"
+  structuredData={{
+    "@context": "https://schema.org",
+    "@type": "EducationalOrganization",
+    name: school.name,
+    url: `https://usenotedai.com/schools/${school.slug}`,
+    description: school.publicDescription,
+  }}
+/>
+```
+
+The homepage metadata is provided automatically for `/`; its global JSON-LD identifies Noted as an `Organization` and `WebSite`. `PricingPage` is an additional live example: its FAQ schema is generated from the same visible FAQ data as the page.
 
 `SEO` also accepts `type`, `robots`, `keywords`, `alternates`, `previousPage`, `nextPage`, `googleSiteVerification`, and one or more `structuredData` objects. For article pages, pass an `Article` or `BlogPosting` schema with accurate author and publication dates. Use `FAQPage` only when the same questions and answers are visible on the page. A course page can pass a `Course` schema; a quiz or other learning activity can use `LearningResource`. Structured data helps search engines understand a page but does not guarantee a rich result.
 

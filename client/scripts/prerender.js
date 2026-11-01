@@ -8,7 +8,8 @@ import { StaticRouter } from "react-router";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const clientDirectory = path.resolve(scriptDirectory, "..");
-const siteUrl = (process.env.VITE_SITE_URL || "https://usenotedai.com").replace(/\/+$/, "");
+let siteUrl = (process.env.VITE_SITE_URL || "https://usenotedai.com").replace(/\/+$/, "");
+let googleSiteVerification = process.env.VITE_GOOGLE_SITE_VERIFICATION || "";
 const routes = [
   { path: "/", module: "/src/pages/marketing/LandingPage.jsx" },
   { path: "/about", module: "/src/pages/marketing/AboutPage.jsx" },
@@ -47,7 +48,7 @@ function renderHead(template, pathname, metadata) {
 
   addMeta("name", "description", metadata.description);
   addMeta("name", "robots", metadata.robots || "index,follow");
-  addMeta("name", "google-site-verification", process.env.VITE_GOOGLE_SITE_VERIFICATION);
+  addMeta("name", "google-site-verification", googleSiteVerification);
   addMeta("name", "keywords", metadata.keywords);
   addMeta("property", "og:type", metadata.type || "website");
   addMeta("property", "og:title", metadata.title);
@@ -109,8 +110,10 @@ const vite = await createServer({
 });
 
 try {
-  const { PUBLIC_PAGES } = await vite.ssrLoadModule("/src/components/SEO.jsx");
-  const { SEOProvider } = await vite.ssrLoadModule("/src/components/SEO.jsx");
+  const seoModule = await vite.ssrLoadModule("/src/components/SEO.jsx");
+  const { PUBLIC_PAGES, SITE_URL, GOOGLE_SITE_VERIFICATION, SEOProvider } = seoModule;
+  siteUrl = SITE_URL;
+  googleSiteVerification = GOOGLE_SITE_VERIFICATION;
   const { UserContextProvider } = await vite.ssrLoadModule("/src/context/userContext.jsx");
   const template = await readFile(path.join(clientDirectory, "dist/index.html"), "utf8");
 
