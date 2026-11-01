@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { Lock, ShieldCheck, ArrowLeft, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import api from "../utils/api";
@@ -37,7 +37,7 @@ export default function CheckoutPage() {
   const coveredBySchool = Boolean(user?.schoolOwnerId); // a school teacher's plan comes from the school
   const busy = status !== "idle";
 
-  const confirmPayment = async (reference) => {
+  const confirmPayment = useCallback(async (reference) => {
     setStatus("confirming");
     setPendingRef(reference);
     try {
@@ -54,13 +54,13 @@ export default function CheckoutPage() {
     }
     try { await refreshUser?.(); } catch { /* the dashboard refreshes again */ }
     navigate("/admin/dashboard?payment=success", { replace: true });
-  };
+  }, [navigate, refreshUser]);
 
   useEffect(() => {
     if (!callbackReference || processedReference.current === callbackReference) return;
     processedReference.current = callbackReference;
     confirmPayment(callbackReference);
-  }, [callbackReference]);
+  }, [callbackReference, confirmPayment]);
 
   const handlePayment = async (e) => {
     e.preventDefault();
