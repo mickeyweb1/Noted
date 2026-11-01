@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowRight, AudioLines, Eye, EyeOff, LockKeyhole, Mail, LoaderCircle } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AuthLayout from './authLayout';
 import { ThemeToggle } from '../components/themeToggle';
 import UnsplashCredit from '../components/UnsplashCredit';
@@ -18,6 +18,7 @@ function getRememberedEmail() {
 
 export default function LoginPage() {
   const { login } = useUserContext();
+  const location = useLocation();
   const navigate = useNavigate();
   const [email, setEmail] = useState(getRememberedEmail);
   const [password, setPassword] = useState('');
@@ -66,11 +67,16 @@ export default function LoginPage() {
       // then updates Axios before the protected dashboard route mounts.
       login(user, token);
       toast.success('Welcome back!');
-      if (user.role === 'school_admin' || user.role === 'super_admin' || user.role === 'teacher') {
-        navigate('/admin/dashboard', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
+      const defaultDestination = user.role === 'school_admin' || user.role === 'super_admin' || user.role === 'teacher'
+        ? '/admin/dashboard'
+        : '/dashboard';
+      const requestedDestination = location.state?.from;
+      const destination = typeof requestedDestination === 'string'
+        && requestedDestination.startsWith('/')
+        && !requestedDestination.startsWith('//')
+        ? requestedDestination
+        : defaultDestination;
+      navigate(destination, { replace: true });
     } catch (err) {
       console.error('[Auth] Login failed:', err.response?.data?.message || err.message);
       const message = err.response?.data?.message || 'Login failed. Check your network.';

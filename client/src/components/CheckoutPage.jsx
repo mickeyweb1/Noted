@@ -20,7 +20,7 @@ const PLAN_PRICES = {
 export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, refreshUser } = useUserContext();
+  const { user, refreshUser, isAuthLoading } = useUserContext();
 
   const planKey = searchParams.get("plan") || "teacher_pro";
   const billingCycle = searchParams.get("billing") === "termly" ? "termly" : "monthly";
@@ -57,10 +57,15 @@ export default function CheckoutPage() {
   }, [navigate, refreshUser]);
 
   useEffect(() => {
-    if (!callbackReference || processedReference.current === callbackReference) return;
+    if (!callbackReference || processedReference.current === callbackReference || isAuthLoading) return;
     processedReference.current = callbackReference;
+    if (!userId) {
+      const callbackParams = new URLSearchParams({ plan: planKey, billing: billingCycle, reference: callbackReference });
+      navigate("/login", { state: { from: `/checkout?${callbackParams}` }, replace: true });
+      return;
+    }
     confirmPayment(callbackReference);
-  }, [callbackReference, confirmPayment]);
+  }, [billingCycle, callbackReference, confirmPayment, isAuthLoading, navigate, planKey, userId]);
 
   const handlePayment = async (e) => {
     e.preventDefault();
