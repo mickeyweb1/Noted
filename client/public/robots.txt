@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /checkout
+Disallow: /login
+Disallow: /signup
+Disallow: /support
+
+Sitemap: https://usenotedai.com/sitemap.xml

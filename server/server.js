@@ -26,6 +26,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import quizRoutes from './routes/quizRoutes.js';
 import revisionRoutes from './routes/revisionRoutes.js';
 import academicRoutes from './routes/academicRoutes.js';
+import seoRoutes from './routes/seoRoutes.js';
 
 dotenv.config();
 
@@ -84,6 +85,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/quiz', quizRoutes);
 app.use('/api/revision', revisionRoutes);
 app.use('/api/academic', academicRoutes);
+app.use('/api/seo', seoRoutes);
 app.use('/api/support', supportRoutes); 
 
 app.get('/', (req, res) => res.json({ success: true, message: '✅ Noted Backend API is running!' }));

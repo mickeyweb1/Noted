@@ -6,13 +6,16 @@ import "./index.css";
 import App from "./App.jsx";
 import { UserContextProvider } from "./context/userContext.jsx";
 import { BrowserRouter } from "react-router-dom";
+import { SEOProvider } from "./components/SEO.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
-      <UserContextProvider>
-        <App />
-      </UserContextProvider>
+      <SEOProvider>
+        <UserContextProvider>
+          <App />
+        </UserContextProvider>
+      </SEOProvider>
     </BrowserRouter>
   </StrictMode>,
 );
