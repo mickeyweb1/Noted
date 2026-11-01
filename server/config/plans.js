@@ -40,13 +40,13 @@ const isLive = (u) =>
 /**
  * Works out which plan a user is really on right now.
  * - super_admin: unlimited
- * - teacher under a school owner: the OWNER's plan, if it is live (otherwise locked)
+ * - teacher/student under a school owner: the OWNER's school plan, if it is live (otherwise locked)
  * - everyone else: their own plan, if live (otherwise free)
  */
 export const resolvePlan = async (user) => {
   if (user.role === 'super_admin') return { ...UNLIMITED, locked: null };
 
-  if (user.role === 'teacher' && user.schoolOwnerId) {
+  if ((user.role === 'teacher' || user.role === 'student') && user.schoolOwnerId) {
     const owner = await User.findById(user.schoolOwnerId).select('subscriptionTier subscriptionStatus subscriptionEndsAt');
     if (owner && isLive(owner) && PLANS[owner.subscriptionTier] && owner.subscriptionTier.startsWith('school_')) {
       return { key: owner.subscriptionTier, ...PLANS[owner.subscriptionTier], locked: null };

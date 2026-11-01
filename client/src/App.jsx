@@ -123,6 +123,7 @@ function App() {
         <Route path="/aiGenerator" element={<StudentAiGenerator />} />
         <Route path="/ai-flashcards" element={<AiFlashcards />} />
         <Route path="/study-sets" element={<StudySetsPage />} />
+        <Route path="/study-sets/shared/:shareCode" element={<StudySetsPage />} />
         <Route path="/study-sets/:id" element={<StudySetsPage />} />
         <Route path="/myLibrary" element={<StudentLibrary />} />
         <Route path="/quiz" element={<StudentQuiz />} />

@@ -9,6 +9,11 @@ const studySetSchema = new mongoose.Schema({
     name: { type: String, trim: true, maxlength: 255, default: '' },
     url: { type: String, trim: true, maxlength: 500, default: '' },
   },
+  share: {
+    isEnabled: { type: Boolean, default: false },
+    shareCode: { type: String, trim: true, maxlength: 32, unique: true, sparse: true, default: null },
+    createdAt: { type: Date, default: null },
+  },
   sourceText: { type: String, required: true, maxlength: 50000 },
   notes: {
     summarized: { type: String, required: true, maxlength: 30000 },

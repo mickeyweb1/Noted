@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Check, ChevronRight, Clock3, FileText, Loader2,
-  MessageCircle, RotateCw, Sparkles, Upload, Video,
+  ArrowLeft, Check, ChevronRight, Clock3, Copy, FileText, Loader2,
+  Link2, MessageCircle, RotateCw, Share2, Sparkles, Upload, Video,
 } from 'lucide-react';
 import api from '../utils/api';
 import * as Tesseract from 'tesseract.js';
@@ -23,7 +23,7 @@ const tabs = [
 ];
 
 export default function StudySetsPage() {
-  const { id } = useParams();
+  const { id, shareCode } = useParams();
   const navigate = useNavigate();
   const [sets, setSets] = useState([]);
   const [studySet, setStudySet] = useState(null);
@@ -67,13 +67,29 @@ export default function StudySetsPage() {
     }
   }, []);
 
+  const loadSharedStudySet = useCallback(async (code) => {
+    try {
+      setBusy(true);
+      setError('');
+      const response = await api.get(`/study-sets/shared/${code}`);
+      setStudySet(response.data.data);
+      setActiveTab('notes');
+      setCardIndex(0);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'This shared Study Set could not be loaded.');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (id) void loadStudySet(id);
+      if (shareCode) void loadSharedStudySet(shareCode);
+      else if (id) void loadStudySet(id);
       else void loadSets();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [id, loadSets, loadStudySet]);
+  }, [id, loadSets, loadSharedStudySet, loadStudySet, shareCode]);
 
   const masteredCount = useMemo(
     () => studySet?.flashcards?.filter((card) => card.repetitions >= 3).length || 0,
@@ -189,12 +205,47 @@ export default function StudySetsPage() {
     }
   };
 
+  const shareUrl = studySet?.share?.shareCode ? `${window.location.origin}/study-sets/shared/${studySet.share.shareCode}` : '';
+
+  const toggleStudySetShare = async (enabled) => {
+    if (!studySet || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const response = await api.post(`/study-sets/${studySet._id}/share`, { enabled });
+      setStudySet((current) => ({
+        ...current,
+        share: response.data.data.share,
+      }));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'The Study Set could not be shared.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setError('');
+      alert('Share link copied to your clipboard.');
+    } catch {
+      setError('Your browser blocked clipboard access. Please copy the link manually.');
+    }
+  };
+
+  if (shareCode && (!studySet || String(studySet.share?.shareCode || '') !== shareCode)) {
+    if (busy) return <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-brand" aria-label="Loading Study Set" /></div>;
+    return <div className="mx-auto max-w-4xl space-y-4"><Link to="/study-sets" className="inline-flex items-center gap-2 text-sm text-brand"><ArrowLeft size={16} /> Back to Study Sets</Link>{error && <p role="alert" className="text-destructive">{error}</p>}</div>;
+  }
+
   if (id && (!studySet || String(studySet._id) !== id)) {
     if (busy) return <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-brand" aria-label="Loading Study Set" /></div>;
     return <div className="mx-auto max-w-4xl space-y-4"><Link to="/study-sets" className="inline-flex items-center gap-2 text-sm text-brand"><ArrowLeft size={16} /> All Study Sets</Link>{error && <p role="alert" className="text-destructive">{error}</p>}</div>;
   }
 
-  if (!id) {
+  if (!id && !shareCode) {
     return (
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="space-y-2">
@@ -283,11 +334,29 @@ export default function StudySetsPage() {
           <h1 className="mt-1 text-2xl font-bold text-foreground md:text-3xl">{studySet.title}</h1>
           {studySet.source?.url && <a className="mt-2 inline-block text-sm text-muted-foreground underline" href={studySet.source.url} target="_blank" rel="noreferrer">Open original video</a>}
         </div>
-        <div className="min-w-44">
-          <div className="mb-1 flex justify-between text-xs"><span>You know</span><span>{masteryPercent}% · {masteredCount}/{studySet.flashcards.length}</span></div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Study Set mastery" aria-valuemin={0} aria-valuemax={studySet.flashcards.length} aria-valuenow={masteredCount}>
-            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${studySet.flashcards.length ? masteredCount / studySet.flashcards.length * 100 : 0}%` }} />
+        <div className="flex min-w-44 flex-col items-end gap-3">
+          <div className="w-full">
+            <div className="mb-1 flex justify-between text-xs"><span>You know</span><span>{masteryPercent}% · {masteredCount}/{studySet.flashcards.length}</span></div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Study Set mastery" aria-valuemin={0} aria-valuemax={studySet.flashcards.length} aria-valuenow={masteredCount}>
+              <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${studySet.flashcards.length ? masteredCount / studySet.flashcards.length * 100 : 0}%` }} />
+            </div>
           </div>
+          {!shareCode && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => toggleStudySetShare(!studySet.share?.isEnabled)} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent">
+                {studySet.share?.isEnabled ? <Link2 size={16} /> : <Share2 size={16} />}
+                {studySet.share?.isEnabled ? 'Disable sharing' : 'Share set'}
+              </button>
+              {studySet.share?.isEnabled && shareUrl && (
+                <button type="button" onClick={copyShareLink} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent">
+                  <Copy size={16} /> Copy link
+                </button>
+              )}
+            </div>
+          )}
+          {shareCode && studySet.share?.isEnabled && (
+            <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-brand">Shared study set</div>
+          )}
         </div>
       </header>
       <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Study modes">

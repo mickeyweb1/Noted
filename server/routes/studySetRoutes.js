@@ -4,10 +4,12 @@ import { protect } from '../middleware/protect.js';
 import {
   createStudySetFromText,
   createStudySetFromUpload,
+  getSharedStudySet,
   getStudySet,
   listStudySets,
   reviewStudySetCard,
   sendStudySetTutorMessage,
+  toggleStudySetShare,
 } from '../controllers/studySetController.js';
 
 const router = express.Router();
@@ -26,10 +28,13 @@ const receiveUpload = (req, res, next) => upload.single('file')(req, res, (error
   return next();
 });
 
+router.get('/shared/:shareCode', getSharedStudySet);
 router.use(protect);
 router.get('/', listStudySets);
 router.post('/', createStudySetFromText);
 router.post('/upload', receiveUpload, createStudySetFromUpload);
+router.post('/:id/share', toggleStudySetShare);
+router.delete('/:id/share', toggleStudySetShare);
 router.post('/:id/tutor', sendStudySetTutorMessage);
 router.post('/:id/cards/:cardId/review', reviewStudySetCard);
 router.get('/:id', getStudySet);

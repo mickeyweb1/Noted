@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { randomUUID } from 'node:crypto';
 import { parseOfficeAsync } from 'officeparser';
 import { fetchTranscript } from 'youtube-transcript';
 import { generateWithGroq } from '../config/grok.js';
@@ -20,6 +21,13 @@ const cleanText = (value) => {
   if (!text) throw httpError('No readable text was found in the source.', 422);
   if (text.length > MAX_SOURCE_LENGTH) throw httpError('Source material must be 50,000 characters or fewer.', 413);
   return text;
+};
+
+const generateShareCode = () => `NS-${randomUUID().slice(0, 8).toUpperCase()}`;
+
+const buildShareUrl = (shareCode) => {
+  const base = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+  return `${base}/study-sets/shared/${shareCode}`;
 };
 
 const parseJson = (value) => {
@@ -168,6 +176,61 @@ const createStudySet = async ({ req, res, sourceText, source, title, subject }) 
   }
 };
 
+export const getSharedStudySet = async (req, res, next) => {
+  try {
+    const shareCode = typeof req.params?.shareCode === 'string' ? req.params.shareCode.trim().toUpperCase() : '';
+    if (!shareCode) throw httpError('This shared Study Set could not be found.', 404);
+
+    const studySet = await StudySet.findOne({ 'share.isEnabled': true, 'share.shareCode': shareCode }).lean();
+    if (!studySet) throw httpError('This shared Study Set could not be found.', 404);
+
+    const { sourceText, tutorMessages, ...publicSet } = studySet;
+    return res.json({ success: true, data: publicSet });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const toggleStudySetShare = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) throw httpError('Study Set not found.', 404);
+    const enabled = req.method === 'DELETE' ? false : req.body?.enabled !== false;
+    const studySet = await StudySet.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!studySet) throw httpError('Study Set not found.', 404);
+
+    const plan = await resolvePlan(req.user);
+    if (!plan.share) throw httpError('Sharing Study Sets is available on paid plans. Upgrade to unlock it.', 403);
+
+    if (!enabled) {
+      studySet.share = { isEnabled: false, shareCode: null, createdAt: null };
+      await studySet.save();
+      return res.json({ success: true, data: { share: { isEnabled: false, shareCode: null, shareUrl: null } } });
+    }
+
+    const shareCode = (studySet.share?.shareCode || generateShareCode()).toUpperCase();
+    const shareUrl = buildShareUrl(shareCode);
+    studySet.share = {
+      isEnabled: true,
+      shareCode,
+      createdAt: studySet.share?.createdAt || new Date(),
+    };
+    await studySet.save();
+
+    return res.json({
+      success: true,
+      data: {
+        share: {
+          isEnabled: true,
+          shareCode: studySet.share.shareCode,
+          shareUrl,
+        },
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const createStudySetFromText = async (req, res, next) => {
   try {
     const source = req.body?.source && typeof req.body.source === 'object' ? req.body.source : {};
@@ -227,7 +290,7 @@ export const listStudySets = async (req, res, next) => {
   try {
     const sets = await StudySet.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
-      .select('title subject source flashcards.repetitions createdAt updatedAt');
+      .select('title subject source share flashcards.repetitions createdAt updatedAt');
     return res.json({ success: true, data: sets });
   } catch (error) {
     return next(error);
