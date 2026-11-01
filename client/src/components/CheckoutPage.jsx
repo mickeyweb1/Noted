@@ -6,7 +6,7 @@ import { useUserContext } from "../context/userContext";
 
 /*
  * Display prices only. The server checks every payment against its own price table
- * (backend/config/prices.js), so changing a number here cannot lower what a user is charged.
+ * (server/config/prices.js), so changing a number here cannot lower what a user is charged.
  * Keep both in sync with the pricing page.
  */
 const PLAN_PRICES = {

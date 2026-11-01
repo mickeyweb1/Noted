@@ -148,6 +148,7 @@ cp client/.env.example client/.env
 | `JWT_SECRET` | Yes | Long, private, randomly generated secret for signing authentication tokens |
 | `VITE_API_URL` | Yes for local client setup | API base URL, including `/api` |
 | `CLIENT_URL` | Recommended | Frontend origin used for CORS and generated links |
+| `PAYSTACK_SECRET_KEY` | Required for payments | Paystack secret key used to initialize and verify transactions and validate webhooks |
 | `PORT` | No | API port; defaults to `5000` |
 | `GAME_SHOW_OUTBOX_DIR` | Recommended for production | Directory for pending Game Show results and active match snapshots; point this to a persistent mounted disk to recover them after an API restart |
 
@@ -159,6 +160,7 @@ For local development, use these values where appropriate:
 # server/.env
 PORT=5000
 CLIENT_URL=http://localhost:5173
+PAYSTACK_SECRET_KEY=your_paystack_secret_key
 
 # Configure these with your actual values:
 MONGO_URI=your_mongodb_connection_string
@@ -215,6 +217,19 @@ Configure the corresponding credentials for the media features you intend to use
 
 - `ELEVENLABS_API_KEY`
 - `ELEVENLABS_VOICE_ID` — optional voice configuration
+
+</details>
+
+<details>
+<summary><strong>💳 Paystack payments</strong></summary>
+
+Set `PAYSTACK_SECRET_KEY` in the server environment and `CLIENT_URL` to the deployed frontend origin. The pricing checkout initializes payments on the server using the plan prices in `server/config/prices.js`; never put the secret key in the client environment. Configure the Paystack webhook URL as:
+
+```text
+https://your-api-host/api/payment/webhook
+```
+
+The checkout returns to `/checkout` to verify the transaction, while the webhook handles server-to-server confirmation.
 
 </details>
 
