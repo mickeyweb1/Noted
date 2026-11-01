@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useLocation } from "react-router-dom";
 import { useWebVitals } from "../hooks/useWebVitals";
 
-export const SITE_URL = (import.meta.env.VITE_SITE_URL || "https://usenotedai.com").replace(/\/+$/, "");
+export const SITE_URL = (import.meta.env.VITE_SITE_URL || "https://www.usenotedai.com").replace(/\/+$/, "");
 export const GOOGLE_SITE_VERIFICATION = import.meta.env.VITE_GOOGLE_SITE_VERIFICATION || "";
 const DEFAULT_TITLE = "Noted | AI-Powered Study Tools for Students";
 const DEFAULT_DESCRIPTION = "Turn class notes into clear summaries, quizzes, flashcards, and audio lessons with Noted's AI-powered learning platform.";

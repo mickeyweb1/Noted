@@ -28,7 +28,7 @@ export default function StudySetPage({ studySet }) {
     name: studySet.title,
     description: studySet.description,
     learningResourceType: "Study set",
-    url: `https://usenotedai.com${url}`,
+    url: `https://www.usenotedai.com${url}`,
     inLanguage: "en",
   };
 
@@ -90,7 +90,7 @@ For a blog or editorial article:
     datePublished: article.publishedAt,
     dateModified: article.updatedAt,
     author: { "@type": "Person", name: article.authorName },
-    mainEntityOfPage: `https://usenotedai.com/articles/${article.slug}`,
+    mainEntityOfPage: `https://www.usenotedai.com/articles/${article.slug}`,
   }}
 />
 ```
@@ -107,7 +107,7 @@ For an article, include truthful authorship and publication dates. For an actual
     "@context": "https://schema.org",
     "@type": "EducationalOrganization",
     name: school.name,
-    url: `https://usenotedai.com/schools/${school.slug}`,
+    url: `https://www.usenotedai.com/schools/${school.slug}`,
     description: school.publicDescription,
   }}
 />

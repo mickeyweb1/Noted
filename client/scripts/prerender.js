@@ -8,7 +8,7 @@ import { StaticRouter } from "react-router";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const clientDirectory = path.resolve(scriptDirectory, "..");
-let siteUrl = (process.env.VITE_SITE_URL || "https://usenotedai.com").replace(/\/+$/, "");
+let siteUrl = (process.env.VITE_SITE_URL || "https://www.usenotedai.com").replace(/\/+$/, "");
 let googleSiteVerification = process.env.VITE_GOOGLE_SITE_VERIFICATION || "";
 const routes = [
   { path: "/", module: "/src/pages/marketing/LandingPage.jsx" },

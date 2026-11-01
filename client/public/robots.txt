@@ -9,4 +9,4 @@ Disallow: /login
 Disallow: /signup
 Disallow: /support
 
-Sitemap: https://usenotedai.com/sitemap.xml
+Sitemap: https://www.usenotedai.com/sitemap.xml

@@ -1,5 +1,5 @@
 export function getSiteUrl() {
-  return (process.env.SEO_SITE_URL || process.env.CLIENT_URL || 'https://usenotedai.com').replace(/\/+$/, '');
+  return (process.env.SEO_SITE_URL || process.env.CLIENT_URL || 'https://www.usenotedai.com').replace(/\/+$/, '');
 }
 
 export const PUBLIC_SEO_PAGES = [
