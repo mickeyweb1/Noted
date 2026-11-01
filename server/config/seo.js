@@ -29,7 +29,12 @@ export function getAdditionalPublicPaths(rawPaths = process.env.SEO_PUBLIC_PATHS
 export function buildSitemapXml(siteUrl = SITE_URL, pages = PUBLIC_SEO_PAGES) {
   const uniquePages = new Map(pages.map((page) => [page.path, page]));
   const urls = [...uniquePages.values()].map(({ path, priority }) => {
-    const loc = new URL(path, `${siteUrl}/`).href;
+    const loc = new URL(path, `${siteUrl}/`).href
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
     return `  <url><loc>${loc}</loc><priority>${priority}</priority></url>`;
   });
   return [
