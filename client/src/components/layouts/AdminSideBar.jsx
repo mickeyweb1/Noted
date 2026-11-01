@@ -29,7 +29,13 @@ export default function AdminSideBar({ isOpen, onClose }) {
   };
 
   const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
-  const isFree = user?.subscriptionTier === 'free' || !user?.subscriptionTier; // ✅ Check if user is on free plan
+  const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
+  const isFree = !user?.subscriptionTier || user.subscriptionTier === "free" || user.subscriptionStatus !== "active" || subscriptionExpired;
+  const isSchoolAdmin = user?.role === "school_admin";
+  const isIndependentTeacher = user?.role === "teacher" && !user.schoolOwnerId;
+  const showUpgrade = (isSchoolAdmin && (user.subscriptionTier !== "school_premium" || isFree))
+    || (isIndependentTeacher && isFree);
+  const pricingAudience = isSchoolAdmin ? "schools" : "teachers";
 
   const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
@@ -101,16 +107,16 @@ export default function AdminSideBar({ isOpen, onClose }) {
         ))}
       </nav>
 
-      {/* 3. UPGRADE BANNER (Only for Free users) */}
-      {isFree && (
+      {/* 3. UPGRADE BANNER */}
+      {showUpgrade && (
         <div className="px-4 pb-2">
           <NavLink
-            to="/pricing"
+            to={`/pricing?audience=${pricingAudience}`}
             onClick={onClose}
             className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand/80 px-4 py-3 text-sm font-semibold text-brand-foreground shadow-md transition-all hover:scale-[1.02] hover:shadow-lg"
           >
             <Crown className="w-4 h-4" />
-            <span>Upgrade to Pro</span>
+            <span>{isSchoolAdmin ? "Upgrade School Plan" : "Upgrade to Pro"}</span>
           </NavLink>
         </div>
       )}

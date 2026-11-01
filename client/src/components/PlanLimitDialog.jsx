@@ -21,6 +21,13 @@ export default function PlanLimitDialog() {
 
   const isSchoolAdmin = user?.role === "school_admin";
   const isSchoolLinked = Boolean(user?.schoolOwnerId || user?.schoolId);
+  const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
+  const hasLivePaidPlan = user?.subscriptionTier
+    && user.subscriptionTier !== "free"
+    && user.subscriptionStatus === "active"
+    && !subscriptionExpired;
+  if (user?.role === "super_admin" || (hasLivePaidPlan && !isSchoolLinked)) return null;
+
   const canPurchase = isSchoolAdmin
     || ((user?.role === "personal_user" || user?.role === "teacher") && !isSchoolLinked);
   const pricingAudience = isSchoolAdmin ? "schools" : "teachers";

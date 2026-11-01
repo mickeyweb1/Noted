@@ -217,13 +217,15 @@ export default function AdminDashboard() {
                       <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-brand" />
                     </NavLink>
                   )}
-                  <NavLink to="/pricing" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-muted/30 p-3 transition-all hover:border-electric/30 hover:bg-electric/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="shrink-0 rounded-lg bg-electric-soft p-2 text-electric"><TrendingUp className="h-4 w-4" /></div>
-                      <span className="text-sm font-medium text-foreground">Upgrade School Plan</span>
-                    </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-electric" />
-                  </NavLink>
+                  {user?.role === "school_admin" && user?.subscriptionTier !== "school_premium" && (
+                    <NavLink to="/pricing?audience=schools" className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent bg-muted/30 p-3 transition-all hover:border-electric/30 hover:bg-electric/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="shrink-0 rounded-lg bg-electric-soft p-2 text-electric"><TrendingUp className="h-4 w-4" /></div>
+                        <span className="text-sm font-medium text-foreground">Upgrade School Plan</span>
+                      </div>
+                      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-electric" />
+                    </NavLink>
+                  )}
                 </>
               )}
             </div>

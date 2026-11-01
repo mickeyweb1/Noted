@@ -19,7 +19,13 @@ export default function AdminTopBar({ onToggleSidebar }) {
   const pageTitle = pageTitles[pathname] || "Admin Dashboard";
   const { theme, toggleTheme } = useTheme();
 
-  const isFree = user?.subscriptionTier === 'free' || !user?.subscriptionTier; // ✅ Check if free
+  const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
+  const isFree = !user?.subscriptionTier || user.subscriptionTier === "free" || user.subscriptionStatus !== "active" || subscriptionExpired;
+  const isSchoolAdmin = user?.role === "school_admin";
+  const isIndependentTeacher = user?.role === "teacher" && !user.schoolOwnerId;
+  const showUpgrade = (isSchoolAdmin && (user.subscriptionTier !== "school_premium" || isFree))
+    || (isIndependentTeacher && isFree);
+  const pricingAudience = isSchoolAdmin ? "schools" : "teachers";
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -66,10 +72,9 @@ export default function AdminTopBar({ onToggleSidebar }) {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* ✅ NEW: Upgrade Button for Free Users */}
-        {isFree && (
+        {showUpgrade && (
           <NavLink
-            to="/pricing"
+            to={`/pricing?audience=${pricingAudience}`}
             className="hidden md:inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-brand-foreground shadow-sm transition-colors hover:bg-brand/90"
           >
             <Crown className="w-4 h-4" />
