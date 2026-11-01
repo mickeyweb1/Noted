@@ -152,9 +152,9 @@ function App() {
         }
       >
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/students" element={<StudentDirectory />} />
-            <Route path="/admin/teachers" element={<MyTeachers />} />
-        <Route path="/admin/add-student" element={<AddStudent />} />
+        <Route path="/admin/students" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><StudentDirectory /></ProtectedRoute>} />
+        <Route path="/admin/teachers" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><MyTeachers /></ProtectedRoute>} />
+        <Route path="/admin/add-student" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><AddStudent /></ProtectedRoute>} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
         <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
@@ -167,7 +167,7 @@ function App() {
         <Route path="/admin/shared-quiz-results" element={<SharedQuizResults />} />
  
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
-<Route path="/admin/add-teacher" element={<AddTeacher />} />
+        <Route path="/admin/add-teacher" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><AddTeacher /></ProtectedRoute>} />
         <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
         <Route path="/admin/support" element={<SupportPage />} />
       </Route>
