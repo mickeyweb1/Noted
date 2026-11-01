@@ -51,6 +51,7 @@ export default function StudentHome() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [focusData, setFocusData] = useState({ dailyMinutes: 0, totalHours: 0 });
   const [studySetInsights, setStudySetInsights] = useState({ totalSets: 0, sharedSets: 0, averageMastery: 0 });
+  const [studySetRecords, setStudySetRecords] = useState([]);
 
   // Battle Arena States
   const [classmates, setClassmates] = useState([]);
@@ -99,6 +100,7 @@ export default function StudentHome() {
 
         const studySetsRes = await api.get('/study-sets');
         const studySets = Array.isArray(studySetsRes.data?.data) ? studySetsRes.data.data : [];
+        setStudySetRecords(studySets);
         const masteryValues = studySets.map((set) => {
           const cards = Array.isArray(set.flashcards) ? set.flashcards : [];
           if (!cards.length) return 0;
@@ -216,6 +218,16 @@ export default function StudentHome() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const studySetCards = studySetRecords.map((set) => {
+    const cards = Array.isArray(set.flashcards) ? set.flashcards : [];
+    const mastered = cards.filter((card) => Number(card.repetitions || 0) >= 3).length;
+    const mastery = cards.length ? Math.round((mastered / cards.length) * 100) : 0;
+    return { ...set, mastery, mastered, totalCards: cards.length };
+  }).sort((a, b) => (b.mastery || 0) - (a.mastery || 0));
+
+  const strongestStudySet = studySetCards[0] || null;
+  const reviewReadyStudySet = studySetCards.filter((set) => set.totalCards > 0).sort((a, b) => b.totalCards - a.totalCards)[0] || null;
 
   const shareToWhatsApp = () => {
     const message = `Hey! I challenge you to a ${numQuestions}-question study battle on Noted about "${battleTopic || "General Knowledge"}". Click here to accept: ${generatedLink}`;
