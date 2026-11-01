@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import React from "react";
 import { renderToString } from "react-dom/server";
-import { StaticRouter } from "react-router-dom/server";
+import { StaticRouter } from "react-router";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const clientDirectory = path.resolve(scriptDirectory, "..");
