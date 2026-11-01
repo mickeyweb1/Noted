@@ -21,15 +21,22 @@ export default function PlanLimitDialog() {
 
   const isSchoolAdmin = user?.role === "school_admin";
   const isSchoolLinked = Boolean(user?.schoolOwnerId || user?.schoolId);
+  const isIndependentTeacher = user?.role === "teacher" && !isSchoolLinked;
+  const isIndependentLearner = user?.role === "personal_user" && !isSchoolLinked;
+  const isSchoolMember = isSchoolLinked && (user?.role === "student" || user?.role === "teacher");
   const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
   const hasLivePaidPlan = user?.subscriptionTier
     && user.subscriptionTier !== "free"
     && user.subscriptionStatus === "active"
     && !subscriptionExpired;
-  if (user?.role === "super_admin" || (hasLivePaidPlan && !isSchoolLinked)) return null;
+  if (
+    (!isSchoolAdmin && !isIndependentTeacher && !isIndependentLearner && !isSchoolMember)
+    || (hasLivePaidPlan && !isSchoolLinked)
+  ) return null;
 
   const canPurchase = isSchoolAdmin
-    || ((user?.role === "personal_user" || user?.role === "teacher") && !isSchoolLinked);
+    || isIndependentTeacher
+    || isIndependentLearner;
   const pricingAudience = isSchoolAdmin ? "schools" : "teachers";
   const dismiss = () => setLimitMessage("");
 
