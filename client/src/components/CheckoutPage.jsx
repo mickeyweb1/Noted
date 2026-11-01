@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { Lock, ShieldCheck, ArrowLeft, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import api from "../utils/api";
@@ -17,24 +17,6 @@ const PLAN_PRICES = {
   school_premium: { monthly: 40000, termly: 100000, label: "School Premium" },
 };
 
-const PAYSTACK_SRC = "https://js.paystack.co/v1/inline.js";
-
-// Loads the Paystack script once, however many times the button is clicked.
-const loadPaystack = () =>
-  new Promise((resolve, reject) => {
-    if (window.PaystackPop) return resolve();
-    let script = document.querySelector(`script[src="${PAYSTACK_SRC}"]`);
-    const created = !script;
-    if (created) {
-      script = document.createElement("script");
-      script.src = PAYSTACK_SRC;
-      script.async = true;
-    }
-    script.addEventListener("load", () => resolve(), { once: true });
-    script.addEventListener("error", () => reject(new Error("Paystack failed to load")), { once: true });
-    if (created) document.body.appendChild(script);
-  });
-
 export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -42,13 +24,14 @@ export default function CheckoutPage() {
 
   const planKey = searchParams.get("plan") || "teacher_pro";
   const billingCycle = searchParams.get("billing") === "termly" ? "termly" : "monthly";
+  const callbackReference = searchParams.get("reference") || searchParams.get("trxref");
   const planDetails = PLAN_PRICES[planKey]; // undefined = unknown plan
   const amountInNaira = planDetails?.[billingCycle];
-  const amountInKobo = amountInNaira ? amountInNaira * 100 : 0;
 
   const [status, setStatus] = useState("idle"); // idle | opening | confirming
   const [error, setError] = useState("");
   const [pendingRef, setPendingRef] = useState("");
+  const processedReference = useRef("");
 
   const userId = user?._id ?? user?.id;
   const coveredBySchool = Boolean(user?.schoolOwnerId); // a school teacher's plan comes from the school
@@ -73,6 +56,12 @@ export default function CheckoutPage() {
     navigate("/admin/dashboard?payment=success", { replace: true });
   };
 
+  useEffect(() => {
+    if (!callbackReference || processedReference.current === callbackReference) return;
+    processedReference.current = callbackReference;
+    confirmPayment(callbackReference);
+  }, [callbackReference]);
+
   const handlePayment = async (e) => {
     e.preventDefault();
     setError("");
@@ -81,35 +70,18 @@ export default function CheckoutPage() {
       navigate("/login", { state: { from: `/checkout?plan=${planKey}&billing=${billingCycle}` } });
       return;
     }
-    if (!planDetails || !amountInKobo) return setError("That plan doesn't exist. Please pick one from the pricing page.");
+    if (!planDetails || !amountInNaira) return setError("That plan doesn't exist. Please pick one from the pricing page.");
     if (coveredBySchool) return setError("Your plan is provided by your school, so you don't need to pay here.");
-
-    const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-    if (!publicKey) return setError("Payments aren't set up yet. Please contact support.");
 
     setStatus("opening");
     try {
-      await loadPaystack();
-      const reference = `noted_${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
-      const handler = window.PaystackPop.setup({
-        key: publicKey,
-        email: user.email,
-        amount: amountInKobo,
-        currency: "NGN",
-        ref: reference,
-        metadata: { userId, plan: planKey, billingCycle },
-        // Paystack's v1 popup wants a plain function here, so the async work lives in confirmPayment.
-        callback: function (response) {
-          confirmPayment(response?.reference || reference);
-        },
-        onClose: function () {
-          setStatus((current) => (current === "confirming" ? current : "idle"));
-        },
-      });
-      handler.openIframe();
-    } catch {
+      const response = await api.post("/payment/initialize", { plan: planKey, billingCycle });
+      const authorizationUrl = response.data?.data?.authorization_url;
+      if (!authorizationUrl) throw new Error("Paystack did not return a checkout URL.");
+      window.location.assign(authorizationUrl);
+    } catch (err) {
       setStatus("idle");
-      setError("Couldn't load the payment window. Check your connection and try again.");
+      setError(err.response?.data?.message || "Couldn't start checkout. Check your connection and try again.");
     }
   };
 

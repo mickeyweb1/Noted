@@ -19,6 +19,59 @@ const addMonths = (date, n) => {
 
 const reject = (reason) => ({ status: 'rejected', reason });
 
+router.post('/initialize', protect, async (req, res, next) => {
+  try {
+    const planKey = typeof req.body?.plan === 'string' ? req.body.plan : '';
+    const billingCycle = req.body?.billingCycle;
+    const plan = PRICES[planKey];
+
+    if (!plan || !['monthly', 'termly'].includes(billingCycle)) {
+      return res.status(400).json({ success: false, message: 'Choose a valid plan and billing cycle.' });
+    }
+    if (req.user.schoolOwnerId) {
+      return res.status(403).json({ success: false, message: 'Your plan is provided by your school.' });
+    }
+    if (!process.env.PAYSTACK_SECRET_KEY || !process.env.CLIENT_URL) {
+      return res.status(500).json({ success: false, message: 'Payments are not configured.' });
+    }
+
+    const callbackUrl = new URL('/checkout', process.env.CLIENT_URL);
+    callbackUrl.searchParams.set('plan', planKey);
+    callbackUrl.searchParams.set('billing', billingCycle);
+
+    const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `******`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: req.user.email,
+        amount: plan[billingCycle] * 100,
+        currency: 'NGN',
+        reference: `noted_${crypto.randomUUID()}`,
+        callback_url: callbackUrl.toString(),
+        metadata: { userId: String(req.user._id), plan: planKey, billingCycle },
+      }),
+    });
+    const body = await paystackResponse.json().catch(() => null);
+    if (!paystackResponse.ok || !body?.status || !body.data?.authorization_url) {
+      console.error('Paystack transaction initialization failed:', body?.message || paystackResponse.status);
+      return res.status(502).json({ success: false, message: 'Could not start payment with Paystack. Please try again.' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        authorization_url: body.data.authorization_url,
+        reference: body.data.reference,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 /**
  * Turns a successful Paystack transaction into a subscription.
  * Used by BOTH the webhook and /verify, so it must be safe to run more than once:
@@ -32,7 +85,8 @@ export const activateFromTransaction = async (tx) => {
 
   const meta = tx.metadata || {};
   const plan = PRICES[meta.plan];
-  const cycle = meta.billingCycle === 'termly' ? 'termly' : 'monthly';
+  if (!['monthly', 'termly'].includes(meta.billingCycle)) return reject('Unknown billing cycle.');
+  const cycle = meta.billingCycle;
   if (!plan || !mongoose.isValidObjectId(meta.userId)) return reject('Unknown plan or user in the payment metadata.');
 
   const expectedKobo = plan[cycle] * 100;
