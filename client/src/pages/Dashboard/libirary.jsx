@@ -172,6 +172,7 @@ export default function StudentLibrary() {
             date: new Date(item.createdAt).toLocaleDateString(),
             categoryLabel: "Study Set",
             share: item.share || { isEnabled: false, shareCode: null },
+            visibility: item.visibility || "private",
             icon,
             colorClass,
           };
@@ -190,6 +191,12 @@ export default function StudentLibrary() {
   }, []);
 
   useEffect(() => { fetchLibrary(); }, [fetchLibrary]);
+
+  const schoolSharedStudySets = myGenerations.filter((item) => item.type === "study-set" && item.visibility === "school");
+  const filteredSchoolStudySets = schoolSharedStudySets.filter((item) => {
+    const haystack = `${item.title || ""} ${item.subject || ""}`.toLowerCase();
+    return haystack.includes(searchTerm.toLowerCase());
+  });
 
   const closeModal = () => {
     if (selectedItem?.type === "music" && isBeatPlaying) pauseBeat(); // don't leave a beat playing with no controls
@@ -486,7 +493,7 @@ export default function StudentLibrary() {
           </div>
           <div className="flex w-fit rounded-xl border border-border bg-card p-1 shadow-sm">
             <button type="button" onClick={() => setActiveTab("my-library")} className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${focusRing} ${activeTab === "my-library" ? "bg-brand text-brand-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}>My Library</button>
-            <button type="button" onClick={() => setActiveTab("discover")} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${focusRing} ${activeTab === "discover" ? "bg-electric text-electric-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}><Users className="h-4 w-4" /> Discover</button>
+            <button type="button" onClick={() => setActiveTab("discover")} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${focusRing} ${activeTab === "discover" ? "bg-electric text-electric-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}><Users className="h-4 w-4" /> School Library</button>
           </div>
           <button type="button" onClick={() => navigate("/study-sets")} className="inline-flex items-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
             <BookOpen className="h-4 w-4" /> Create Study Set
@@ -624,15 +631,50 @@ export default function StudentLibrary() {
         )}
 
         {activeTab === "discover" && (
-          <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in zoom-in-95 duration-300 sm:py-20">
-            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-muted"><Lock className="h-10 w-10 text-muted-foreground" /></div>
-            <h3 className="mb-2 text-xl font-bold text-foreground sm:text-2xl">Community Library coming soon</h3>
-            <p className="mb-6 max-w-md text-sm text-muted-foreground sm:text-base">
-              We're building a secure space where you can discover and share study materials with your classmates. It's temporarily unavailable — stay tuned!
-            </p>
-            <button type="button" onClick={() => setActiveTab("my-library")} className={`flex items-center gap-2 rounded-lg bg-brand px-6 py-2.5 font-medium text-brand-foreground transition-all hover:bg-brand/90 ${focusRing}`}>
-              <FolderOpen className="h-4 w-4" /> Back to My Library
-            </button>
+          <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-foreground">School Library</h3>
+                <p className="text-sm text-muted-foreground">Shared study sets that are visible to your school community.</p>
+              </div>
+              <button type="button" onClick={() => setActiveTab("my-library")} className={`inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent ${focusRing}`}>
+                <FolderOpen className="h-4 w-4" /> Back to My Library
+              </button>
+            </div>
+
+            {schoolSharedStudySets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card py-16 text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted"><Lock className="h-8 w-8 text-muted-foreground" /></div>
+                <h4 className="text-lg font-semibold text-foreground">No school-shared sets yet</h4>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground">Your classmates and teachers will appear here once they share study sets with the school.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredSchoolStudySets.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => navigate(`/study-sets/${item.id}`)}
+                    className={`group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-brand/40 hover:shadow-md ${focusRing}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.colorClass}`}>
+                        <item.icon className="h-5 w-5" />
+                      </span>
+                      <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand">School</span>
+                    </div>
+                    <div className="mt-4 min-w-0">
+                      <p className="truncate text-lg font-semibold text-foreground">{item.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{item.subject || "General"} · {item.date}</p>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Open set</span>
+                      <span className="inline-flex items-center gap-1 text-brand">View <FolderOpen className="h-4 w-4" /></span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
