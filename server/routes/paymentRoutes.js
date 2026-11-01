@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 import { User } from '../models/User.js';
@@ -16,6 +16,15 @@ const addMonths = (date, months) => {
   result.setMonth(result.getMonth() + months);
   if (result.getDate() < day) result.setDate(0);
   return result;
+};
+
+export const isValidPaystackSignature = (rawBody, signature, secretKey) => {
+  if (!Buffer.isBuffer(rawBody) || typeof signature !== 'string' || !/^[a-f\d]{128}$/i.test(signature)) {
+    return false;
+  }
+  const expected = createHmac('sha512', secretKey).update(rawBody).digest();
+  const received = Buffer.from(signature, 'hex');
+  return received.length === expected.length && timingSafeEqual(received, expected);
 };
 
 const paystackRequest = async (path, options = {}) => {
@@ -180,6 +189,28 @@ router.post('/verify', protect, async (req, res, next) => {
     }
 
     const result = await activateFromTransaction(transaction);
+    if (result.status === 'rejected') {
+      return res.status(400).json({ success: false, message: result.reason });
+    }
+    return res.json({ success: true, activated: true, tier: result.tier });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/webhook', async (req, res, next) => {
+  try {
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) throw httpError('Payments are not configured.', 503);
+    if (!isValidPaystackSignature(req.rawBody, req.get('x-paystack-signature'), secretKey)) {
+      return res.status(401).json({ success: false, message: 'Invalid payment signature.' });
+    }
+
+    if (req.body?.event !== 'charge.success') {
+      return res.json({ success: true, ignored: true });
+    }
+
+    const result = await activateFromTransaction(req.body.data);
     if (result.status === 'rejected') {
       return res.status(400).json({ success: false, message: result.reason });
     }
