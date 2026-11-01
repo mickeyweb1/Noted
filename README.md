@@ -227,7 +227,7 @@ Configure the corresponding credentials for the media features you intend to use
 <details>
 <summary><strong>💳 Paystack payments</strong></summary>
 
-Set `PAYSTACK_SECRET_KEY` in the server environment and `CLIENT_URL` to the deployed frontend origin. The pricing checkout initializes payments on the server using the plan prices in `server/config/prices.js`; never put the secret key in the client environment. Configure the Paystack webhook URL as:
+Set `PAYSTACK_SECRET_KEY` in the server environment and `CLIENT_URL` to the deployed frontend origin. The pricing checkout initializes payments on the server using the plan prices in `server/config/prices.js`; never put the secret key in the client environment. The callback verifies the transaction directly with Paystack, and the signed webhook provides server-to-server confirmation. Configure the webhook URL as:
 
 ```text
 https://your-api-host/api/payment/webhook

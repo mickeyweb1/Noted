@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { User } from '../models/User.js';
-import { activateFromTransaction, initializePaystackTransaction } from '../routes/paymentRoutes.js';
+import {
+  activateFromTransaction,
+  initializePaystackTransaction,
+  isValidPaystackSignature,
+} from '../routes/paymentRoutes.js';
 
 const userId = '65b123456789012345678901';
 
@@ -149,4 +154,13 @@ test('rejects transactions without a provider reference before updating an accou
     metadata: { userId, plan: 'teacher_pro', billingCycle: 'monthly' },
   });
   assert.equal(result.status, 'rejected');
+});
+
+test('validates Paystack webhook signatures against the exact raw request body', () => {
+  const secret = 'test-only-paystack-secret';
+  const rawBody = Buffer.from('{"event":"charge.success","data":{"reference":"test"}}');
+  const signature = createHmac('sha512', secret).update(rawBody).digest('hex');
+  assert.equal(isValidPaystackSignature(rawBody, signature, secret), true);
+  assert.equal(isValidPaystackSignature(Buffer.from(`${rawBody.toString()} `), signature, secret), false);
+  assert.equal(isValidPaystackSignature(rawBody, 'invalid', secret), false);
 });
