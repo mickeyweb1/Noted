@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Brain, FileText, Plus, Trash2, Sparkles, Loader2, CheckCircle2, Copy, Check, Users, Clock,
   Image as ImageIcon, Upload, AlertTriangle, ArrowLeft,
@@ -433,9 +433,17 @@ export default function AdminQuizGenerator() {
               </Field>
 
               {isAI ? (
-                <Field label="Number of questions" htmlFor="quiz-questions" hint={`1 to ${maxQ} on your plan. The AI may return fewer.`}>
-                  <NumberInput id="quiz-questions" aria-describedby="quiz-questions-hint" value={metadata.numQuestions} onChange={setField("numQuestions")} placeholder="e.g., 5" />
-                </Field>
+                <div className="space-y-1">
+                  <Field label="Number of questions" htmlFor="quiz-questions" hint={`1 to ${maxQ} on your plan. The AI may return fewer.`}>
+                    <NumberInput id="quiz-questions" aria-describedby="quiz-questions-hint" value={metadata.numQuestions} onChange={setField("numQuestions")} placeholder="e.g., 5" />
+                  </Field>
+                  {/* ✅ NEW: Upgrade prompt for free users */}
+                  {limits?.plan === 'free' && (
+                    <Link to="/pricing" className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline">
+                      <Sparkles className="h-3 w-3" /> Upgrade to generate up to 100 questions
+                    </Link>
+                  )}
+                </div>
               ) : (
                 <div>
                   <p className="mb-1.5 text-sm font-medium text-foreground">Number of questions</p>
