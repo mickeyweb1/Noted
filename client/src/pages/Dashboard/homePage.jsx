@@ -50,6 +50,7 @@ export default function StudentHome() {
   const [topStudents, setTopStudents] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [focusData, setFocusData] = useState({ dailyMinutes: 0, totalHours: 0 });
+  const [studySetInsights, setStudySetInsights] = useState({ totalSets: 0, sharedSets: 0, averageMastery: 0 });
 
   // Battle Arena States
   const [classmates, setClassmates] = useState([]);
@@ -95,6 +96,20 @@ export default function StudentHome() {
         if (response.data.success) {
           setLibraryData(allItems);
         }
+
+        const studySetsRes = await api.get('/study-sets');
+        const studySets = Array.isArray(studySetsRes.data?.data) ? studySetsRes.data.data : [];
+        const masteryValues = studySets.map((set) => {
+          const cards = Array.isArray(set.flashcards) ? set.flashcards : [];
+          if (!cards.length) return 0;
+          const mastered = cards.filter((card) => Number(card.repetitions || 0) >= 3).length;
+          return Math.round((mastered / cards.length) * 100);
+        });
+        setStudySetInsights({
+          totalSets: studySets.length,
+          sharedSets: studySets.filter((set) => set.share?.isEnabled).length,
+          averageMastery: masteryValues.length ? Math.round(masteryValues.reduce((sum, value) => sum + value, 0) / masteryValues.length) : 0,
+        });
 
         const focusRes = await api.get("/auth/me");
         let focusLog = {};
@@ -287,6 +302,37 @@ export default function StudentHome() {
       </div>
 
       <PlanUpgradeBanner />
+
+      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5" aria-label="Study set insights">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+              <BookOpen className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-semibold text-foreground">Study Set insights</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">Your personalized study momentum across all generated sets.</p>
+            </div>
+          </div>
+          <NavLink to="/study-sets" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent">
+            Manage sets <ArrowRight className="h-4 w-4" />
+          </NavLink>
+        </div>
+        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-3">
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Total sets</div>
+            <div className="mt-2 text-2xl font-display font-bold text-foreground">{studySetInsights.totalSets}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Shared</div>
+            <div className="mt-2 text-2xl font-display font-bold text-foreground">{studySetInsights.sharedSets}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Avg mastery</div>
+            <div className="mt-2 text-2xl font-display font-bold text-foreground">{studySetInsights.averageMastery}%</div>
+          </div>
+        </div>
+      </section>
 
       <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Revision due">
         <div className="flex items-start gap-3">

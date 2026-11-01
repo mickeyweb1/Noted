@@ -3,7 +3,7 @@ import {
   Library as LibraryIcon, Search, Grid3x3, List,
   FileText, Video, Music, Brain, FolderOpen,
   Users, Download, X, CheckCircle2, Play, Pause, Mic, Headphones, Trash2, Lock, RotateCw, AlertTriangle, Loader2,
-  BookOpen,
+  BookOpen, Share2,
 } from "lucide-react";
 import api from "../../utils/api";
 import AudioPlayer from "../../components/AudioPlayer";
@@ -171,6 +171,7 @@ export default function StudentLibrary() {
             subject: item.subject,
             date: new Date(item.createdAt).toLocaleDateString(),
             categoryLabel: "Study Set",
+            share: item.share || { isEnabled: false, shareCode: null },
             icon,
             colorClass,
           };
@@ -193,6 +194,18 @@ export default function StudentLibrary() {
   const closeModal = () => {
     if (selectedItem?.type === "music" && isBeatPlaying) pauseBeat(); // don't leave a beat playing with no controls
     setSelectedItem(null);
+  };
+
+  const copyStudySetLink = async (item) => {
+    const shareCode = item?.share?.shareCode;
+    if (!shareCode) return;
+    const url = `${window.location.origin}/study-sets/shared/${shareCode}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      window.alert("Study Set link copied to your clipboard.");
+    } catch {
+      window.alert("Copy failed. Open the Study Set and copy the share link from there.");
+    }
   };
 
   const addToRevisionQueue = async (item) => {
@@ -563,6 +576,25 @@ export default function StudentLibrary() {
                         <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                           <span className="font-medium text-foreground/80">{item.categoryLabel}</span><span aria-hidden="true">•</span><span>{item.date}</span>
                         </span>
+                        {item.type === "study-set" && (
+                          <span className="mt-2 flex items-center gap-2">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.share?.isEnabled ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"}`}>
+                              {item.share?.isEnabled ? "Shared" : "Private"}
+                            </span>
+                            {item.share?.isEnabled && (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  copyStudySetLink(item);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground hover:bg-accent"
+                              >
+                                <Share2 className="h-3 w-3" /> Copy link
+                              </button>
+                            )}
+                          </span>
+                        )}
                       </span>
                     </button>
                     {/* Always visible on touch screens; hover-reveal only on desktop */}
