@@ -346,6 +346,60 @@ export default function StudentHome() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5" aria-label="Study set performance">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+              <Brain className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-semibold text-foreground">Study Set performance</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">A quick drill-down across your generated study sets.</p>
+            </div>
+          </div>
+          <NavLink to="/study-sets" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent">
+            Open all sets <ArrowRight className="h-4 w-4" />
+          </NavLink>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Strongest set</div>
+            <div className="mt-2 text-lg font-bold text-foreground">{strongestStudySet ? strongestStudySet.title : 'No sets yet'}</div>
+            <div className="mt-1 text-sm text-muted-foreground">{strongestStudySet ? `${strongestStudySet.mastery}% mastery` : 'Create your first set to begin tracking progress.'}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Largest set</div>
+            <div className="mt-2 text-lg font-bold text-foreground">{reviewReadyStudySet ? reviewReadyStudySet.title : 'No sets yet'}</div>
+            <div className="mt-1 text-sm text-muted-foreground">{reviewReadyStudySet ? `${reviewReadyStudySet.totalCards} cards` : 'Storage will appear here once you create a set.'}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Shared access</div>
+            <div className="mt-2 text-lg font-bold text-foreground">{studySetInsights.sharedSets}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Shared sets are ready to send or copy.</div>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {studySetCards.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">You haven’t created a Study Set yet. Build one to unlock mastery analytics.</div>
+          ) : (
+            studySetCards.slice(0, 3).map((set) => (
+              <div key={set._id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-foreground">{set.title}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{set.totalCards} cards · {set.share?.isEnabled ? 'Shared' : 'Private'}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-brand">{set.mastery}%</div>
+                  <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Mastery</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
       <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Revision due">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
