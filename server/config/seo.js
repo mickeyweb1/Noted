@@ -15,10 +15,12 @@ export const PUBLIC_SEO_PAGES = [
 export function getAdditionalPublicPaths(rawPaths = process.env.SEO_PUBLIC_PATHS) {
   if (!rawPaths) return [];
   const paths = JSON.parse(rawPaths);
-  if (!Array.isArray(paths) || paths.some((path) => (
+  if (!Array.isArray(paths) || paths.length > 50000 - PUBLIC_SEO_PAGES.length || paths.some((path) => (
     typeof path !== 'string'
     || !path.startsWith('/')
     || path.startsWith('//')
+    || path.includes('\\')
+    || path.length > 2048
     || path.includes('?')
     || path.includes('#')
     || path.split('/').includes('..')
@@ -29,9 +31,16 @@ export function getAdditionalPublicPaths(rawPaths = process.env.SEO_PUBLIC_PATHS
 }
 
 export function buildSitemapXml(siteUrl = getSiteUrl(), pages = PUBLIC_SEO_PAGES) {
-  const uniquePages = new Map(pages.map((page) => [page.path, page]));
+  const siteOrigin = new URL(siteUrl).origin;
+  const uniquePages = new Map();
+  for (const page of pages) {
+    if (!uniquePages.has(page.path)) uniquePages.set(page.path, page);
+  }
+  if (uniquePages.size > 50000) throw new Error('A sitemap cannot contain more than 50,000 URLs.');
   const urls = [...uniquePages.values()].map(({ path, priority }) => {
-    const loc = new URL(path, `${siteUrl}/`).href
+    const url = new URL(path, `${siteUrl}/`);
+    if (url.origin !== siteOrigin) throw new Error('Sitemap paths must stay on the canonical site origin.');
+    const loc = url.href
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')

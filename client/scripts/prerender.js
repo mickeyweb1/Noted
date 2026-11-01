@@ -60,8 +60,6 @@ function renderHead(template, pathname, metadata) {
   addMeta("name", "twitter:title", metadata.title);
   addMeta("name", "twitter:description", metadata.description);
   addMeta("name", "twitter:image", image);
-  if (metadata.keywords) addMeta("name", "keywords", metadata.keywords);
-
   removeLink("canonical");
   tags.push(`<link rel="canonical" href="${escapeHtml(canonical)}" />`);
   for (const { language, url } of metadata.alternates || []) {
@@ -71,6 +69,22 @@ function renderHead(template, pathname, metadata) {
     if (url) tags.push(`<link rel="${relation}" href="${escapeHtml(new URL(url, `${siteUrl}/`).href)}" />`);
   }
 
+  const websiteSchema = metadata.searchAction
+    ? {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "Noted",
+        url: siteUrl,
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: new URL(metadata.searchAction, `${siteUrl}/`).href.replace(/%7B/gi, "{").replace(/%7D/gi, "}"),
+          },
+          "query-input": "required name=search_term_string",
+        },
+      }
+    : { "@context": "https://schema.org", "@type": "WebSite", name: "Noted", url: siteUrl };
   const schemas = [
     {
       "@context": "https://schema.org",
@@ -79,7 +93,7 @@ function renderHead(template, pathname, metadata) {
       url: siteUrl,
       logo: `${siteUrl}/favicon.svg`,
     },
-    { "@context": "https://schema.org", "@type": "WebSite", name: "Noted", url: siteUrl },
+    websiteSchema,
   ];
   const customSchemas = metadata.structuredData
     ? Array.isArray(metadata.structuredData) ? metadata.structuredData : [metadata.structuredData]

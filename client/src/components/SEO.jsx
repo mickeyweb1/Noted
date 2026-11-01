@@ -227,7 +227,7 @@ export default function SEO(options) {
   const setPageMetadata = useContext(SEOContext);
   if (!setPageMetadata) throw new Error("SEO must be rendered inside SEOProvider.");
 
-  const signature = JSON.stringify(options);
+  const signature = JSON.stringify({ robots: "index,follow", ...options });
   useEffect(() => {
     setPageMetadata(JSON.parse(signature));
     return () => setPageMetadata(null);
