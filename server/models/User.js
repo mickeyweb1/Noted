@@ -62,7 +62,7 @@ const userSchema = new mongoose.Schema({
         enum: ['active', 'canceled', 'past_due'],
         default: 'active'
     },
-    // Set this in your Paystack webhook: now + 1 month (monthly) or now + 3 months (termly).
+    // Set after server-side Paystack transaction verification.
     // When it passes, the plan stops counting even if nothing else changed.
     subscriptionEndsAt: { type: Date, default: null },
     billingCycle: { type: String, enum: ['monthly', 'termly'], default: 'monthly' },
@@ -79,7 +79,7 @@ const userSchema = new mongoose.Schema({
     // ---- AI credits (30-day rolling period) ----
     aiCreditsUsed: { type: Number, default: 0, min: 0 },
     creditsPeriodStart: { type: Date, default: null },
-      // Paystack references already applied. Stops a repeated webhook from upgrading twice.
+      // Paystack references already applied. Stops a repeated verification from upgrading twice.
   paymentReferences: { type: [String], default: [], select: false },
 
 }, { timestamps: true });
