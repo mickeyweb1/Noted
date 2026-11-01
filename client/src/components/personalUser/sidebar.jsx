@@ -17,17 +17,21 @@ import {
   Zap,
   GraduationCap,
   MessageSquare,
-  Crown
+  Crown,
+  CalendarDays,
+  Gauge
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
 import { useEffect, useState } from "react";
 import api from "../../utils/api";
+import useMyLimits from "../../hooks/useMyLimits";
 
 export default function StudentSideBar({ isOpen, onClose }) {
   const navigate = useNavigate();
   const context = useUserContext() || {};
   const { user, logout } = context;
+  const { limits } = useMyLimits();
   const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
   const isFree = !user?.subscriptionTier
     || user.subscriptionTier === "free"
@@ -36,6 +40,26 @@ export default function StudentSideBar({ isOpen, onClose }) {
   const isIndependentLearner = (user?.role === "personal_user" || user?.role === "student")
     && !user.schoolId
     && !user.schoolOwnerId;
+  const planLabels = {
+    free: "Free",
+    pro: "Teacher Pro",
+    premium: "Teacher Premium",
+    school_owner: "School Starter",
+    school_pro: "School Pro",
+    school_premium: "School Premium",
+  };
+  const planName = user?.schoolId || user?.schoolOwnerId
+    ? "School account"
+    : limits?.planLabel || planLabels[limits?.plan ?? (isFree ? "free" : user?.subscriptionTier)] || "Free";
+  const subscriptionEndsAt = !isFree && user?.subscriptionEndsAt
+    ? new Date(user.subscriptionEndsAt)
+    : null;
+  const formatDate = (value) => {
+    const date = value instanceof Date ? value : value ? new Date(value) : null;
+    return date && !Number.isNaN(date.getTime())
+      ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date)
+      : null;
+  };
   const [dueCount, setDueCount] = useState(0);
   useEffect(() => {
     const refresh = () => api.get('/revision/stats').then((r) => setDueCount(r.data?.data?.dueCount || 0)).catch(() => {});
@@ -119,6 +143,59 @@ export default function StudentSideBar({ isOpen, onClose }) {
 
       {/* Footer / XP & Profile */}
       <div className="shrink-0 border-t border-border p-4 space-y-4">
+        <section className="rounded-xl border border-border bg-card p-3" aria-label="My plan">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">My plan</h2>
+            <span className="truncate rounded-full bg-brand/10 px-2 py-1 text-xs font-semibold text-brand">
+              {planName}
+            </span>
+          </div>
+          {limits?.credits && (
+            <div className="mt-3">
+              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Gauge className="h-3.5 w-3.5" />
+                  AI credits
+                </span>
+                <span className="font-medium text-foreground">
+                  {limits.credits.total === null
+                    ? "Unlimited"
+                    : `${limits.credits.remaining} / ${limits.credits.total} left`}
+                </span>
+              </div>
+              {limits.credits.total !== null && limits.credits.total > 0 && (
+                <div
+                  className="h-1.5 overflow-hidden rounded-full bg-muted"
+                  role="progressbar"
+                  aria-label="AI credits used"
+                  aria-valuemin={0}
+                  aria-valuemax={limits.credits.total}
+                  aria-valuenow={limits.credits.used}
+                >
+                  <div
+                    className="h-full rounded-full bg-brand transition-all"
+                    style={{ width: `${Math.min((limits.credits.used / limits.credits.total) * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+              {formatDate(limits.credits.resetsAt) && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Credits reset {formatDate(limits.credits.resetsAt)}
+                </p>
+              )}
+            </div>
+          )}
+          {formatDate(subscriptionEndsAt) && (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5" />
+              Active until {formatDate(subscriptionEndsAt)}
+            </p>
+          )}
+          {!limits && (
+            <p className="mt-2 text-[11px] text-muted-foreground">Usage details unavailable.</p>
+          )}
+        </section>
+
         {isIndependentLearner && isFree && (
           <NavLink
             to="/pricing?audience=teachers"
