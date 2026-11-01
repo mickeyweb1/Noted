@@ -43,6 +43,11 @@ export default function CheckoutPage() {
     try {
       await api.post("/payment/verify", { reference });
     } catch (err) {
+      if (err.response?.status === 401) {
+        const callbackParams = new URLSearchParams({ plan: planKey, billing: billingCycle, reference });
+        navigate("/login", { state: { from: `/checkout?${callbackParams}` }, replace: true });
+        return;
+      }
       // The webhook may still activate the plan, so don't tell the user they lost their money.
       setStatus("idle");
       setError(
@@ -54,7 +59,7 @@ export default function CheckoutPage() {
     }
     try { await refreshUser?.(); } catch { /* the dashboard refreshes again */ }
     navigate("/admin/dashboard?payment=success", { replace: true });
-  }, [navigate, refreshUser]);
+  }, [billingCycle, navigate, planKey, refreshUser]);
 
   useEffect(() => {
     if (!callbackReference || processedReference.current === callbackReference || isAuthLoading) return;
@@ -119,7 +124,7 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
           <div className="space-y-6 lg:col-span-3">
             <form onSubmit={handlePayment} className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground">Card Payment via Paystack</h2>
+              <h2 className="text-lg font-semibold text-foreground">Secure payment via Paystack</h2>
 
               {error && (
                 <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
