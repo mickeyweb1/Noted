@@ -367,7 +367,7 @@ const currentTier = !isAuthLoading && user ? (limits?.plan ?? user.subscriptionT
           </div>
 
           <div id="pricing-panel" role="tabpanel" className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3 lg:items-stretch lg:gap-7">
-            {tiers.map((tier) => (<PlanCard key={tier.name} tier={tier} isCurrent={currentTier === tier.tierKey} loggedIn={Boolean(user)} billingCycle={billingCycle} onChoose={handleChoose} />))}
+            {tiers.map((tier) => (<PlanCard key={tier.name} tier={tier} isCurrent={currentTier === tier.tierKey} loggedIn={Boolean(user && !isAuthLoading)} billingCycle={billingCycle} onChoose={handleChoose} />))}
           </div>
 
           {audience === "schools" && (
