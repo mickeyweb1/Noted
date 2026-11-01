@@ -65,7 +65,7 @@ test('school student registration links the student to the school owner account'
   }
 });
 
-test('login normalizes email and rejects an incorrect password', async () => {
+test('login normalizes email, preserves password whitespace, and rejects an incorrect password', async () => {
   const originalFindOne = User.findOne;
   const originalJwtSecret = process.env.JWT_SECRET;
   const account = {
@@ -73,7 +73,7 @@ test('login normalizes email and rejects an incorrect password', async () => {
     fullName: 'Student Example',
     email: 'student@example.test',
     role: 'student',
-    password: await bcrypt.hash('correct-password', 4),
+    password: await bcrypt.hash(' correct-password ', 4),
     isActive: true,
   };
   let queriedEmail;
@@ -99,7 +99,7 @@ test('login normalizes email and rejects an incorrect password', async () => {
   try {
     const successResponse = makeResponse();
     await loginUser({
-      body: { email: '  STUDENT@EXAMPLE.TEST ', password: 'correct-password' },
+      body: { email: '  STUDENT@EXAMPLE.TEST ', password: ' correct-password ' },
     }, successResponse, (error) => {
       throw error;
     });

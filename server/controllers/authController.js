@@ -146,11 +146,9 @@ export const loginUser = async (req, res, next) => {
     if (!email || typeof rawPassword !== 'string' || !rawPassword.trim()) {
       return res.status(400).json({ success: false, message: 'Email and password are required.' });
     }
-    const password = rawPassword.trim();
-
     const user = await User.findOne({ email }).select('+password');
     if (!user) return res.status(401).json({ success: false, message: 'Invalid email or password' });
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    const isPasswordCorrect = await bcrypt.compare(rawPassword, user.password);
     if (!isPasswordCorrect) return res.status(401).json({ success: false, message: 'Invalid email or password' });
 
     // Deactivated students/teachers (and accounts not activated yet) can't log in
