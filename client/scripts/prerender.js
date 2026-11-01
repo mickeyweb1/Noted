@@ -35,9 +35,9 @@ function renderHead(template, pathname, metadata) {
   let html = template.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
 
   const addMeta = (attribute, key, content) => {
-    if (!content) return;
     const matcher = new RegExp(`<meta\\b(?=[^>]*\\b${attribute}=["']${escapeRegExp(key)}["'])[^>]*>`, "gi");
     html = html.replace(matcher, "");
+    if (!content) return;
     tags.push(`<meta ${attribute}="${escapeHtml(key)}" content="${escapeHtml(content)}" />`);
   };
   const removeLink = (rel) => {
@@ -47,6 +47,8 @@ function renderHead(template, pathname, metadata) {
 
   addMeta("name", "description", metadata.description);
   addMeta("name", "robots", metadata.robots || "index,follow");
+  addMeta("name", "google-site-verification", process.env.VITE_GOOGLE_SITE_VERIFICATION);
+  addMeta("name", "keywords", metadata.keywords);
   addMeta("property", "og:type", metadata.type || "website");
   addMeta("property", "og:title", metadata.title);
   addMeta("property", "og:description", metadata.description);
@@ -61,6 +63,12 @@ function renderHead(template, pathname, metadata) {
 
   removeLink("canonical");
   tags.push(`<link rel="canonical" href="${escapeHtml(canonical)}" />`);
+  for (const { language, url } of metadata.alternates || []) {
+    tags.push(`<link rel="alternate" hreflang="${escapeHtml(language)}" href="${escapeHtml(new URL(url, `${siteUrl}/`).href)}" />`);
+  }
+  for (const [relation, url] of [["prev", metadata.previousPage], ["next", metadata.nextPage]]) {
+    if (url) tags.push(`<link rel="${relation}" href="${escapeHtml(new URL(url, `${siteUrl}/`).href)}" />`);
+  }
 
   const schemas = [
     {

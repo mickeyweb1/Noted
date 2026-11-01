@@ -18,8 +18,8 @@ export function useWebVitals(onMetric) {
       observers.push(observer);
     };
 
-    const report = (name, value, entry) => {
-      const metric = { name, value, path: window.location.pathname, entry };
+    const report = (name, value) => {
+      const metric = { name, value, path: window.location.pathname };
       if (onMetric) onMetric(metric);
       else window.dispatchEvent(new CustomEvent("noted:web-vital", { detail: metric }));
     };

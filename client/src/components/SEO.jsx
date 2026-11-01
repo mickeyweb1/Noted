@@ -60,8 +60,11 @@ const WEBSITE_SCHEMA = {
 };
 
 const setMeta = (selector, attribute, key, content) => {
-  if (content === undefined || content === null || content === "") return;
   let element = document.head.querySelector(selector);
+  if (content === undefined || content === null || content === "") {
+    element?.remove();
+    return;
+  }
   if (!element) {
     element = document.createElement("meta");
     element.setAttribute(attribute, key);
@@ -100,7 +103,7 @@ function SEOHead({ metadata, pathname }) {
             "@type": "SearchAction",
             target: {
               "@type": "EntryPoint",
-              urlTemplate: absoluteUrl(searchAction, "/"),
+              urlTemplate: absoluteUrl(searchAction, "/").replace(/%7B/gi, "{").replace(/%7D/gi, "}"),
             },
             "query-input": "required name=search_term_string",
           },
