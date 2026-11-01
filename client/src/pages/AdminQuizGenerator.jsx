@@ -678,14 +678,14 @@ export default function AdminQuizGenerator() {
                   )}
                 </div>
 
-                <input
-                  type="text"
-                  aria-label={`Question ${idx + 1} text`}
-                  placeholder="Question text"
-                  value={q.question}
-                  onChange={(e) => { setErrorMessage(""); updateManualQuestion(q.cid, { question: e.target.value }); }}
-                  className={inputCls}
-                />
+               <textarea
+  aria-label={`Question ${idx + 1} text`}
+  placeholder="Question text (Press Enter for new line)"
+  value={q.question}
+  onChange={(e) => { setErrorMessage(""); updateManualQuestion(q.cid, { question: e.target.value }); }}
+  className={`${inputCls} min-h-[80px] resize-y`}
+  rows={3}
+/>
 
                 <input
                   type="text"
@@ -717,14 +717,14 @@ export default function AdminQuizGenerator() {
                             onChange={() => updateManualQuestion(q.cid, { correctOptionIndex: optIdx })}
                             className="h-4 w-4 shrink-0 accent-brand"
                           />
-                          <input
-                            type="text"
-                            aria-label={`Option ${String.fromCharCode(65 + optIdx)}`}
-                            placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
-                            value={opt}
-                            onChange={(e) => { setErrorMessage(""); updateOption(q.cid, optIdx, e.target.value); }}
-                            className={`${inputCls} min-w-0 flex-1 py-2 text-sm`}
-                          />
+                          <textarea
+  aria-label={`Option ${String.fromCharCode(65 + optIdx)}`}
+  placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
+  value={opt}
+  onChange={(e) => { setErrorMessage(""); updateOption(q.cid, optIdx, e.target.value); }}
+  className={`${inputCls} min-w-0 flex-1 py-2 text-sm min-h-[50px] resize-y`}
+  rows={2}
+/>
                         </div>
                       );
                     })}

@@ -7,7 +7,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'; // ✅ Added ipKeyGenerator
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
@@ -60,7 +60,8 @@ const aiLimiter = rateLimit({
   keyGenerator: (req) => {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     const id = token ? jwt.decode(token)?.id : null; 
-    return id ? `user:${id}` : req.ip;
+    // ✅ Use ipKeyGenerator(req) instead of req.ip to satisfy the library's IPv6 safety check
+    return id ? `user:${id}` : ipKeyGenerator(req); 
   },
   message: { success: false, message: "AI limit reached. Please try again later." },
   standardHeaders: true,
