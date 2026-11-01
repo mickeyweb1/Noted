@@ -55,7 +55,10 @@ export const initializePaystackTransaction = async ({ user, planKey, billingCycl
   if (plan.tier.startsWith('school_') && user.role !== 'school_admin') {
     throw httpError('Only a school administrator can purchase a school plan.', 403);
   }
-  if (user.schoolOwnerId) {
+  if (
+    user.schoolOwnerId ||
+    (user.schoolId && ['student', 'teacher'].includes(user.role))
+  ) {
     throw httpError('Your plan is provided by your school.', 403);
   }
   if (typeof user.email !== 'string' || !user.email.trim()) {

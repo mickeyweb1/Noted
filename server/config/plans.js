@@ -1,5 +1,6 @@
 import { User } from '../models/User.js';
 import { Quiz } from '../models/Quiz.js';
+import { Organization } from '../models/Organization.js';
 
 /*
  * SINGLE SOURCE OF TRUTH for plan limits.
@@ -26,7 +27,7 @@ export const LOCKED_MESSAGE =
   'Upgrade Required: This feature is locked because your school admin has not upgraded the subscription yet. Please contact your admin to unlock full access.';
 
 // Fields resolvePlan needs. Use this in .select() when loading a user just to resolve their plan.
-export const PLAN_FIELDS = 'role subscriptionTier subscriptionStatus subscriptionEndsAt schoolOwnerId aiCreditsUsed creditsPeriodStart';
+export const PLAN_FIELDS = 'role subscriptionTier subscriptionStatus subscriptionEndsAt schoolOwnerId schoolId aiCreditsUsed creditsPeriodStart';
 
 const UNLIMITED = {
   key: 'super_admin', label: 'Admin', credits: Infinity, maxQ: 9999, codes: 9999, gameShows: Infinity,
@@ -46,8 +47,15 @@ const isLive = (u) =>
 export const resolvePlan = async (user) => {
   if (user.role === 'super_admin') return { ...UNLIMITED, locked: null };
 
-  if ((user.role === 'teacher' || user.role === 'student') && user.schoolOwnerId) {
-    const owner = await User.findById(user.schoolOwnerId).select('subscriptionTier subscriptionStatus subscriptionEndsAt');
+  if ((user.role === 'teacher' || user.role === 'student') && (user.schoolOwnerId || user.schoolId)) {
+    let schoolOwnerId = user.schoolOwnerId;
+    if (!schoolOwnerId && user.schoolId) {
+      const organization = await Organization.findById(user.schoolId).select('adminId');
+      schoolOwnerId = organization?.adminId;
+    }
+    const owner = schoolOwnerId
+      ? await User.findById(schoolOwnerId).select('subscriptionTier subscriptionStatus subscriptionEndsAt')
+      : null;
     if (owner && isLive(owner) && PLANS[owner.subscriptionTier] && owner.subscriptionTier.startsWith('school_')) {
       return { key: owner.subscriptionTier, ...PLANS[owner.subscriptionTier], locked: null };
     }

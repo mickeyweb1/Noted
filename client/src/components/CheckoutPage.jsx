@@ -28,7 +28,10 @@ export default function CheckoutPage() {
   const processedReference = useRef("");
 
   const userId = user?._id ?? user?.id;
-  const coveredBySchool = Boolean(user?.schoolOwnerId);
+  const coveredBySchool = Boolean(
+    user?.schoolOwnerId ||
+    (user?.schoolId && ["student", "teacher"].includes(user?.role)),
+  );
   const busy = status !== "idle";
 
   const verifyPayment = useCallback(async (reference) => {
