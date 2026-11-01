@@ -30,12 +30,32 @@ export default function CheckoutPage() {
   const coveredBySchool = Boolean(user?.schoolOwnerId);
   const busy = status === "confirming";
 
-  // This function runs AFTER the user successfully pays on Flutterwave
+  // ✅ 1. DEFINE CONFIG AT TOP LEVEL
+  const config = {
+    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
+    tx_ref: `noted_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    amount: amountInNaira || 0,
+    currency: "NGN",
+    payment_options: "card, mobilemoney, ussd",
+    customer: {
+      email: user?.email || "",
+      name: user?.fullName || "Customer",
+    },
+    customizations: {
+      title: "Noted AI Subscription",
+      description: `Payment for ${planDetails?.label} (${billingCycle})`,
+      logo: "https://www.usenotedai.com/logo.png", 
+    },
+  };
+
+  // ✅ 2. CALL THE HOOK AT THE TOP LEVEL (Not inside a function!)
+  const handleFlutterwave = useFlutterwave(config);
+
+  // ✅ 3. THIS FUNCTION RUNS AFTER THE USER SUCCESSFULLY PAYS
   const handleFlutterwavePayment = useCallback(
     async (response) => {
       setStatus("confirming");
       try {
-        // Send the Flutterwave transaction ID to our backend to verify and activate
         await api.post("/payment/verify", { 
           reference: response.transaction_id,
           tx_ref: response.tx_ref
@@ -53,23 +73,7 @@ export default function CheckoutPage() {
     [navigate, refreshUser]
   );
 
-  const config = {
-    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
-    tx_ref: `noted_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    amount: amountInNaira || 0,
-    currency: "NGN",
-    payment_options: "card, mobilemoneyghana, ussd",
-    customer: {
-      email: user?.email || "",
-      name: user?.fullName || "Customer",
-    },
-    customizations: {
-      title: "Noted AI Subscription",
-      description: `Payment for ${planDetails?.label} (${billingCycle})`,
-      logo: "https://www.usenotedai.com/logo.png", // Replace with your actual logo URL
-    },
-  };
-
+  // ✅ 4. TRIGGER THE MODAL HERE
   const handlePayment = (e) => {
     e.preventDefault();
     setError("");
@@ -81,8 +85,6 @@ export default function CheckoutPage() {
     if (!planDetails || !amountInNaira) return setError("That plan doesn't exist. Please pick one from the pricing page.");
     if (coveredBySchool) return setError("Your plan is provided by your school, so you don't need to pay here.");
 
-    // Trigger the Flutterwave modal
-    const handleFlutterwave = useFlutterwave(config);
     handleFlutterwave({
       callback: handleFlutterwavePayment,
       onClose: () => {
