@@ -1,25 +1,46 @@
 import { useState, useEffect } from 'react';
 
+const THEME_CHANGE_EVENT = 'noted:theme-change';
+
+const readTheme = () => {
+  const savedTheme = localStorage.getItem('theme');
+  return savedTheme === 'dark' ? 'dark' : 'light';
+};
+
+const applyTheme = (theme) => {
+  document.documentElement.classList.remove('light', 'dark');
+  document.documentElement.classList.add(theme);
+  localStorage.setItem('theme', theme);
+};
+
 export function useTheme() {
-  // Get initial theme from localStorage, or default to 'light'
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'light';
-  });
+  const [theme, setThemeState] = useState(readTheme);
 
   useEffect(() => {
-    const root = document.documentElement;
-    
-    // Remove both classes, then add the active one
-    root.classList.remove('light', 'dark');
-    root.classList.add(theme);
-    
-    // Save preference to localStorage
-    localStorage.setItem('theme', theme);
+    const syncTheme = () => setThemeState(readTheme());
+    window.addEventListener(THEME_CHANGE_EVENT, syncTheme);
+    window.addEventListener('storage', syncTheme);
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, syncTheme);
+      window.removeEventListener('storage', syncTheme);
+    };
+  }, []);
+
+  useEffect(() => {
+    applyTheme(theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    applyTheme(nextTheme);
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   };
 
-  return { theme, toggleTheme };
+  const setTheme = (nextTheme) => {
+    if (nextTheme !== 'light' && nextTheme !== 'dark') return;
+    applyTheme(nextTheme);
+    window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+  };
+
+  return { theme, toggleTheme, setTheme };
 }

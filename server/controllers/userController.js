@@ -158,3 +158,31 @@ export const updateProfile = async (req, res, next) => {
     next(error);
   }
 };
+
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+      return res.status(400).json({ success: false, message: 'Enter your current password and a new password.' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'Your new password must be at least 8 characters.' });
+    }
+
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+    if (!(await user.matchPassword(currentPassword))) {
+      return res.status(400).json({ success: false, message: 'Your current password is incorrect.' });
+    }
+    if (await user.matchPassword(newPassword)) {
+      return res.status(400).json({ success: false, message: 'Choose a new password different from your current one.' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    return res.json({ success: true, message: 'Password updated successfully.' });
+  } catch (error) {
+    return next(error);
+  }
+};

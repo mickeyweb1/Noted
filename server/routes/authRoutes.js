@@ -7,7 +7,7 @@ import {
 } from '../controllers/authController.js';
 import { getLeaderboard } from '../controllers/leaderboardController.js';
 import { protect } from '../middleware/protect.js';
-import { completeFocusSession, getMe, updateProfile } from '../controllers/userController.js'; 
+import { changePassword, completeFocusSession, getMe, updateProfile } from '../controllers/userController.js'; 
 import { getStudentDirectory } from '../controllers/directoryController.js';
 console.log("✅ AUTH ROUTES FILE LOADED SUCCESSFULLY");
 
@@ -23,6 +23,7 @@ router.post('/claim', claimAccount);
 router.get('/leaderboard', protect, getLeaderboard); 
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile); 
+router.put('/change-password', protect, changePassword);
 router.get('/directory', protect, getStudentDirectory);
 
 // ✅ CRITICAL: This MUST be at the very bottom of the file
