@@ -33,8 +33,21 @@ const generateStudentCode = async () => {
 
 export const createOrganization = async (req, res, next) => {
   try {
-    const { name } = req.body;
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!name || name.length > 120) {
+      const error = new Error('School name must be between 1 and 120 characters.');
+      error.status = 400;
+      throw error;
+    }
+
     const adminId = req.user._id;
+    const existingOrganization = await Organization.findOne({ adminId });
+    if (existingOrganization) {
+      const error = new Error('You already have an organization.');
+      error.status = 409;
+      throw error;
+    }
+
     const inviteCode = await generateUniqueCode();
     const org = await Organization.create({ name, adminId, inviteCode });
     await User.findByIdAndUpdate(adminId, { schoolName: name, schoolId: org._id });
