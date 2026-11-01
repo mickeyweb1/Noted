@@ -31,7 +31,7 @@ export default function PlanLimitDialog() {
     && !subscriptionExpired;
   if (
     (!isSchoolAdmin && !isIndependentTeacher && !isIndependentLearner && !isSchoolMember)
-    || (hasLivePaidPlan && !isSchoolLinked)
+    || (hasLivePaidPlan && user?.role !== "school_admin" && !isSchoolLinked)
   ) return null;
 
   const canPurchase = isSchoolAdmin
