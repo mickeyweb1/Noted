@@ -581,22 +581,22 @@ export default function StudentLibrary() {
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.share?.isEnabled ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"}`}>
                               {item.share?.isEnabled ? "Shared" : "Private"}
                             </span>
-                            {item.share?.isEnabled && (
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  copyStudySetLink(item);
-                                }}
-                                className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground hover:bg-accent"
-                              >
-                                <Share2 className="h-3 w-3" /> Copy link
-                              </button>
-                            )}
                           </span>
                         )}
                       </span>
                     </button>
+                    {item.type === "study-set" && item.share?.isEnabled && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          copyStudySetLink(item);
+                        }}
+                        className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-[10px] font-semibold text-foreground shadow-sm hover:bg-accent"
+                      >
+                        <Share2 className="h-3 w-3" /> Copy link
+                      </button>
+                    )}
                     {/* Always visible on touch screens; hover-reveal only on desktop */}
                     {item.type !== "study-set" && <button
                       type="button"
