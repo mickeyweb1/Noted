@@ -1,14 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState, useCallback } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { Lock, ShieldCheck, ArrowLeft, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { useFlutterwave, closePaymentModal } from "flutterwave-react-v3";
 import api from "../utils/api";
 import { useUserContext } from "../context/userContext";
 
-/*
- * Display prices only. The server checks every payment against its own price table
- * (server/config/prices.js), so changing a number here cannot lower what a user is charged.
- * Keep both in sync with the pricing page.
- */
 const PLAN_PRICES = {
   teacher_pro: { monthly: 2000, termly: 5000, label: "Teacher Pro" },
   teacher_premium: { monthly: 4000, termly: 10000, label: "Teacher Premium" },
@@ -24,55 +20,57 @@ export default function CheckoutPage() {
 
   const planKey = searchParams.get("plan") || "teacher_pro";
   const billingCycle = searchParams.get("billing") === "termly" ? "termly" : "monthly";
-  const callbackReference = searchParams.get("reference") || searchParams.get("trxref");
-  const planDetails = PLAN_PRICES[planKey]; // undefined = unknown plan
+  const planDetails = PLAN_PRICES[planKey];
   const amountInNaira = planDetails?.[billingCycle];
 
-  const [status, setStatus] = useState("idle"); // idle | opening | confirming
+  const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [pendingRef, setPendingRef] = useState("");
-  const processedReference = useRef("");
 
   const userId = user?._id ?? user?.id;
-  const coveredBySchool = Boolean(user?.schoolOwnerId); // a school teacher's plan comes from the school
-  const busy = status !== "idle";
+  const coveredBySchool = Boolean(user?.schoolOwnerId);
+  const busy = status === "confirming";
 
-  const confirmPayment = useCallback(async (reference) => {
-    setStatus("confirming");
-    setPendingRef(reference);
-    try {
-      await api.post("/payment/verify", { reference });
-    } catch (err) {
-      if (err.response?.status === 401) {
-        const callbackParams = new URLSearchParams({ plan: planKey, billing: billingCycle, reference });
-        navigate("/login", { state: { from: `/checkout?${callbackParams}` }, replace: true });
-        return;
+  // This function runs AFTER the user successfully pays on Flutterwave
+  const handleFlutterwavePayment = useCallback(
+    async (response) => {
+      setStatus("confirming");
+      try {
+        // Send the Flutterwave transaction ID to our backend to verify and activate
+        await api.post("/payment/verify", { 
+          reference: response.transaction_id,
+          tx_ref: response.tx_ref
+        });
+        await refreshUser?.();
+        navigate("/admin/dashboard?payment=success", { replace: true });
+      } catch (err) {
+        setStatus("idle");
+        setError(
+          err.response?.data?.message || 
+          `Payment was successful, but we couldn't activate your plan yet. Please contact support with Transaction ID: ${response.transaction_id}`
+        );
       }
-      // The webhook may still activate the plan, so don't tell the user they lost their money.
-      setStatus("idle");
-      setError(
-        err.response?.data?.message
-          ? `We received your payment but couldn't confirm it yet (${err.response.data.message}). Your plan should activate within a few minutes. If it doesn't, contact support with reference ${reference}.`
-          : `We received your payment but couldn't confirm it yet. Your plan should activate within a few minutes. If it doesn't, contact support with reference ${reference}.`
-      );
-      return;
-    }
-    try { await refreshUser?.(); } catch { /* the dashboard refreshes again */ }
-    navigate("/admin/dashboard?payment=success", { replace: true });
-  }, [billingCycle, navigate, planKey, refreshUser]);
+    },
+    [navigate, refreshUser]
+  );
 
-  useEffect(() => {
-    if (!callbackReference || processedReference.current === callbackReference || isAuthLoading) return;
-    processedReference.current = callbackReference;
-    if (!userId) {
-      const callbackParams = new URLSearchParams({ plan: planKey, billing: billingCycle, reference: callbackReference });
-      navigate("/login", { state: { from: `/checkout?${callbackParams}` }, replace: true });
-      return;
-    }
-    confirmPayment(callbackReference);
-  }, [billingCycle, callbackReference, confirmPayment, isAuthLoading, navigate, planKey, userId]);
+  const config = {
+    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY,
+    tx_ref: `noted_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    amount: amountInNaira || 0,
+    currency: "NGN",
+    payment_options: "card, mobilemoneyghana, ussd",
+    customer: {
+      email: user?.email || "",
+      name: user?.fullName || "Customer",
+    },
+    customizations: {
+      title: "Noted AI Subscription",
+      description: `Payment for ${planDetails?.label} (${billingCycle})`,
+      logo: "https://www.usenotedai.com/logo.png", // Replace with your actual logo URL
+    },
+  };
 
-  const handlePayment = async (e) => {
+  const handlePayment = (e) => {
     e.preventDefault();
     setError("");
 
@@ -83,16 +81,15 @@ export default function CheckoutPage() {
     if (!planDetails || !amountInNaira) return setError("That plan doesn't exist. Please pick one from the pricing page.");
     if (coveredBySchool) return setError("Your plan is provided by your school, so you don't need to pay here.");
 
-    setStatus("opening");
-    try {
-      const response = await api.post("/payment/initialize", { plan: planKey, billingCycle });
-      const authorizationUrl = response.data?.data?.authorization_url;
-      if (!authorizationUrl) throw new Error("Paystack did not return a checkout URL.");
-      window.location.assign(authorizationUrl);
-    } catch (err) {
-      setStatus("idle");
-      setError(err.response?.data?.message || "Couldn't start checkout. Check your connection and try again.");
-    }
+    // Trigger the Flutterwave modal
+    const handleFlutterwave = useFlutterwave(config);
+    handleFlutterwave({
+      callback: handleFlutterwavePayment,
+      onClose: () => {
+        setStatus("idle");
+        closePaymentModal();
+      },
+    });
   };
 
   if (!planDetails) {
@@ -114,7 +111,7 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
-          <button onClick={() => navigate("/pricing")} disabled={status === "confirming"} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">
+          <button onClick={() => navigate("/pricing")} disabled={busy} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">
             <ArrowLeft className="h-4 w-4" /> Back to Pricing Plans
           </button>
           <h1 className="mt-4 text-2xl font-bold text-foreground md:text-3xl">Secure Checkout</h1>
@@ -124,16 +121,13 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
           <div className="space-y-6 lg:col-span-3">
             <form onSubmit={handlePayment} className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground">Secure payment via Paystack</h2>
+              <h2 className="text-lg font-semibold text-foreground">Secure payment via Flutterwave</h2>
 
               {error && (
                 <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div className="min-w-0">
                     <p className="break-words">{error}</p>
-                    {pendingRef && (
-                      <Link to="/admin/dashboard" className="mt-2 inline-block font-semibold underline">Go to dashboard</Link>
-                    )}
                   </div>
                 </div>
               )}
@@ -154,14 +148,12 @@ export default function CheckoutPage() {
                 disabled={busy || coveredBySchool}
                 className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-base font-semibold text-brand-foreground shadow-lg shadow-brand/20 transition-all hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {status === "opening" && (<><Loader2 className="h-5 w-5 animate-spin" /> Opening secure payment…</>)}
-                {status === "confirming" && (<><Loader2 className="h-5 w-5 animate-spin" /> Confirming your payment…</>)}
-                {status === "idle" && (<><Lock className="h-4 w-4" /> Pay securely ₦{amountInNaira.toLocaleString()}</>)}
+                {busy ? (<><Loader2 className="h-5 w-5 animate-spin" /> Activating your plan…</>) : (<><Lock className="h-4 w-4" /> Pay securely ₦{amountInNaira.toLocaleString()}</>)}
               </button>
 
               <div className="flex items-center justify-center gap-4 pt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> 256-bit SSL Encrypted</span>
-                <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Secured by Paystack</span>
+                <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Secured by Flutterwave</span>
               </div>
             </form>
           </div>
@@ -181,14 +173,6 @@ export default function CheckoutPage() {
               <div className="flex justify-between border-t border-border pt-3 text-sm">
                 <span className="text-base font-semibold text-foreground">Total Due Today</span>
                 <span className="text-xl font-bold text-brand">₦{amountInNaira.toLocaleString()}</span>
-              </div>
-              <div className="border-t border-border pt-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Access Includes:</p>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Higher AI question limits</li>
-                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Remove "Noted AI" branding</li>
-                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Secure result sharing &amp; Offline support</li>
-                </ul>
               </div>
             </div>
           </div>
