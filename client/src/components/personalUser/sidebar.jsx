@@ -16,7 +16,8 @@ import {
   Bot,
   Zap,
   GraduationCap,
-  MessageSquare
+  MessageSquare,
+  Crown
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -27,6 +28,14 @@ export default function StudentSideBar({ isOpen, onClose }) {
   const navigate = useNavigate();
   const context = useUserContext() || {};
   const { user, logout } = context;
+  const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
+  const isFree = !user?.subscriptionTier
+    || user.subscriptionTier === "free"
+    || user.subscriptionStatus !== "active"
+    || subscriptionExpired;
+  const isIndependentLearner = (user?.role === "personal_user" || user?.role === "student")
+    && !user.schoolId
+    && !user.schoolOwnerId;
   const [dueCount, setDueCount] = useState(0);
   useEffect(() => {
     const refresh = () => api.get('/revision/stats').then((r) => setDueCount(r.data?.data?.dueCount || 0)).catch(() => {});
@@ -110,7 +119,17 @@ export default function StudentSideBar({ isOpen, onClose }) {
 
       {/* Footer / XP & Profile */}
       <div className="shrink-0 border-t border-border p-4 space-y-4">
-        
+        {isIndependentLearner && isFree && (
+          <NavLink
+            to="/pricing?audience=teachers"
+            onClick={onClose}
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand/80 px-4 py-3 text-sm font-semibold text-brand-foreground shadow-md transition-all hover:scale-[1.02] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Crown className="h-4 w-4" />
+            <span>Upgrade to Pro</span>
+          </NavLink>
+        )}
+
         {/* ✅ RESTORED: XP and Level Display */}
         <div className="rounded-xl bg-gradient-to-r from-brand/10 to-brand/5 p-3 border border-brand/20">
           <div className="flex justify-between items-center mb-1.5">
