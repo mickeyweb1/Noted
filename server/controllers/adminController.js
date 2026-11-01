@@ -7,25 +7,27 @@ import crypto from 'crypto';
 // Helper to generate a unique SCHOOL code
 const generateUniqueCode = async () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "NTD-";
-  for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-  code += "-";
-  for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-  const exists = await Organization.findOne({ inviteCode: code });
-  if (exists) return generateUniqueCode();
-  return code;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "NTD-";
+    for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += "-";
+    for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    if (!(await Organization.findOne({ inviteCode: code }))) return code;
+  }
+  return `NTD-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 };
 
 // ✅ NEW: Helper to generate a unique STUDENT code
 const generateStudentCode = async () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "STU-";
-  for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-  code += "-";
-  for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-  const exists = await User.findOne({ uniqueInviteCode: code });
-  if (exists) return generateStudentCode();
-  return code;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "STU-";
+    for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += "-";
+    for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    if (!(await User.findOne({ uniqueInviteCode: code }))) return code;
+  }
+  return `STU-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 };
 
 export const createOrganization = async (req, res, next) => {

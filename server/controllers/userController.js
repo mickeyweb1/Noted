@@ -137,9 +137,7 @@ export const updateProfile = async (req, res, next) => {
     }
 
     // ✅ SAVE ALL FIELDS (not just school/bio)
-    if (firstName !== undefined) user.firstName = firstName;
-    if (lastName !== undefined) user.lastName = lastName;
-    if (fullName !== undefined) user.fullName = fullName; // ✅ THIS WAS MISSING!
+    if (fullName !== undefined) user.fullName = fullName;
     if (email !== undefined) user.email = email;
     if (phone !== undefined) user.phone = phone;
     if (schoolName !== undefined) user.schoolName = schoolName;

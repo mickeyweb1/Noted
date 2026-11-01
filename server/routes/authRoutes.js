@@ -9,7 +9,7 @@ import { getLeaderboard } from '../controllers/leaderboardController.js';
 import { protect } from '../middleware/protect.js';
 import { changePassword, completeFocusSession, getMe, updateProfile } from '../controllers/userController.js'; 
 import { getStudentDirectory } from '../controllers/directoryController.js';
-console.log("✅ AUTH ROUTES FILE LOADED SUCCESSFULLY");
+
 
 const router = express.Router();
 

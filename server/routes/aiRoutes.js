@@ -4,7 +4,7 @@ import { getUserLibrary, getSingleContent, deleteContent } from '../controllers/
 import { saveQuizAttempt, getQuizAttempt } from '../controllers/quizController.js';
 import { protect } from '../middleware/protect.js';
 import { MongoRateLimitStore } from '../middleware/MongoRateLimitStore.js';
-import { cancelFocusSession, completeFocusSession, startFocusSession } from '../controllers/userController.js';
+import { cancelFocusSession, startFocusSession } from '../controllers/userController.js';
 import { 
   getClassmates, challengeClassmate, getMyBattles, 
   generateChallengeLink, acceptBattle, resolveBattle,
@@ -48,7 +48,6 @@ router.post('/text-to-speech', protect, expensiveAiLimiter, generateSpeech);
 
 router.post('/focus-session/start', protect, startFocusSession);
 router.post('/focus-session/cancel', protect, cancelFocusSession);
-router.post('/focus-complete', protect, completeFocusSession);
 router.post('/attempt', protect, saveQuizAttempt);
 router.get('/attempt/:id', protect, getQuizAttempt);
 
