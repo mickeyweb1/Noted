@@ -86,6 +86,7 @@ if (finalRole === 'teacher' && !code) {
       if (!org) throw httpError('Invalid invite code');
       schoolId = org._id;
       finalSchoolName = org.name;
+      schoolOwnerId = org.adminId;
 
       if (finalRole === 'teacher') {
         // Same limits as "Add Teacher": the owner must be on the School plan and have a free slot
@@ -96,7 +97,6 @@ if (finalRole === 'teacher' && !code) {
         );
         if (!owner) throw httpError('This school has no free teacher slots. Please ask your school owner.', 403);
         reservedOwnerId = owner._id;
-        schoolOwnerId = owner._id;
       }
     }
 
