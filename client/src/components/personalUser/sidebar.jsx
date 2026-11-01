@@ -16,8 +16,6 @@ import {
   Bot,
   Zap,
   GraduationCap,
-  MessageSquare,
-  CircleHelp,
   Crown,
   CalendarDays,
   Gauge
@@ -143,52 +141,6 @@ export default function StudentSideBar({ isOpen, onClose }) {
 
       {/* Footer / XP & Profile */}
       <div className="shrink-0 border-t border-border p-4 space-y-4">
-        <section aria-label="Quick actions">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick actions</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <NavLink
-              to="/quiz"
-              onClick={onClose}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <Brain className="h-4 w-4 shrink-0 text-brand" />
-              <span>Create quiz</span>
-            </NavLink>
-            <NavLink
-              to="/aiGenerator"
-              onClick={onClose}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <Sparkles className="h-4 w-4 shrink-0 text-brand" />
-              <span>Generate summary</span>
-            </NavLink>
-          </div>
-        </section>
-
-        <section aria-label="Help and support">
-          <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            <CircleHelp className="h-3.5 w-3.5" />
-            Help &amp; support
-          </h2>
-          <div className="grid grid-cols-2 gap-2">
-            <NavLink
-              to="/help/student"
-              onClick={onClose}
-              className="flex min-h-9 items-center justify-center rounded-lg border border-border bg-card px-2 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              Student guide
-            </NavLink>
-            <NavLink
-              to="/support"
-              onClick={onClose}
-              className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-brand" />
-              Contact support
-            </NavLink>
-          </div>
-        </section>
-
         <section className="rounded-xl border border-border bg-card p-3" aria-label="My plan">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">My plan</h2>
