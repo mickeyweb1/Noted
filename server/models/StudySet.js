@@ -9,6 +9,8 @@ const studySetSchema = new mongoose.Schema({
     name: { type: String, trim: true, maxlength: 255, default: '' },
     url: { type: String, trim: true, maxlength: 500, default: '' },
   },
+  schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', default: null, index: true },
+  visibility: { type: String, enum: ['private', 'school'], default: 'private', index: true },
   share: {
     isEnabled: { type: Boolean, default: false },
     shareCode: { type: String, trim: true, maxlength: 32, unique: true, sparse: true, default: null },

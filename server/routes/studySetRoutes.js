@@ -9,6 +9,7 @@ import {
   listStudySets,
   reviewStudySetCard,
   sendStudySetTutorMessage,
+  toggleStudySetSchoolShare,
   toggleStudySetShare,
 } from '../controllers/studySetController.js';
 
@@ -35,6 +36,7 @@ router.post('/', createStudySetFromText);
 router.post('/upload', receiveUpload, createStudySetFromUpload);
 router.post('/:id/share', toggleStudySetShare);
 router.delete('/:id/share', toggleStudySetShare);
+router.post('/:id/school-share', toggleStudySetSchoolShare);
 router.post('/:id/tutor', sendStudySetTutorMessage);
 router.post('/:id/cards/:cardId/review', reviewStudySetCard);
 router.get('/:id', getStudySet);

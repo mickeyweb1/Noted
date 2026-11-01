@@ -224,6 +224,23 @@ export default function StudySetsPage() {
     }
   };
 
+  const toggleSchoolStudySetShare = async (enabled) => {
+    if (!studySet || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const response = await api.post(`/study-sets/${studySet._id}/school-share`, { enabled });
+      setStudySet((current) => ({
+        ...current,
+        visibility: response.data.data.visibility,
+      }));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'The Study Set could not be shared with your school.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copyShareLink = async () => {
     if (!shareUrl) return;
     try {
@@ -315,7 +332,10 @@ export default function StudySetsPage() {
               {sets.map((set) => (
                 <Link key={set._id} to={`/study-sets/${set._id}`} className={`${panelClass} flex items-center justify-between gap-4 transition hover:border-brand/50`}>
                   <span className="min-w-0"><span className="block truncate font-semibold">{set.title}</span><span className="text-sm text-muted-foreground">{set.subject || 'General'} · {set.flashcards?.length || 0} cards</span></span>
-                  <ChevronRight className="shrink-0 text-muted-foreground" size={18} />
+                  <span className="flex items-center gap-2">
+                    {set.visibility === 'school' && <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand">School</span>}
+                    <ChevronRight className="shrink-0 text-muted-foreground" size={18} />
+                  </span>
                 </Link>
               ))}
             </div>
@@ -345,17 +365,24 @@ export default function StudySetsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => toggleStudySetShare(!studySet.share?.isEnabled)} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent">
                 {studySet.share?.isEnabled ? <Link2 size={16} /> : <Share2 size={16} />}
-                {studySet.share?.isEnabled ? 'Disable sharing' : 'Share set'}
+                {studySet.share?.isEnabled ? 'Disable public share' : 'Public share'}
               </button>
               {studySet.share?.isEnabled && shareUrl && (
                 <button type="button" onClick={copyShareLink} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent">
                   <Copy size={16} /> Copy link
                 </button>
               )}
+              <button type="button" onClick={() => toggleSchoolStudySetShare(studySet.visibility !== 'school')} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent">
+                <Share2 size={16} />
+                {studySet.visibility === 'school' ? 'School shared' : 'Share with school'}
+              </button>
             </div>
           )}
           {shareCode && studySet.share?.isEnabled && (
             <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-brand">Shared study set</div>
+          )}
+          {!shareCode && studySet.visibility === 'school' && (
+            <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-brand">Visible to your school</div>
           )}
         </div>
       </header>

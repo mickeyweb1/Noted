@@ -25,6 +25,14 @@ const cleanText = (value) => {
 
 const generateShareCode = () => `NS-${randomUUID().slice(0, 8).toUpperCase()}`;
 
+const buildAccessibleSetQuery = (user) => {
+  const query = { $or: [{ userId: user._id }] };
+  if (user.schoolId) {
+    query.$or.push({ schoolId: user.schoolId, visibility: 'school' });
+  }
+  return query;
+};
+
 const buildShareUrl = (shareCode) => {
   const base = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
   return `${base}/study-sets/shared/${shareCode}`;
@@ -156,6 +164,8 @@ const createStudySet = async ({ req, res, sourceText, source, title, subject }) 
     const cleanTitle = typeof title === 'string' && title.trim() ? title.trim().slice(0, 160) : generated.title;
     const studySet = await StudySet.create({
       userId: req.user._id,
+      schoolId: req.user.schoolId || null,
+      visibility: 'private',
       title: cleanTitle,
       subject: typeof subject === 'string' ? subject.trim().slice(0, 100) : 'General',
       source,
@@ -231,6 +241,31 @@ export const toggleStudySetShare = async (req, res, next) => {
   }
 };
 
+export const toggleStudySetSchoolShare = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) throw httpError('Study Set not found.', 404);
+    if (!req.user.schoolId) throw httpError('School sharing is only available for school members.', 403);
+
+    const enabled = req.body?.enabled !== false;
+    const studySet = await StudySet.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!studySet) throw httpError('Study Set not found.', 404);
+
+    studySet.schoolId = req.user.schoolId;
+    studySet.visibility = enabled ? 'school' : 'private';
+    await studySet.save();
+
+    return res.json({
+      success: true,
+      data: {
+        visibility: studySet.visibility,
+        schoolId: studySet.schoolId,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const createStudySetFromText = async (req, res, next) => {
   try {
     const source = req.body?.source && typeof req.body.source === 'object' ? req.body.source : {};
@@ -288,9 +323,10 @@ export const createStudySetFromUpload = async (req, res, next) => {
 
 export const listStudySets = async (req, res, next) => {
   try {
-    const sets = await StudySet.find({ userId: req.user._id })
+    const query = buildAccessibleSetQuery(req.user);
+    const sets = await StudySet.find(query)
       .sort({ createdAt: -1 })
-      .select('title subject source share flashcards.repetitions createdAt updatedAt');
+      .select('title subject source share visibility schoolId flashcards.repetitions createdAt updatedAt');
     return res.json({ success: true, data: sets });
   } catch (error) {
     return next(error);
@@ -300,7 +336,13 @@ export const listStudySets = async (req, res, next) => {
 export const getStudySet = async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) throw httpError('Study Set not found.', 404);
-    const studySet = await StudySet.findOne({ _id: req.params.id, userId: req.user._id });
+    const studySet = await StudySet.findOne({
+      _id: req.params.id,
+      $or: [
+        { userId: req.user._id },
+        ...(req.user.schoolId ? [{ schoolId: req.user.schoolId, visibility: 'school' }] : []),
+      ],
+    });
     if (!studySet) throw httpError('Study Set not found.', 404);
     return res.json({ success: true, data: studySet });
   } catch (error) {
