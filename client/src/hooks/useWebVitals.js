@@ -6,6 +6,9 @@ export function useWebVitals(onMetric) {
     const supportedTypes = PerformanceObserver.supportedEntryTypes || [];
     const observers = [];
     let largestContentfulPaint = 0;
+    let clsSessionValue = 0;
+    let clsSessionStart = 0;
+    let lastLayoutShiftTime = 0;
     let cumulativeLayoutShift = 0;
     const interactionDurations = new Map();
 
@@ -14,7 +17,9 @@ export function useWebVitals(onMetric) {
       const observer = new PerformanceObserver((list) => {
         callback(list.getEntries());
       });
-      observer.observe({ type, buffered: true });
+      observer.observe(type === "event"
+        ? { type, buffered: true, durationThreshold: 16 }
+        : { type, buffered: true });
       observers.push(observer);
     };
 
@@ -33,7 +38,14 @@ export function useWebVitals(onMetric) {
 
     observe("layout-shift", (entries) => {
       for (const entry of entries) {
-        if (!entry.hadRecentInput) cumulativeLayoutShift += entry.value;
+        if (entry.hadRecentInput) continue;
+        if (!lastLayoutShiftTime || entry.startTime - lastLayoutShiftTime >= 1000 || entry.startTime - clsSessionStart >= 5000) {
+          clsSessionValue = 0;
+          clsSessionStart = entry.startTime;
+        }
+        clsSessionValue += entry.value;
+        cumulativeLayoutShift = Math.max(cumulativeLayoutShift, clsSessionValue);
+        lastLayoutShiftTime = entry.startTime;
       }
       report("CLS", cumulativeLayoutShift);
     });
