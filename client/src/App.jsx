@@ -22,6 +22,7 @@ const PricingPage = lazy(() => import("./pages/PricingPage"));
 const JoinSharedQuiz = lazy(() => import("./pages/schoolAdmin/JoinSharedQuiz"));
 const SharedQuizResults = lazy(() => import("./pages/schoolAdmin/SharedQuizResults"));
 const AiFlashcards = lazy(() => import("./pages/AiFlashcards"));
+const StudySetsPage = lazy(() => import("./pages/StudySetsPage"));
 const AddTeacher = lazy(() => import("./pages/schoolAdmin/AddTeacher"));
 
 // Auth Pages
@@ -121,6 +122,8 @@ function App() {
         <Route path="/ai-teacher" element={<AiTeacher />} />
         <Route path="/aiGenerator" element={<StudentAiGenerator />} />
         <Route path="/ai-flashcards" element={<AiFlashcards />} />
+        <Route path="/study-sets" element={<StudySetsPage />} />
+        <Route path="/study-sets/:id" element={<StudySetsPage />} />
         <Route path="/myLibrary" element={<StudentLibrary />} />
         <Route path="/quiz" element={<StudentQuiz />} />
         <Route path="/ai" element={<StudioHub />} /> 

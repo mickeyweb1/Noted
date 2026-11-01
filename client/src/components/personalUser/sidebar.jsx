@@ -18,7 +18,8 @@ import {
   GraduationCap,
   Crown,
   CalendarDays,
-  Gauge
+  Gauge,
+  BookOpen,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -78,6 +79,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
     { to: "/dashboard", label: "Dashboard", icon: Home },
     { to: "/ai-teacher", label: "AI Teacher", icon: Bot },
     { to: "/aiGenerator", label: "AI Summary", icon: Sparkles },
+    { to: "/study-sets", label: "Study Sets", icon: BookOpen },
     { to: "/podcast", label: "Podcast", icon: Mic },
     { to: "/quiz", label: "Quizzes", icon: Brain },
         { to: "/ai-flashcards", label: "AI Flashcards", icon: RotateCw },

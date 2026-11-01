@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import { extractImageText } from "../services/imageOcr.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1088,20 +1089,8 @@ export const extractTextFromImage = async (req, res, next) => {
     requireUser(req);
     const imageUrl = ensureText(req.body?.imageUrl, "Image data is required.");
     if (imageUrl.length > MAX_IMAGE_PAYLOAD_LENGTH) throw httpError("The image is too large to process.", 413);
-    const apiKey = process.env.OCR_SPACE_API_KEY;
-    if (!apiKey) throw httpError("OCR is not configured.", 503);
-    const formData = new URLSearchParams();
-    formData.append("apikey", apiKey);
-    formData.append("base64Image", imageUrl);
-    formData.append("language", "eng");
-    formData.append("isOverlayRequired", "false");
-    formData.append("OCREngine", "2");
-    const response = await fetchWithTimeout("https://api.ocr.space/parse/image", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Noted-App/1.0" }, body: formData.toString() }, 60000);
-    const data = await response.json().catch(() => null);
-    if (!response.ok || !data) throw httpError("OCR service failed.", 503);
-    if (data.IsErroredOnProcessing) throw httpError(data.ErrorMessage?.[0] || "OCR could not process this image.", 422);
-    const extractedText = data.ParsedResults?.[0]?.ParsedText || "";
-    return res.status(200).json({ success: true, text: extractedText.trim(), message: extractedText.trim() ? "Text extracted." : "No text detected.", method: "ocr-space" });
+    const text = await extractImageText(imageUrl);
+    return res.status(200).json({ success: true, text, message: text ? "Text extracted." : "No text detected.", method: "ocr-space" });
   } catch (error) {
     console.error("OCR extraction error:", error.message);
     return next(error);

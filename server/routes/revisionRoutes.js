@@ -5,6 +5,7 @@ import { Content } from '../models/Content.js';
 import { Quiz } from '../models/Quiz.js';
 import { User } from '../models/User.js';
 import { ReviewItem } from '../models/ReviewItem.js';
+import { StudySet } from '../models/StudySet.js';
 import { applyReview } from '../utils/sm2.js';
 
 const router = express.Router();
@@ -140,9 +141,10 @@ router.post('/queue', async (req, res, next) => {
 router.get('/due', async (req, res, next) => {
   try {
     const now = new Date();
-    const [contents, quizzes, reviewItems, totalReviewDue, futureReviewItem] = await Promise.all([
+    const [contents, quizzes, studySets, reviewItems, totalReviewDue, futureReviewItem] = await Promise.all([
       Content.find({ userId: req.user._id, type: 'quiz', 'revisionQuestions.0': { $exists: true } }).select('title revisionQuestions'),
       Quiz.find({ createdBy: req.user._id, 'questions.revisionQueued': true }).select('title questions'),
+      StudySet.find({ userId: req.user._id, 'flashcards.0': { $exists: true } }).select('title flashcards'),
       ReviewItem.find({ userId: req.user._id, nextReviewDate: { $lte: now } }).sort({ nextReviewDate: 1 }).limit(20),
       ReviewItem.countDocuments({ userId: req.user._id, nextReviewDate: { $lte: now } }),
       ReviewItem.findOne({ userId: req.user._id, nextReviewDate: { $gt: now } }).sort({ nextReviewDate: 1 }).select('nextReviewDate'),
@@ -158,6 +160,24 @@ router.get('/due', async (req, res, next) => {
     };
     contents.forEach((c) => c.revisionQuestions.forEach((q, i) => add(c._id, c.title, 'content', q, i)));
     quizzes.forEach((quiz) => quiz.questions.forEach((q, i) => { if (q.revisionQueued) add(quiz._id, quiz.title, 'quiz', q, i); }));
+    studySets.forEach((studySet) => studySet.flashcards.forEach((card) => {
+      if (new Date(card.nextReviewDate) <= now) {
+        totalDue += 1;
+        due.push({
+          parentId: String(studySet._id),
+          title: studySet.title,
+          sourceType: 'study-set',
+          cardId: String(card._id),
+          question: card.front,
+          correctAnswer: card.back,
+          options: [],
+          explanation: '',
+          nextReviewDate: card.nextReviewDate,
+        });
+      } else if (!nextReviewDate || new Date(card.nextReviewDate) < nextReviewDate) {
+        nextReviewDate = new Date(card.nextReviewDate);
+      }
+    }));
     due.sort((a, b) => new Date(a.nextReviewDate) - new Date(b.nextReviewDate));
     const limited = due.slice(0, 20);
     const grouped = new Map();
@@ -196,13 +216,15 @@ router.get('/due', async (req, res, next) => {
 router.get('/stats', async (req, res, next) => {
   try {
     const now = new Date();
-    const [contents, quizzes, reviewItems, user] = await Promise.all([
+    const [contents, quizzes, studySets, reviewItems, user] = await Promise.all([
       Content.find({ userId: req.user._id, type: 'quiz', 'revisionQuestions.0': { $exists: true } }).select('revisionQuestions'),
       Quiz.find({ createdBy: req.user._id, 'questions.revisionQueued': true }).select('questions'),
+      StudySet.find({ userId: req.user._id, 'flashcards.0': { $exists: true } }).select('flashcards.nextReviewDate flashcards.repetitions'),
       ReviewItem.find({ userId: req.user._id }).select('nextReviewDate repetitions'),
       User.findById(req.user._id).select('revisionActivityDates'),
     ]);
     const schedules = contents.flatMap((c) => c.revisionQuestions).concat(quizzes.flatMap((q) => q.questions.filter((x) => x.revisionQueued)));
+    const studyCards = studySets.flatMap((set) => set.flashcards);
     const dates = new Set(user?.revisionActivityDates || []);
     let streak = 0;
     const day = new Date(); day.setUTCHours(0, 0, 0, 0);
@@ -210,12 +232,15 @@ router.get('/stats', async (req, res, next) => {
     while (dates.has(day.toISOString().slice(0, 10))) { streak += 1; day.setUTCDate(day.getUTCDate() - 1); }
     res.json({ success: true, data: {
       dueCount: schedules.filter((q) => new Date(q.nextReviewDate) <= now).length
+        + studyCards.filter((card) => new Date(card.nextReviewDate) <= now).length
         + reviewItems.filter((q) => new Date(q.nextReviewDate) <= now).length,
       masteredCount: schedules.filter((q) => q.repetitions >= 3).length
+        + studyCards.filter((card) => card.repetitions >= 3).length
         + reviewItems.filter((q) => q.repetitions >= 3).length,
       streak,
       nextReviewDate: schedules.map((q) => q.nextReviewDate)
         .concat(reviewItems.map((q) => q.nextReviewDate))
+        .concat(studyCards.map((card) => card.nextReviewDate))
         .filter((date) => new Date(date) > now)
         .sort((a, b) => new Date(a) - new Date(b))[0] || null,
     } });

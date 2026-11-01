@@ -35,6 +35,10 @@ Whether you're studying independently or managing learning across a school, Note
 
 ## 🚀 Explore the experience
 
+### Complete Study Sets
+
+Create a Study Set from pasted notes, PDF/DOCX/PPTX documents, images, or a YouTube video with captions. Each set includes summarized and comprehensive notes, spaced-repetition flashcards, a practice quiz, a short study plan, and a source-grounded AI tutor. Study Sets are private to the account that created them and use the existing AI-credit limits.
+
 <table>
   <tr>
     <td width="50%">

@@ -192,10 +192,14 @@ const saveReviewResult = async (isCorrect) => {
       } else if (current.reviewItemId) {
 await api.post(`/revision/items/${current.reviewItemId}/review`, { correct: isCorrect });
       } else if (current.parentId) {
-await api.post(`/quiz/${current.parentId}/review`, {
-          questionIndex: current.questionIndex,
-          correct: isCorrect,
-        });
+        if (current.sourceType === 'study-set') {
+          await api.post(`/study-sets/${current.parentId}/cards/${current.cardId}/review`, { correct: isCorrect });
+        } else {
+          await api.post(`/quiz/${current.parentId}/review`, {
+            questionIndex: current.questionIndex,
+            correct: isCorrect,
+          });
+        }
       } else {
         throw new Error('Unrecognized review target');
       }

@@ -3,6 +3,7 @@ import {
   Library as LibraryIcon, Search, Grid3x3, List,
   FileText, Video, Music, Brain, FolderOpen,
   Users, Download, X, CheckCircle2, Play, Pause, Mic, Headphones, Trash2, Lock, RotateCw, AlertTriangle, Loader2,
+  BookOpen,
 } from "lucide-react";
 import api from "../../utils/api";
 import AudioPlayer from "../../components/AudioPlayer";
@@ -38,6 +39,7 @@ const getIconAndColor = (type) => {
     case "podcast": return { icon: Mic, colorClass: "bg-indigo-500/10 text-indigo-500" };
     case "flashcards": return { icon: RotateCw, colorClass: "bg-orange-500/10 text-orange-500" };
     case "quiz": return { icon: Brain, colorClass: "bg-green-500/10 text-green-500" };
+    case "study-set": return { icon: BookOpen, colorClass: "bg-brand-soft text-brand" };
     default: return { icon: FileText, colorClass: "bg-brand-soft text-brand" };
   }
 };
@@ -116,6 +118,7 @@ export default function StudentLibrary() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [myGenerations, setMyGenerations] = useState([]);
+  const [studySetLoadError, setStudySetLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
@@ -131,9 +134,14 @@ export default function StudentLibrary() {
     setIsLoading(true);
     setLoadError("");
     try {
-      const response = await api.get("/ai/library");
+      const [libraryResult, studySetsResult] = await Promise.allSettled([
+        api.get("/ai/library"),
+        api.get("/study-sets"),
+      ]);
+      if (libraryResult.status === "rejected") throw libraryResult.reason;
+      const response = libraryResult.value;
       if (response.data.success) {
-        setMyGenerations(response.data.data.map((item) => {
+        const contentItems = response.data.data.map((item) => {
           const { icon, colorClass } = getIconAndColor(item.type);
           return {
             id: item._id,
@@ -149,7 +157,28 @@ export default function StudentLibrary() {
             icon,
             colorClass,
           };
-        }));
+        });
+        setMyGenerations(contentItems);
+      }
+      if (studySetsResult.status === "fulfilled") {
+        setStudySetLoadError("");
+        const studySetItems = (studySetsResult.value.data?.data || []).map((item) => {
+          const { icon, colorClass } = getIconAndColor("study-set");
+          return {
+            id: item._id,
+            type: "study-set",
+            title: item.title || "Untitled Study Set",
+            subject: item.subject,
+            date: new Date(item.createdAt).toLocaleDateString(),
+            categoryLabel: "Study Set",
+            icon,
+            colorClass,
+          };
+        });
+        setMyGenerations((items) => [...items.filter((item) => item.type !== "study-set"), ...studySetItems]);
+      } else {
+        console.error("Failed to fetch Study Sets:", studySetsResult.reason);
+        setStudySetLoadError("Study Sets could not be loaded. Try again later.");
       }
     } catch (error) {
       console.error("Failed to fetch library:", error);
@@ -204,6 +233,7 @@ export default function StudentLibrary() {
     { id: "podcast", label: "Podcasts", icon: Mic },
     { id: "music", label: "Music", icon: Music },
     { id: "quiz", label: "Quizzes", icon: Brain },
+    { id: "study-set", label: "Study Sets", icon: BookOpen },
   ];
 
   const counts = myGenerations.reduce((acc, item) => ({ ...acc, [item.type]: (acc[item.type] || 0) + 1 }), { all: myGenerations.length });
@@ -445,6 +475,9 @@ export default function StudentLibrary() {
             <button type="button" onClick={() => setActiveTab("my-library")} className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${focusRing} ${activeTab === "my-library" ? "bg-brand text-brand-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}>My Library</button>
             <button type="button" onClick={() => setActiveTab("discover")} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${focusRing} ${activeTab === "discover" ? "bg-electric text-electric-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}><Users className="h-4 w-4" /> Discover</button>
           </div>
+          <button type="button" onClick={() => navigate("/study-sets")} className="inline-flex items-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-brand-foreground hover:bg-brand/90">
+            <BookOpen className="h-4 w-4" /> Create Study Set
+          </button>
         </div>
 
         {activeTab === "my-library" && (
@@ -496,6 +529,11 @@ export default function StudentLibrary() {
                 <button type="button" onClick={fetchLibrary} className={`rounded-lg border border-destructive/30 px-3 py-1.5 font-medium hover:bg-destructive/10 ${focusRing}`}>Try again</button>
               </div>
             )}
+            {studySetLoadError && (
+              <div role="status" className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
+                {studySetLoadError}
+              </div>
+            )}
 
             {/* Items */}
             <div className={viewStyle === "grid" ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "space-y-3"}>
@@ -514,7 +552,7 @@ export default function StudentLibrary() {
                   <div key={item.id} className="group relative min-w-0 rounded-2xl border border-border bg-card shadow-sm transition-all duration-300 hover:border-brand/30 hover:shadow-md">
                     <button
                       type="button"
-                      onClick={() => setSelectedItem(item)}
+                      onClick={() => item.type === "study-set" ? navigate(`/study-sets/${item.id}`) : setSelectedItem(item)}
                       className={`flex w-full min-w-0 gap-4 rounded-2xl p-4 text-left ${focusRing} ${viewStyle === "list" ? "flex-row items-center pr-14" : "flex-col items-start"}`}
                     >
                       <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105 ${item.colorClass}`}>
@@ -528,14 +566,14 @@ export default function StudentLibrary() {
                       </span>
                     </button>
                     {/* Always visible on touch screens; hover-reveal only on desktop */}
-                    <button
+                    {item.type !== "study-set" && <button
                       type="button"
                       onClick={(e) => requestDelete(item, e)}
                       aria-label={`Delete ${item.title}`}
                       className={`absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 ${focusRing}`}
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </button>}
                   </div>
                 ))
               )}

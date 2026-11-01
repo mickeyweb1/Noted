@@ -276,6 +276,9 @@ export default function StudentHome() {
             <NavLink to="/aiGenerator" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-brand-foreground shadow-lg shadow-brand/20 transition-all hover:scale-105 hover:bg-brand/90 active:scale-95 sm:w-auto sm:px-6">
               <Sparkles className="w-4 h-4" /> Generate AI Summary
             </NavLink>
+            <NavLink to="/study-sets" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-brand/30 bg-background px-4 text-sm font-semibold text-foreground transition-all hover:scale-105 hover:bg-accent active:scale-95 sm:w-auto sm:px-6">
+              <BookOpen className="w-4 h-4" /> Create Study Set
+            </NavLink>
             <NavLink to="/focusTime" className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold text-foreground transition-all hover:scale-105 hover:bg-accent hover:text-accent-foreground active:scale-95 sm:w-auto sm:px-6">
               <Clock className="w-4 h-4" /> Start Focus
             </NavLink>

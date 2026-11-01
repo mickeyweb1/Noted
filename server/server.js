@@ -27,6 +27,7 @@ import quizRoutes from './routes/quizRoutes.js';
 import revisionRoutes from './routes/revisionRoutes.js';
 import academicRoutes from './routes/academicRoutes.js';
 import seoRoutes from './routes/seoRoutes.js';
+import studySetRoutes from './routes/studySetRoutes.js';
 
 dotenv.config();
 
@@ -80,6 +81,8 @@ app.post('/api/contact', submitContactForm);
 app.use('/api/ai/generate', aiLimiter);
 app.use('/api/quiz/generate-ai-preview', aiLimiter);
 app.use('/api/ai', aiRoutes);
+app.use('/api/study-sets', aiLimiter);
+app.use('/api/study-sets', studySetRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payment', paymentRoutes); 
 app.use('/api/quiz', quizRoutes);
