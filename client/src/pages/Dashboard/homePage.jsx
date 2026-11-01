@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import api from "../../utils/api";
 import FeedbackModal from "../../components/FeedbackModal";
+import PlanUpgradeBanner from "../../components/PlanUpgradeBanner";
 
 const WEEKLY_STUDY_GOAL = 3;
 
@@ -281,6 +282,8 @@ export default function StudentHome() {
           </div>
         </div>
       </div>
+
+      <PlanUpgradeBanner />
 
       <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="Revision due">
         <div className="flex items-start gap-3">

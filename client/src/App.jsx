@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ToastViewport } from "./components/ui/toast";
+import PlanLimitDialog from "./components/PlanLimitDialog";
 
 // Marketing Pages
 const LandingPage = lazy(() => import("./pages/marketing/LandingPage"));
@@ -71,8 +72,10 @@ const TakeQuiz = lazy(() => import("./pages/TakeQuiz"));
 
 function App() {
   return (
-    <Suspense fallback={<div role="status" aria-label="Loading page" className="min-h-screen" />}>
-      <Routes>
+    <>
+      <PlanLimitDialog />
+      <Suspense fallback={<div role="status" aria-label="Loading page" className="min-h-screen" />}>
+        <Routes>
       {/* ================= PUBLIC MARKETING ROUTES ================= */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/about" element={<AboutPage />} />
@@ -167,9 +170,10 @@ function App() {
 
       {/* ================= CATCH-ALL (404) ================= */}
       <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      <ToastViewport />
-    </Suspense>
+        </Routes>
+        <ToastViewport />
+      </Suspense>
+    </>
   );
 }
 

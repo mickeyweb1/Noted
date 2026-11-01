@@ -4,6 +4,7 @@ import { Users, UserCheck, UserX, TrendingUp, Calendar, Plus, ArrowRight, Clock,
 import { NavLink } from "react-router-dom";
 import { useUserContext } from "../../context/userContext"; 
 import api from "../../utils/api";
+import PlanUpgradeBanner from "../../components/PlanUpgradeBanner";
  
 export default function AdminDashboard() {
   const { user, isAuthLoading, refreshUser } = useUserContext(); // ✅ ONLY ONE CALL
@@ -91,6 +92,8 @@ export default function AdminDashboard() {
           <button onClick={fetchData} className="rounded-lg border border-destructive/30 px-3 py-1.5 font-medium hover:bg-destructive/10">Try again</button>
         </div>
       )}
+
+      <PlanUpgradeBanner />
       
       {/* HEADER */}
       <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">

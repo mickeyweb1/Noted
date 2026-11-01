@@ -15,7 +15,7 @@ import {
   ArrowRight,
   MessageCircle,
 } from "lucide-react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useUserContext } from "../context/userContext";
 import MarketingLayout from "./marketing/MarketingLayout";
 import useMyLimits from "../hooks/useMyLimits";
@@ -314,7 +314,8 @@ function CompareTable() {
 export default function PricingPage() {
   const { user } = useUserContext();
   const navigate = useNavigate();
-  const [audience, setAudience] = useState("teachers");
+  const [searchParams] = useSearchParams();
+  const [audience, setAudience] = useState(searchParams.get("audience") === "schools" ? "schools" : "teachers");
   const [billingCycle, setBillingCycle] = useState("monthly");
   const [showCompare, setShowCompare] = useState(false);
 

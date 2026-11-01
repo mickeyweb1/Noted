@@ -44,6 +44,13 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        const responseMessage = error.response?.data?.message;
+        const isPlanLimit = typeof responseMessage === 'string'
+            && /upgrade|not enough ai credits|plan allows|maximum of .*access codes|teachers need the school owner plan/i.test(responseMessage);
+        if (error.response?.status === 403 && isPlanLimit) {
+            window.dispatchEvent(new CustomEvent('noted:plan-limit', { detail: { message: responseMessage } }));
+        }
+
         const requestPath = error.config?.url?.split('?')[0] || '';
         const isAuthEntryRequest = /\/auth\/(login|register|claim|validate-code)$/.test(requestPath);
         const authorization = error.config?.headers?.Authorization
