@@ -3,44 +3,31 @@ import api from "../utils/api";
 
 const UserContext = createContext(null);
 
-// ── Canonical storage keys ──────────────────────────────────────────────────
-const KEY_TOKEN   = "userToken";
-const KEY_USER    = "userInfo";
-const KEY_SESSION = "userSessionVersion";
-
-// One-time migration: if a session was saved under the old duplicate keys,
-// promote it to the canonical keys so existing users are not logged out.
-const migrateStorage = () => {
-  if (!localStorage.getItem(KEY_TOKEN) && localStorage.getItem("token")) {
-    localStorage.setItem(KEY_TOKEN, localStorage.getItem("token"));
-  }
-  if (!localStorage.getItem(KEY_USER) && localStorage.getItem("user")) {
-    localStorage.setItem(KEY_USER, localStorage.getItem("user"));
-  }
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-};
+// ✅ SAFE LOCALSTORAGE HELPER: Prevents Vercel build crashes
+const safeLocalStorage = typeof window !== "undefined" ? window.localStorage : null;
 
 const getStoredUser = () => {
+  if (!safeLocalStorage) return null;
   try {
-    const value = JSON.parse(localStorage.getItem(KEY_USER) || "null");
+    const value = JSON.parse(
+      safeLocalStorage.getItem("userInfo") || safeLocalStorage.getItem("user") || "null"
+    );
     return value && typeof value === "object" ? value : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 };
 
-const getStoredToken = () =>
-  typeof window === "undefined" ? null : localStorage.getItem(KEY_TOKEN);
-
 export function UserContextProvider({ children }) {
-  migrateStorage();
-
-  const [token, setToken] = useState(getStoredToken);
+  // ✅ SAFE: Only read tokens if in browser
+  const initialToken = safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null;
+  const initialSession = safeLocalStorage ? safeLocalStorage.getItem("userSessionVersion") : null;
+  
+  const [token, setToken] = useState(initialToken);
   const [user, setUser] = useState(getStoredUser);
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => Boolean(getStoredToken() && getStoredUser()),
-  );
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(initialToken && getStoredUser()));
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-
+  
   const [formState, setFormState] = useState({
     page: "signin",
     fullName: "",
@@ -53,95 +40,103 @@ export function UserContextProvider({ children }) {
 
   useEffect(() => {
     const expireSession = (event) => {
-      const currentToken   = localStorage.getItem(KEY_TOKEN);
-      const currentSession = localStorage.getItem(KEY_SESSION);
-      if (currentToken   && currentToken   !== event.detail?.token)   return;
-      if (currentSession && currentSession !== event.detail?.session) return;
+      const currentToken = safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null;
+      const currentSession = safeLocalStorage ? safeLocalStorage.getItem("userSessionVersion") : null;
+      const expiredToken = event.detail?.token;
+      const expiredSession = event.detail?.session;
+      
+      if (currentToken && currentToken !== expiredToken) return;
+      if (currentSession && currentSession !== expiredSession) return;
+      
       setToken(null);
       setUser(null);
       setIsAuthenticated(false);
       setIsAuthLoading(false);
     };
-    window.addEventListener("noted:auth-expired", expireSession);
+    
+    if (typeof window !== "undefined") {
+      window.addEventListener("noted:auth-expired", expireSession);
+    }
 
     const fetchUserData = async () => {
-      const storedToken   = localStorage.getItem(KEY_TOKEN);
-      const storedSession = localStorage.getItem(KEY_SESSION);
-      if (!storedToken) { setIsAuthLoading(false); return; }
+      const storedToken = safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null;
+      const storedSession = safeLocalStorage ? safeLocalStorage.getItem("userSessionVersion") : null;
+      
+      if (!storedToken) {
+        setIsAuthLoading(false);
+        return;
+      }
 
       try {
-        const response = await api.get("/auth/me", {
-          headers: { Authorization: `Bearer ${storedToken}` },
-        });
+        const response = await api.get("/auth/me", { headers: { Authorization: `Bearer ${storedToken}` } });
         const userData = response.data.data || response.data;
-
-        // Ignore late responses from a session that has already been replaced.
-        if (
-          localStorage.getItem(KEY_TOKEN)   !== storedToken ||
-          localStorage.getItem(KEY_SESSION) !== storedSession
-        ) return;
-
+        
+        if ((safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null) !== storedToken || 
+            (safeLocalStorage ? safeLocalStorage.getItem("userSessionVersion") : null) !== storedSession) return;
+        
         const cleanUserData = {
           ...userData,
-          role: userData.role?.replace(/"/g, "") || userData.role,
+          role: userData.role?.replace(/"/g, '') || userData.role
         };
+        
         setUser(cleanUserData);
-        localStorage.setItem(KEY_USER, JSON.stringify(cleanUserData));
+        if (safeLocalStorage) {
+          safeLocalStorage.setItem("userInfo", JSON.stringify(cleanUserData));
+          safeLocalStorage.setItem("user", JSON.stringify(cleanUserData));
+        }
         setIsAuthenticated(true);
       } catch (error) {
         console.error("[Auth] Session verification failed:", error.message);
-        // Only a confirmed 401 expires the same token — network/5xx failures keep
-        // the cached session intact so a temporary outage doesn't log users out.
-        if (
-          error.response?.status === 401 &&
-          localStorage.getItem(KEY_TOKEN)   === storedToken &&
-          localStorage.getItem(KEY_SESSION) === storedSession
-        ) {
-          localStorage.removeItem(KEY_TOKEN);
-          localStorage.removeItem(KEY_USER);
-          localStorage.removeItem(KEY_SESSION);
+        if (error.response?.status === 401 && 
+            (safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null) === storedToken && 
+            (safeLocalStorage ? safeLocalStorage.getItem("userSessionVersion") : null) === storedSession) {
+          
+          if (safeLocalStorage) {
+            safeLocalStorage.removeItem("userToken");
+            safeLocalStorage.removeItem("token");
+            safeLocalStorage.removeItem("userInfo");
+            safeLocalStorage.removeItem("user");
+            safeLocalStorage.removeItem("userSessionVersion");
+            safeLocalStorage.removeItem("noted_ai_tutor_messages");
+          }
           delete api.defaults.headers.common.Authorization;
           setToken(null);
           setUser(null);
           setIsAuthenticated(false);
         }
       } finally {
-        if (
-          !localStorage.getItem(KEY_TOKEN) ||
-          (
-            localStorage.getItem(KEY_TOKEN)   === storedToken &&
-            localStorage.getItem(KEY_SESSION) === storedSession
-          )
-        ) {
+        if (!(safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null) || 
+            ((safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null) === storedToken && 
+             (safeLocalStorage ? safeLocalStorage.getItem("userSessionVersion") : null) === storedSession)) {
           setIsAuthLoading(false);
         }
       }
     };
 
     fetchUserData();
-    return () => window.removeEventListener("noted:auth-expired", expireSession);
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("noted:auth-expired", expireSession);
+      }
+    };
   }, []);
 
   const login = (userData, authToken) => {
-    if (!authToken || !userData?.role) {
-      throw new Error("[Auth] Login response is missing the user or token.");
-    }
+    if (!authToken || !userData?.role) throw new Error("[Auth] Login response is missing the user or token.");
     const normalizedUser = {
       ...userData,
-      email: typeof userData.email === "string"
-        ? userData.email.trim().toLowerCase()
-        : userData.email,
-      role: typeof userData.role === "string"
-        ? userData.role.replace(/"/g, "")
-        : userData.role,
+      email: typeof userData.email === "string" ? userData.email.trim().toLowerCase() : userData.email,
+      role: typeof userData.role === "string" ? userData.role.replace(/"/g, "") : userData.role,
     };
-    const sessionVersion =
-      globalThis.crypto?.randomUUID?.() ||
-      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    localStorage.setItem(KEY_TOKEN,   authToken);
-    localStorage.setItem(KEY_USER,    JSON.stringify(normalizedUser));
-    localStorage.setItem(KEY_SESSION, sessionVersion);
+    
+    if (safeLocalStorage) {
+      safeLocalStorage.setItem("userToken", authToken);
+      safeLocalStorage.setItem("token", authToken);
+      safeLocalStorage.setItem("userInfo", JSON.stringify(normalizedUser));
+      safeLocalStorage.setItem("user", JSON.stringify(normalizedUser));
+      safeLocalStorage.setItem("userSessionVersion", globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    }
+    
     api.defaults.headers.common.Authorization = `Bearer ${authToken}`;
     setToken(authToken);
     setUser(normalizedUser);
@@ -151,27 +146,55 @@ export function UserContextProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem(KEY_TOKEN);
-    localStorage.removeItem(KEY_USER);
-    localStorage.removeItem(KEY_SESSION);
-    localStorage.removeItem("noted_ai_tutor_messages");
+    if (safeLocalStorage) {
+      safeLocalStorage.removeItem("userToken");
+      safeLocalStorage.removeItem("token");
+      safeLocalStorage.removeItem("userInfo");
+      safeLocalStorage.removeItem("user");
+      safeLocalStorage.removeItem("userSessionVersion");
+      safeLocalStorage.removeItem("noted_ai_tutor_messages");
+    }
     delete api.defaults.headers.common.Authorization;
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
-    window.location.replace("/login");
+    if (typeof window !== "undefined") {
+      window.location.replace("/login");
+    }
   };
 
   const updateUser = (updatedFields) => {
     setUser((prevUser) => {
       const nextUser = { ...prevUser, ...updatedFields };
-      localStorage.setItem(KEY_USER, JSON.stringify(nextUser));
+      if (safeLocalStorage) {
+        safeLocalStorage.setItem("userInfo", JSON.stringify(nextUser));
+        safeLocalStorage.setItem("user", JSON.stringify(nextUser));
+      }
       return nextUser;
     });
   };
 
-  const setPage = (page) => setFormState((prev) => ({ ...prev, page }));
+  const refreshUser = async () => {
+    const currentToken = safeLocalStorage ? (safeLocalStorage.getItem("userToken") || safeLocalStorage.getItem("token")) : null;
+    if (!currentToken) return null;
+    try {
+      const response = await api.get("/auth/me", { headers: { Authorization: `Bearer ${currentToken}` } });
+      const data = response.data.data || response.data;
+      const clean = { ...data, role: data.role?.replace(/"/g, "") || data.role };
+      setUser(clean);
+      if (safeLocalStorage) {
+        safeLocalStorage.setItem("userInfo", JSON.stringify(clean));
+        safeLocalStorage.setItem("user", JSON.stringify(clean));
+      }
+      return clean;
+    } catch (error) {
+      console.error("Failed to refresh user:", error);
+      return null;
+    }
+  };
 
+  const setPage = (page) => setFormState((prev) => ({ ...prev, page }));
+  
   const updateUserField = (section, field, value) => {
     setFormState((prev) => ({
       ...prev,
@@ -179,33 +202,20 @@ export function UserContextProvider({ children }) {
     }));
   };
 
-  const refreshUser = async () => {
-    const currentToken = localStorage.getItem(KEY_TOKEN);
-    if (!currentToken) return null;
-    const response = await api.get("/auth/me", {
-      headers: { Authorization: `Bearer ${currentToken}` },
-    });
-    const data  = response.data.data || response.data;
-    const clean = { ...data, role: data.role?.replace(/"/g, "") || data.role };
-    setUser(clean);
-    localStorage.setItem(KEY_USER, JSON.stringify(clean));
-    return clean;
-  };
-
   return (
     <UserContext.Provider
-      value={{
+      value={{ 
         isAuthenticated,
         isAuthLoading,
-        user,
-        token,
-        login,
-        logout,
+        user, 
+        token, 
+        login, 
+        logout, 
         updateUser,
-        refreshUser,
-        formState,
-        setPage,
-        updateUserField,
+        refreshUser, // ✅ Make sure this is exposed!
+        formState, 
+        setPage, 
+        updateUserField 
       }}
     >
       {children}
