@@ -23,7 +23,7 @@ router.post('/initialize', protect, async (req, res, next) => {
   try {
     const planKey = typeof req.body?.plan === 'string' ? req.body.plan : '';
     const billingCycle = req.body?.billingCycle;
-    const plan = PRICES[planKey];
+    const plan = Object.prototype.hasOwnProperty.call(PRICES, planKey) ? PRICES[planKey] : null;
 
     if (!plan || !['monthly', 'termly'].includes(billingCycle)) {
       return res.status(400).json({ success: false, message: 'Choose a valid plan and billing cycle.' });
@@ -84,7 +84,7 @@ export const activateFromTransaction = async (tx) => {
   if (typeof tx.reference !== 'string' || !tx.reference) return reject('Transaction has no reference.');
 
   const meta = tx.metadata || {};
-  const plan = PRICES[meta.plan];
+  const plan = Object.prototype.hasOwnProperty.call(PRICES, meta.plan) ? PRICES[meta.plan] : null;
   if (!['monthly', 'termly'].includes(meta.billingCycle)) return reject('Unknown billing cycle.');
   const cycle = meta.billingCycle;
   if (!plan || !mongoose.isValidObjectId(meta.userId)) return reject('Unknown plan or user in the payment metadata.');
