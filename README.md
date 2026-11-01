@@ -360,7 +360,13 @@ Set `CLIENT_URL` to the deployed frontend origin so browser requests can pass th
 
 ### Client deployment
 
-Set `VITE_API_URL` to the deployed API base URL, including `/api`.
+The Vercel project should use `client/` as its Root Directory. Git deployments are enabled for all branches: the configured production branch creates production deployments, and other branches create preview deployments.
+
+Configure these environment variables in the Vercel project before deploying:
+
+- `VITE_API_URL`: deployed backend API base URL, including `/api`.
+- `SEO_API_URL`: the same backend API base URL, used by the sitemap serverless function.
+- `VITE_SITE_URL` and `SEO_SITE_URL`: canonical production site origin.
 
 For example:
 
