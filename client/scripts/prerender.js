@@ -109,7 +109,12 @@ try {
   for (const route of routes) {
     const metadata = PUBLIC_PAGES[route.path];
     if (!metadata) throw new Error(`Missing SEO metadata for ${route.path}`);
-    const { default: Page } = await vite.ssrLoadModule(route.module);
+    const pageModule = await vite.ssrLoadModule(route.module);
+    const { default: Page } = pageModule;
+    const pageMetadata = {
+      ...metadata,
+      ...(pageModule.seoStructuredData ? { structuredData: pageModule.seoStructuredData } : {}),
+    };
     const page = React.createElement(
       StaticRouter,
       { location: route.path },
@@ -124,7 +129,7 @@ try {
       ),
     );
     const markup = renderToString(page);
-    const html = renderHead(template, route.path, metadata)
+    const html = renderHead(template, route.path, pageMetadata)
       .replace(
         '<div id="root"></div>',
         `<div id="root" data-noted-prerendered="true">${markup}</div>`,

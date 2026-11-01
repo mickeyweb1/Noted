@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useUserContext } from "../context/userContext";
+import SEO from "../components/SEO";
 import MarketingLayout from "./marketing/MarketingLayout";
 import useMyLimits from "../hooks/useMyLimits";
 
@@ -199,6 +200,15 @@ const faqs = [
   ["What does termly billing mean?", "Termly billing is one payment for a school term. The prices shown are for a three-month term. AI question credits still refresh monthly."],
   ["Can I try Noted AI before paying?", "Yes. The Free plan has no time limit, so you can use it before deciding whether to upgrade."],
 ];
+export const seoStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map(([question, answer]) => ({
+    "@type": "Question",
+    name: question,
+    acceptedAnswer: { "@type": "Answer", text: answer },
+  })),
+};
 
 function FeatureItem({ text, ok = true }) {
   const isHeader = text.toLowerCase().includes("plus") && text.endsWith(":");
@@ -337,6 +347,11 @@ const currentTier = !isAuthLoading && user ? (limits?.plan ?? user.subscriptionT
 
   return (
     <MarketingLayout>
+      <SEO
+        title="Noted Plans and Pricing | Study and School Tools"
+        description="Compare Noted plans for teachers, schools, and independent learners. Choose the study and assessment tools that fit your needs."
+        structuredData={seoStructuredData}
+      />
       <div className="relative overflow-hidden bg-background">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[26rem] bg-gradient-to-b from-brand/10 via-brand/5 to-transparent" aria-hidden="true" />
         <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-14 sm:px-6 lg:px-8 lg:pb-28 lg:pt-20">
