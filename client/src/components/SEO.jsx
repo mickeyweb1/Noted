@@ -6,7 +6,7 @@ const SITE_URL = (import.meta.env.VITE_SITE_URL || "https://usenotedai.com").rep
 const DEFAULT_TITLE = "Noted | AI-Powered Study Tools for Students";
 const DEFAULT_DESCRIPTION = "Turn class notes into clear summaries, quizzes, flashcards, and audio lessons with Noted's AI-powered learning platform.";
 const DEFAULT_METADATA = { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, robots: "noindex,nofollow" };
-const PUBLIC_PAGES = {
+export const PUBLIC_PAGES = {
   "/": {
     title: "Noted | AI Study Tools for Smarter Learning",
     description: "Turn class notes into clear summaries, quizzes, flashcards, and audio lessons with Noted's AI-powered learning platform.",

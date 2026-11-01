@@ -1,14 +1,14 @@
 import "@fontsource-variable/plus-jakarta-sans";
 import "@fontsource-variable/outfit";
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.jsx";
 import { UserContextProvider } from "./context/userContext.jsx";
 import { BrowserRouter } from "react-router-dom";
 import { SEOProvider } from "./components/SEO.jsx";
 
-createRoot(document.getElementById("root")).render(
+const app = (
   <StrictMode>
     <BrowserRouter>
       <SEOProvider>
@@ -17,5 +17,12 @@ createRoot(document.getElementById("root")).render(
         </UserContextProvider>
       </SEOProvider>
     </BrowserRouter>
-  </StrictMode>,
+  </StrictMode>
 );
+const rootElement = document.getElementById("root");
+
+if (rootElement.dataset.notedPrerendered === "true") {
+  hydrateRoot(rootElement, app);
+} else {
+  createRoot(rootElement).render(app);
+}

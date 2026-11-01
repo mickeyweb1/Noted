@@ -312,7 +312,7 @@ function CompareTable() {
 }
 
 export default function PricingPage() {
-  const { user } = useUserContext();
+  const { user, isAuthLoading } = useUserContext();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [audience, setAudience] = useState(searchParams.get("audience") === "schools" ? "schools" : "teachers");
@@ -320,7 +320,7 @@ export default function PricingPage() {
   const [showCompare, setShowCompare] = useState(false);
 
 const { limits } = useMyLimits();
-const currentTier = user ? (limits?.plan ?? user.subscriptionTier ?? "free") : null;
+const currentTier = !isAuthLoading && user ? (limits?.plan ?? user.subscriptionTier ?? "free") : null;
   const tiers = audience === "teachers" ? teacherTiers : schoolTiers;
 
   const handleChoose = (tier) => {

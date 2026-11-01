@@ -9,11 +9,14 @@ const getStoredUser = () => {
     return value && typeof value === "object" ? value : null;
   } catch { return null; }
 };
+const getStoredToken = () => typeof window === "undefined"
+  ? null
+  : localStorage.getItem("userToken") || localStorage.getItem("token");
 
 export function UserContextProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem("userToken") || localStorage.getItem("token"));
+  const [token, setToken] = useState(getStoredToken);
   const [user, setUser] = useState(getStoredUser);
-  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean((localStorage.getItem("userToken") || localStorage.getItem("token")) && getStoredUser()));
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getStoredToken() && getStoredUser()));
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   
   const [formState, setFormState] = useState({

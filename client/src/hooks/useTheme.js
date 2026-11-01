@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 const THEME_CHANGE_EVENT = 'noted:theme-change';
 
 const readTheme = () => {
+  if (typeof window === 'undefined') return 'light';
   const savedTheme = localStorage.getItem('theme');
   return savedTheme === 'dark' ? 'dark' : 'light';
 };
@@ -14,9 +15,12 @@ const applyTheme = (theme) => {
 };
 
 export function useTheme() {
-  const [theme, setThemeState] = useState(readTheme);
+  const [theme, setThemeState] = useState('light');
 
   useEffect(() => {
+    const storedTheme = readTheme();
+    setThemeState(storedTheme);
+    applyTheme(storedTheme);
     const syncTheme = () => setThemeState(readTheme());
     window.addEventListener(THEME_CHANGE_EVENT, syncTheme);
     window.addEventListener('storage', syncTheme);
@@ -25,10 +29,6 @@ export function useTheme() {
       window.removeEventListener('storage', syncTheme);
     };
   }, []);
-
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
