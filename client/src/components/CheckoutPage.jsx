@@ -1,14 +1,16 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { Lock, ShieldCheck, ArrowLeft, AlertTriangle, Loader2 } from "lucide-react";
-import { useFlutterwave, closePaymentModal } from "flutterwave-react-v3";
-import api from "../utils/api";
+import { Lock, ShieldCheck, ArrowLeft, CheckCircle2, AlertTriangle, Copy, Check, MessageCircle } from "lucide-react";
 import { useUserContext } from "../context/userContext";
 
-/*
- * Display prices only. The server checks every payment against its own price table
- * (backend/config/prices.js), so changing a number here cannot lower what a user is charged.
- */
+// ✅ YOUR BANK DETAILS ARE ALREADY FILLED IN HERE
+const BANK_DETAILS = {
+  bankName: "PalmPay",
+  accountNumber: "9126994325",
+  accountName: "Ogunleye Anuoluwa janet", // You can update this later if needed
+  whatsappNumber: "2347062640714", // Your WhatsApp number
+};
+
 const PLAN_PRICES = {
   teacher_pro: { monthly: 2000, termly: 5000, label: "Teacher Pro" },
   teacher_premium: { monthly: 4000, termly: 10000, label: "Teacher Premium" },
@@ -17,108 +19,30 @@ const PLAN_PRICES = {
   school_premium: { monthly: 40000, termly: 100000, label: "School Premium" },
 };
 
-const newTxRef = () =>
-  `noted_${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.floor(Math.random() * 1e6)}`}`;
-
 export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, refreshUser, isAuthLoading } = useUserContext();
+  const { user, isAuthLoading } = useUserContext();
 
   const planKey = searchParams.get("plan") || "teacher_pro";
   const billingCycle = searchParams.get("billing") === "termly" ? "termly" : "monthly";
   const planDetails = PLAN_PRICES[planKey];
   const amountInNaira = planDetails?.[billingCycle];
 
-  const [status, setStatus] = useState("idle"); // idle | confirming
-  const [error, setError] = useState("");
-  const [paidId, setPaidId] = useState(""); // set when money was taken but activation isn't confirmed yet
-  const [paidTxRef, setPaidTxRef] = useState("");
-  const [txRef, setTxRef] = useState(newTxRef); // a fresh reference for every payment attempt
+  const [copied, setCopied] = useState(false);
+  const [transferConfirmed, setTransferConfirmed] = useState(false);
 
-  const userId = user?._id ?? user?.id;
-  const coveredBySchool = Boolean(user?.schoolOwnerId);
-  const busy = status === "confirming";
-  const publicKey = import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY;
-    console.log("MY FLUTTERWAVE KEY IS:", publicKey); 
-
-  // The hook must be called at the top level. `meta` is REQUIRED: the server reads the user, plan
-  // and billing cycle from it when it verifies the payment. Without it every payment is rejected.
-  const config = {
-    public_key: publicKey || "",
-    tx_ref: txRef,
-    amount: amountInNaira || 0,
-    currency: "NGN",
-    payment_options: "card,banktransfer,ussd",
-    customer: {
-      email: user?.email || "",
-      name: user?.fullName || "Customer",
-      ...(user?.phone ? { phone_number: user.phone } : {}),
-    },
-    meta: { userId: String(userId ?? ""), plan: planKey, billingCycle },
-    customizations: {
-      title: "Noted AI Subscription",
-      description: `Payment for ${planDetails?.label ?? "plan"} (${billingCycle})`,
-      logo: "https://www.usenotedai.com/logo.png",
-    },
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(BANK_DETAILS.accountNumber);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
-  const handleFlutterwave = useFlutterwave(config);
 
-  // Asks the server to confirm the payment with Flutterwave, then opens the dashboard.
-  const confirmPayment = useCallback(
-    async (transactionId, reference) => {
-      setStatus("confirming");
-      setError("");
-      try {
-        await api.post("/payment/verify", {
-          transactionId: String(transactionId),
-          reference,
-        });
-      } catch (err) {
-        setPaidId(String(transactionId));
-        setPaidTxRef(reference);
-        setStatus("idle");
-        setError(
-          `${err.response?.data?.message || "We couldn't confirm your payment yet."} Your payment went through, so please don't pay again. Try "Check my payment again" in a moment. If it still fails, contact support with Transaction ID ${transactionId}.`
-        );
-        return;
-      }
-      try { await refreshUser?.(); } catch { /* the dashboard refreshes again */ }
-      navigate("/admin/dashboard?payment=success", { replace: true });
-    },
-    [navigate, refreshUser]
-  );
-
-  const handlePayment = (e) => {
-    e.preventDefault();
-    setError("");
-
-    if (paidId) return confirmPayment(paidId, paidTxRef);
-
-    if (!userId) {
-      navigate("/login", { state: { from: `/checkout?plan=${planKey}&billing=${billingCycle}` } });
-      return;
-    }
-    if (!planDetails || !amountInNaira) return setError("That plan doesn't exist. Please pick one from the pricing page.");
-    if (coveredBySchool) return setError("Your plan is provided by your school, so you don't need to pay here.");
-    if (!publicKey) return setError("Payments aren't set up yet. Please contact support.");
-
-    handleFlutterwave({
-      callback: (response) => {
-        closePaymentModal();
-        const completed = response?.status === "successful" || response?.status === "completed";
-        if (!completed || !response?.transaction_id) {
-          setTxRef(newTxRef());
-          setError("The payment wasn't completed. Please try again.");
-          return;
-        }
-        confirmPayment(response.transaction_id, txRef);
-      },
-      onClose: () => {
-        setStatus((current) => (current === "confirming" ? current : "idle"));
-        setTxRef(newTxRef());
-      },
-    });
+  const handleWhatsAppClick = () => {
+    setTransferConfirmed(true);
+    const message = `Hello Noted AI, I just made a bank transfer for the *${planDetails?.label}* plan (${billingCycle}).\n\nMy account email is: *${user?.email}*\n\nPlease find my payment receipt attached.`;
+    const whatsappUrl = `https://wa.me/${BANK_DETAILS.whatsappNumber}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank");
   };
 
   if (isAuthLoading) {
@@ -148,57 +72,91 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
-          <button onClick={() => navigate("/pricing")} disabled={busy} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">
+          <button onClick={() => navigate("/pricing")} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="h-4 w-4" /> Back to Pricing Plans
           </button>
-          <h1 className="mt-4 text-2xl font-bold text-foreground md:text-3xl">Secure Checkout</h1>
-          <p className="mt-1 text-muted-foreground">Complete your subscription to unlock all features.</p>
+          <h1 className="mt-4 text-2xl font-bold text-foreground md:text-3xl">Complete Your Subscription</h1>
+          <p className="mt-1 text-muted-foreground">Follow the steps below to activate your plan via bank transfer.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+          {/* LEFT SIDE: Instructions & Bank Details */}
           <div className="space-y-6 lg:col-span-3">
-            <form onSubmit={handlePayment} className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground">Secure payment via Flutterwave</h2>
-
-              {error && (
-                <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p className="min-w-0 break-words">{error}</p>
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-6">
+              
+              {/* Step 1 */}
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-brand-foreground text-sm font-bold">1</span>
+                  Transfer the exact amount
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground ml-10">Please transfer <strong className="text-foreground">₦{amountInNaira.toLocaleString()}</strong> to the account details below:</p>
+                
+                <div className="mt-4 ml-10 rounded-xl border border-border bg-muted/50 p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Bank Name</span>
+                    <span className="font-semibold text-foreground">{BANK_DETAILS.bankName}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Account Number</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-foreground text-lg">{BANK_DETAILS.accountNumber}</span>
+                      <button onClick={copyToClipboard} className="p-1.5 rounded-md hover:bg-background transition-colors" title="Copy Account Number">
+                        {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Account Name</span>
+                    <span className="font-semibold text-foreground">{BANK_DETAILS.accountName}</span>
+                  </div>
                 </div>
-              )}
+              </div>
 
-              {coveredBySchool && (
-                <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">
-                  Your plan is provided by your school. Ask your school admin to upgrade it.
+              {/* Step 2 */}
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-brand-foreground text-sm font-bold">2</span>
+                  Send your receipt via WhatsApp
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground ml-10">
+                  After making the transfer, click the button below to send your payment receipt to our support team on WhatsApp. We have automatically included your email ({user?.email}) in the message.
                 </p>
-              )}
 
-              <div className="space-y-2">
-                <label htmlFor="checkout-email" className="text-sm font-medium text-foreground">Email Address</label>
-                <input id="checkout-email" type="email" value={user?.email || ""} disabled className="flex h-11 w-full cursor-not-allowed rounded-xl border border-input bg-muted px-4 text-sm text-muted-foreground" />
-              </div>
-
-              <button
-                type="submit"
-                disabled={busy || coveredBySchool}
-                className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-base font-semibold text-brand-foreground shadow-lg shadow-brand/20 transition-all hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {busy ? (
-                  <><Loader2 className="h-5 w-5 animate-spin" /> Activating your plan…</>
-                ) : paidId ? (
-                  <>Check my payment again</>
+                {!transferConfirmed ? (
+                  <button
+                    onClick={handleWhatsAppClick}
+                    className="mt-4 ml-10 inline-flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3.5 text-base font-semibold text-white shadow-lg shadow-green-500/20 transition-all hover:bg-[#20bd5a] active:scale-[0.98]"
+                  >
+                    <MessageCircle className="h-5 w-5" /> 
+                    Send Receipt on WhatsApp
+                  </button>
                 ) : (
-                  <><Lock className="h-4 w-4" /> Pay securely ₦{amountInNaira.toLocaleString()}</>
+                  <div className="mt-4 ml-10 max-w-sm rounded-xl border border-green-500/30 bg-green-500/10 p-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600 dark:text-green-400" />
+                      <div>
+                        <h3 className="font-semibold text-green-700 dark:text-green-400">Receipt Submitted!</h3>
+                        <p className="mt-1 text-sm text-green-700/80 dark:text-green-400/80">
+                          Thank you! Your account (<strong>{user?.email}</strong>) will be upgraded to <strong>{planDetails.label}</strong> within the next <strong>24 hours</strong> once we verify the transfer.
+                        </p>
+                        <button onClick={() => navigate("/admin/dashboard")} className="mt-3 text-sm font-semibold text-brand hover:underline">
+                          Return to Dashboard →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </button>
-
-              <div className="flex items-center justify-center gap-4 pt-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> 256-bit SSL Encrypted</span>
-                <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Secured by Flutterwave</span>
               </div>
-            </form>
+
+              <div className="ml-10 flex items-center gap-4 pt-4 border-t border-border text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Secure Manual Processing</span>
+                <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Your data is safe with us</span>
+              </div>
+            </div>
           </div>
 
+          {/* RIGHT SIDE: Order Summary */}
           <div className="lg:col-span-2">
             <div className="sticky top-24 space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-foreground">Order Summary</h2>
@@ -214,6 +172,14 @@ export default function CheckoutPage() {
               <div className="flex justify-between border-t border-border pt-3 text-sm">
                 <span className="text-base font-semibold text-foreground">Total Due Today</span>
                 <span className="text-xl font-bold text-brand">₦{amountInNaira.toLocaleString()}</span>
+              </div>
+              <div className="border-t border-border pt-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Access Includes:</p>
+                <ul className="space-y-2">
+                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Higher AI question limits</li>
+                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Remove "Noted AI" branding</li>
+                  <li className="flex items-center gap-2 text-sm text-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> Secure result sharing & Offline support</li>
+                </ul>
               </div>
             </div>
           </div>
