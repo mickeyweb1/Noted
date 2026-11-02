@@ -40,6 +40,7 @@ export default function CheckoutPage() {
   const coveredBySchool = Boolean(user?.schoolOwnerId);
   const busy = status === "confirming";
   const publicKey = import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY;
+    console.log("MY FLUTTERWAVE KEY IS:", publicKey); 
 
   // The hook must be called at the top level. `meta` is REQUIRED: the server reads the user, plan
   // and billing cycle from it when it verifies the payment. Without it every payment is rejected.
