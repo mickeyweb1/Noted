@@ -75,9 +75,7 @@ test('organization creation trims the name before storing and updating the admin
   const originalFindByIdAndUpdate = User.findByIdAndUpdate;
   let createdData;
   let userUpdate;
-  Organization.findOne = async (query) => query.adminId
-    ? null
-    : null;
+  Organization.findOne = async () => null;
   Organization.create = async (data) => {
     createdData = data;
     return { ...data, _id: '65b123456789012345678902' };
