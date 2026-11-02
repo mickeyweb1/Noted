@@ -1,22 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
 import { User } from '../models/User.js';
 import {
   activateFromTransaction,
-  initializePaystackTransaction,
-  isValidPaystackSignature,
+  initializeFlutterwaveTransaction,
+  isValidFlutterwaveSignature,
+  verifyFlutterwaveTransaction,
 } from '../routes/paymentRoutes.js';
 
 const userId = '65b123456789012345678901';
 
-test('initializes a Paystack checkout with server-selected amount and metadata', async () => {
+test('initializes a Flutterwave checkout with server-selected amount and metadata', async () => {
   const originalFetch = globalThis.fetch;
-  const originalSecret = process.env.PAYSTACK_SECRET_KEY;
+  const originalSecret = process.env.FLW_SECRET_KEY;
   const originalClientUrl = process.env.CLIENT_URL;
   let requestUrl;
   let requestOptions;
-  process.env.PAYSTACK_SECRET_KEY = 'sk_test_not_a_real_key';
+  process.env.FLW_SECRET_KEY = 'FLWSECK_TEST-not-a-real-key';
   process.env.CLIENT_URL = 'https://app.example.test';
   globalThis.fetch = async (url, options) => {
     requestUrl = url;
@@ -25,38 +25,38 @@ test('initializes a Paystack checkout with server-selected amount and metadata',
     return {
       ok: true,
       json: async () => ({
-        status: true,
+        status: 'success',
         data: {
-          authorization_url: 'https://checkout.paystack.com/test-code',
-          reference: requestBody.reference,
+          link: 'https://checkout.flutterwave.com/test-code',
+          tx_ref: requestBody.tx_ref,
         },
       }),
     };
   };
 
   try {
-    const result = await initializePaystackTransaction({
+    const result = await initializeFlutterwaveTransaction({
       user: { _id: userId, email: 'learner@example.test', role: 'teacher' },
       planKey: 'teacher_pro',
       billingCycle: 'monthly',
     });
     const requestBody = JSON.parse(requestOptions.body);
 
-    assert.equal(requestUrl, 'https://api.paystack.co/transaction/initialize');
+    assert.equal(requestUrl, 'https://api.flutterwave.com/v3/payments');
     assert.equal(requestOptions.method, 'POST');
     assert.equal(requestOptions.headers.Authorization, 'Bearer sk_test_not_a_real_key');
-    assert.equal(requestBody.amount, 200000);
+    assert.equal(requestBody.amount, 2000);
     assert.equal(requestBody.currency, 'NGN');
-    assert.equal(requestBody.metadata.userId, userId);
-    assert.equal(requestBody.metadata.plan, 'teacher_pro');
-    assert.equal(requestBody.metadata.billingCycle, 'monthly');
-    assert.equal(requestBody.callback_url, 'https://app.example.test/checkout?plan=teacher_pro&billing=monthly');
-    assert.equal(result.authorizationUrl, 'https://checkout.paystack.com/test-code');
+    assert.equal(requestBody.meta.userId, userId);
+    assert.equal(requestBody.meta.plan, 'teacher_pro');
+    assert.equal(requestBody.meta.billingCycle, 'monthly');
+    assert.equal(requestBody.redirect_url, 'https://app.example.test/checkout?plan=teacher_pro&billing=monthly');
+    assert.equal(result.authorizationUrl, 'https://checkout.flutterwave.com/test-code');
     assert.ok(result.reference);
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalSecret === undefined) delete process.env.PAYSTACK_SECRET_KEY;
-    else process.env.PAYSTACK_SECRET_KEY = originalSecret;
+    if (originalSecret === undefined) delete process.env.FLW_SECRET_KEY;
+    else process.env.FLW_SECRET_KEY = originalSecret;
     if (originalClientUrl === undefined) delete process.env.CLIENT_URL;
     else process.env.CLIENT_URL = originalClientUrl;
   }
@@ -64,7 +64,7 @@ test('initializes a Paystack checkout with server-selected amount and metadata',
 
 test('rejects invalid checkout plans and school-plan purchases by non-admins', async () => {
   await assert.rejects(
-    initializePaystackTransaction({
+    initializeFlutterwaveTransaction({
       user: { _id: userId, email: 'learner@example.test', role: 'student' },
       planKey: 'school_owner',
       billingCycle: 'monthly',
@@ -72,7 +72,7 @@ test('rejects invalid checkout plans and school-plan purchases by non-admins', a
     { status: 403 },
   );
   await assert.rejects(
-    initializePaystackTransaction({
+    initializeFlutterwaveTransaction({
       user: { _id: userId, email: 'learner@example.test', role: 'teacher' },
       planKey: 'unknown',
       billingCycle: 'monthly',
@@ -80,7 +80,7 @@ test('rejects invalid checkout plans and school-plan purchases by non-admins', a
     { status: 400 },
   );
   await assert.rejects(
-    initializePaystackTransaction({
+    initializeFlutterwaveTransaction({
       user: {
         _id: userId,
         email: 'learner@example.test',
@@ -120,11 +120,11 @@ test('activates only a verified exact-amount payment and atomically rejects dupl
   };
 
   const transaction = {
-    status: 'success',
-    reference: 'paystack_test_reference',
+    status: 'successful',
+    tx_ref: 'flutterwave_test_reference',
     currency: 'NGN',
-    amount: 5000000,
-    metadata: { userId, plan: 'school_pro', billingCycle: 'termly' },
+    amount: 50000,
+    meta: { userId, plan: 'school_pro', billingCycle: 'termly' },
   };
 
   try {
@@ -135,8 +135,8 @@ test('activates only a verified exact-amount payment and atomically rejects dupl
     assert.equal(firstActivation.status, 'activated');
     assert.equal(user.subscriptionTier, 'school_pro');
     assert.equal(user.maxTeachersAllowed, 13);
-    assert.equal(updateQuery.paymentReferences.$ne, transaction.reference);
-    assert.deepEqual(updatePayload.$addToSet, { paymentReferences: transaction.reference });
+    assert.equal(updateQuery.paymentReferences.$ne, transaction.tx_ref);
+    assert.deepEqual(updatePayload.$addToSet, { paymentReferences: transaction.tx_ref });
 
     const duplicateActivation = await activateFromTransaction(transaction);
     assert.equal(duplicateActivation.status, 'duplicate');
@@ -148,19 +148,49 @@ test('activates only a verified exact-amount payment and atomically rejects dupl
 
 test('rejects transactions without a provider reference before updating an account', async () => {
   const result = await activateFromTransaction({
-    status: 'success',
+    status: 'successful',
     currency: 'NGN',
     amount: 200000,
-    metadata: { userId, plan: 'teacher_pro', billingCycle: 'monthly' },
+    meta: { userId, plan: 'teacher_pro', billingCycle: 'monthly' },
   });
   assert.equal(result.status, 'rejected');
 });
 
-test('validates Paystack webhook signatures against the exact raw request body', () => {
-  const secret = 'test-only-paystack-secret';
-  const rawBody = Buffer.from('{"event":"charge.success","data":{"reference":"test"}}');
-  const signature = createHmac('sha512', secret).update(rawBody).digest('hex');
-  assert.equal(isValidPaystackSignature(rawBody, signature, secret), true);
-  assert.equal(isValidPaystackSignature(Buffer.from(`${rawBody.toString()} `), signature, secret), false);
-  assert.equal(isValidPaystackSignature(rawBody, 'invalid', secret), false);
+test('verifies transactions against Flutterwave using the provider transaction ID', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSecret = process.env.FLW_SECRET_KEY;
+  let requestUrl;
+  let requestOptions;
+  process.env.FLW_SECRET_KEY = 'FLWSECK_TEST-not-a-real-key';
+  globalThis.fetch = async (url, options) => {
+    requestUrl = url;
+    requestOptions = options;
+    return {
+      ok: true,
+      json: async () => ({
+        status: 'success',
+        data: { id: 12345, tx_ref: 'noted_test_reference', meta: { userId } },
+      }),
+    };
+  };
+
+  try {
+    const transaction = await verifyFlutterwaveTransaction('12345');
+    assert.equal(requestUrl, 'https://api.flutterwave.com/v3/transactions/12345/verify');
+    assert.equal(requestOptions.method, undefined);
+    assert.equal(transaction.reference, 'noted_test_reference');
+    assert.equal(transaction.metadata.userId, userId);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalSecret === undefined) delete process.env.FLW_SECRET_KEY;
+    else process.env.FLW_SECRET_KEY = originalSecret;
+  }
+});
+
+test('validates Flutterwave webhook hashes using constant-time equality', () => {
+  const secretHash = 'test-only-flutterwave-secret-hash';
+  assert.equal(isValidFlutterwaveSignature(secretHash, secretHash), true);
+  assert.equal(isValidFlutterwaveSignature(`${secretHash} `, secretHash), false);
+  assert.equal(isValidFlutterwaveSignature('invalid', secretHash), false);
+  assert.equal(isValidFlutterwaveSignature(secretHash, ''), false);
 });
