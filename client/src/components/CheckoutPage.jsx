@@ -33,6 +33,7 @@ export default function CheckoutPage() {
   const [status, setStatus] = useState("idle"); // idle | confirming
   const [error, setError] = useState("");
   const [paidId, setPaidId] = useState(""); // set when money was taken but activation isn't confirmed yet
+  const [paidTxRef, setPaidTxRef] = useState("");
   const [txRef, setTxRef] = useState(newTxRef); // a fresh reference for every payment attempt
 
   const userId = user?._id ?? user?.id;
@@ -64,13 +65,17 @@ export default function CheckoutPage() {
 
   // Asks the server to confirm the payment with Flutterwave, then opens the dashboard.
   const confirmPayment = useCallback(
-    async (transactionId) => {
+    async (transactionId, reference) => {
       setStatus("confirming");
       setError("");
       try {
-        await api.post("/payment/verify", { reference: String(transactionId) });
+        await api.post("/payment/verify", {
+          transactionId: String(transactionId),
+          reference,
+        });
       } catch (err) {
         setPaidId(String(transactionId));
+        setPaidTxRef(reference);
         setStatus("idle");
         setError(
           `${err.response?.data?.message || "We couldn't confirm your payment yet."} Your payment went through, so please don't pay again. Try "Check my payment again" in a moment. If it still fails, contact support with Transaction ID ${transactionId}.`
@@ -87,7 +92,7 @@ export default function CheckoutPage() {
     e.preventDefault();
     setError("");
 
-    if (paidId) return confirmPayment(paidId);
+    if (paidId) return confirmPayment(paidId, paidTxRef);
 
     if (!userId) {
       navigate("/login", { state: { from: `/checkout?plan=${planKey}&billing=${billingCycle}` } });
@@ -106,7 +111,7 @@ export default function CheckoutPage() {
           setError("The payment wasn't completed. Please try again.");
           return;
         }
-        confirmPayment(response.transaction_id);
+        confirmPayment(response.transaction_id, txRef);
       },
       onClose: () => {
         setStatus((current) => (current === "confirming" ? current : "idle"));

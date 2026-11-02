@@ -62,7 +62,7 @@ const userSchema = new mongoose.Schema({
         enum: ['active', 'canceled', 'past_due'],
         default: 'active'
     },
-    // Set after server-side Paystack transaction verification.
+    // Set after server-side payment verification.
     // When it passes, the plan stops counting even if nothing else changed.
     subscriptionEndsAt: { type: Date, default: null },
     billingCycle: { type: String, enum: ['monthly', 'termly'], default: 'monthly' },
@@ -79,7 +79,7 @@ const userSchema = new mongoose.Schema({
     // ---- AI credits (30-day rolling period) ----
     aiCreditsUsed: { type: Number, default: 0, min: 0 },
     creditsPeriodStart: { type: Date, default: null },
-      // Paystack references already applied. Stops a repeated verification from upgrading twice.
+      // Payment references already applied. Stops a repeated verification from upgrading twice.
   paymentReferences: { type: [String], default: [], select: false },
 
 }, { timestamps: true });

@@ -401,7 +401,7 @@ const currentTier = !isAuthLoading && user ? (limits?.plan ?? user.subscriptionT
           )}
 
           <div className="mx-auto mt-20 grid max-w-4xl gap-4 sm:grid-cols-3">
-            {[{ icon: Shield, title: "Secure payments", text: "Payments are processed through Paystack." }, { icon: WifiOff, title: "Offline quiz support", text: "Available on eligible paid plans; answers sync when students reconnect." }, { icon: BadgeCheck, title: "Free to start", text: "Keep using the Free plan for as long as you like." }].map(({ icon: Icon, title, text }) => (
+            {[{ icon: Shield, title: "Secure payments", text: "Payments are processed through Flutterwave." }, { icon: WifiOff, title: "Offline quiz support", text: "Available on eligible paid plans; answers sync when students reconnect." }, { icon: BadgeCheck, title: "Free to start", text: "Keep using the Free plan for as long as you like." }].map(({ icon: Icon, title, text }) => (
               <div key={title} className="flex items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Icon className="h-5 w-5" /></span>
                 <div><p className="font-semibold text-foreground">{title}</p><p className="mt-0.5 text-sm text-muted-foreground">{text}</p></div>

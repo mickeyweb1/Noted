@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 import { User } from '../models/User.js';
@@ -18,22 +18,22 @@ const addMonths = (date, months) => {
   return result;
 };
 
-export const isValidPaystackSignature = (rawBody, signature, secretKey) => {
-  if (!Buffer.isBuffer(rawBody) || typeof signature !== 'string' || !/^[a-f\d]{128}$/i.test(signature)) {
+export const isValidFlutterwaveSignature = (signature, secretHash) => {
+  if (typeof signature !== 'string' || typeof secretHash !== 'string' || !secretHash) {
     return false;
   }
-  const expected = createHmac('sha512', secretKey).update(rawBody).digest();
-  const received = Buffer.from(signature, 'hex');
+  const received = Buffer.from(signature);
+  const expected = Buffer.from(secretHash);
   return received.length === expected.length && timingSafeEqual(received, expected);
 };
 
-const paystackRequest = async (path, options = {}) => {
-  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+const flutterwaveRequest = async (path, options = {}) => {
+  const secretKey = process.env.FLW_SECRET_KEY;
   if (!secretKey) throw httpError('Payments are not configured.', 503);
 
   let response;
   try {
-    response = await fetch(`https://api.paystack.co${path}`, {
+    response = await fetch(`https://api.flutterwave.com/v3${path}`, {
       ...options,
       headers: {
         Authorization: `Bearer ${secretKey}`,
@@ -44,19 +44,19 @@ const paystackRequest = async (path, options = {}) => {
     });
   } catch (error) {
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      throw httpError('Paystack did not respond in time. Please try again.', 504);
+      throw httpError('Flutterwave did not respond in time. Please try again.', 504);
     }
-    throw httpError('Paystack could not be reached. Please try again.', 502);
+    throw httpError('Flutterwave could not be reached. Please try again.', 502);
   }
 
   const body = await response.json().catch(() => null);
-  if (!response.ok || body?.status !== true || !body.data) {
-    throw httpError('Paystack could not complete the payment request. Please try again.', 502);
+  if (!response.ok || body?.status !== 'success' || !body.data) {
+    throw httpError('Flutterwave could not complete the payment request. Please try again.', 502);
   }
   return body.data;
 };
 
-export const initializePaystackTransaction = async ({ user, planKey, billingCycle }) => {
+export const initializeFlutterwaveTransaction = async ({ user, planKey, billingCycle }) => {
   const plan = hasOwn(PRICES, planKey) ? PRICES[planKey] : null;
   if (!plan || !['monthly', 'termly'].includes(billingCycle)) {
     throw httpError('Choose a valid plan and billing cycle.', 400);
@@ -77,38 +77,54 @@ export const initializePaystackTransaction = async ({ user, planKey, billingCycl
   const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, '');
   const reference = `noted_${randomUUID()}`;
   const amount = plan[billingCycle];
-  const transaction = await paystackRequest('/transaction/initialize', {
+  const transaction = await flutterwaveRequest('/payments', {
     method: 'POST',
     body: JSON.stringify({
-      email: user.email,
-      amount: amount * 100,
+      tx_ref: reference,
+      amount,
       currency: 'NGN',
-      reference,
-      callback_url: `${clientUrl}/checkout?plan=${encodeURIComponent(planKey)}&billing=${billingCycle}`,
-      metadata: {
+      redirect_url: `${clientUrl}/checkout?plan=${encodeURIComponent(planKey)}&billing=${billingCycle}`,
+      customer: { email: user.email },
+      meta: {
         userId: String(user._id),
         plan: planKey,
         billingCycle,
       },
+      customizations: { title: 'Noted AI Subscription', description: plan.label },
     }),
   });
 
-  if (typeof transaction.authorization_url !== 'string' || transaction.reference !== reference) {
-    throw httpError('Paystack returned an invalid checkout session. Please try again.', 502);
+  if (typeof transaction.link !== 'string' || !transaction.link) {
+    throw httpError('Flutterwave returned an invalid checkout session. Please try again.', 502);
   }
 
-  return { authorizationUrl: transaction.authorization_url, reference };
+  return { authorizationUrl: transaction.link, reference };
+};
+
+export const verifyFlutterwaveTransaction = async (transactionId) => {
+  const transaction = await flutterwaveRequest(
+    `/transactions/${encodeURIComponent(transactionId)}/verify`,
+  );
+  if (String(transaction.id) !== transactionId) {
+    throw httpError('Flutterwave returned an invalid transaction. Please try again.', 502);
+  }
+  return {
+    ...transaction,
+    reference: transaction.tx_ref,
+    metadata: transaction.meta ?? transaction.metadata,
+  };
 };
 
 export const activateFromTransaction = async (transaction) => {
-  if (!transaction || transaction.status !== 'success') {
+  if (!transaction || transaction.status !== 'successful') {
     return { status: 'rejected', reason: 'Transaction was not successful.' };
   }
 
-  const metadata = transaction.metadata || {};
+  const metadata = transaction.meta || transaction.metadata || {};
   const planKey = metadata.plan;
   const billingCycle = metadata.billingCycle;
-  const reference = typeof transaction.reference === 'string' ? transaction.reference.trim() : '';
+  const transactionReference = transaction.tx_ref || transaction.reference;
+  const reference = typeof transactionReference === 'string' ? transactionReference.trim() : '';
   const plan = hasOwn(PRICES, planKey) ? PRICES[planKey] : null;
 
   if (
@@ -120,11 +136,11 @@ export const activateFromTransaction = async (transaction) => {
     return { status: 'rejected', reason: 'Unknown plan, billing cycle, user, or transaction reference.' };
   }
 
-  const expectedAmountKobo = plan[billingCycle] * 100;
+  const expectedAmountNaira = plan[billingCycle];
   if (
     transaction.currency !== 'NGN' ||
     !Number.isSafeInteger(Number(transaction.amount)) ||
-    Number(transaction.amount) !== expectedAmountKobo
+    Number(transaction.amount) !== expectedAmountNaira
   ) {
     return { status: 'rejected', reason: 'The transaction amount or currency does not match this plan.' };
   }
@@ -169,7 +185,7 @@ router.post('/initialize', protect, async (req, res, next) => {
   try {
     const planKey = typeof req.body?.plan === 'string' ? req.body.plan : '';
     const billingCycle = req.body?.billingCycle;
-    const data = await initializePaystackTransaction({ user: req.user, planKey, billingCycle });
+    const data = await initializeFlutterwaveTransaction({ user: req.user, planKey, billingCycle });
     return res.json({ success: true, data });
   } catch (error) {
     return next(error);
@@ -178,13 +194,19 @@ router.post('/initialize', protect, async (req, res, next) => {
 
 router.post('/verify', protect, async (req, res, next) => {
   try {
+    const transactionId = typeof req.body?.transactionId === 'string'
+      ? req.body.transactionId.trim()
+      : '';
     const reference = typeof req.body?.reference === 'string' ? req.body.reference.trim() : '';
-    if (!reference || reference.length > 100) {
-      return res.status(400).json({ success: false, message: 'A valid transaction reference is required.' });
+    if (!/^\d{1,30}$/.test(transactionId) || !reference || reference.length > 100) {
+      return res.status(400).json({ success: false, message: 'A valid transaction is required.' });
     }
 
-    const transaction = await paystackRequest(`/transaction/verify/${encodeURIComponent(reference)}`);
-    if (String(transaction.metadata?.userId) !== String(req.user._id)) {
+    const transaction = await verifyFlutterwaveTransaction(transactionId);
+    if (
+      transaction.reference !== reference ||
+      String(transaction.metadata?.userId) !== String(req.user._id)
+    ) {
       return res.status(403).json({ success: false, message: 'This payment belongs to a different account.' });
     }
 
@@ -200,17 +222,22 @@ router.post('/verify', protect, async (req, res, next) => {
 
 router.post('/webhook', async (req, res, next) => {
   try {
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-    if (!secretKey) throw httpError('Payments are not configured.', 503);
-    if (!isValidPaystackSignature(req.rawBody, req.get('x-paystack-signature'), secretKey)) {
+    const secretHash = process.env.FLW_SECRET_HASH;
+    if (!secretHash) throw httpError('Payment webhooks are not configured.', 503);
+    if (!isValidFlutterwaveSignature(req.get('verif-hash'), secretHash)) {
       return res.status(401).json({ success: false, message: 'Invalid payment signature.' });
     }
 
-    if (req.body?.event !== 'charge.success') {
+    if (
+      req.body?.event !== 'charge.completed' ||
+      req.body?.data?.status !== 'successful' ||
+      req.body?.data?.id == null
+    ) {
       return res.json({ success: true, ignored: true });
     }
 
-    const result = await activateFromTransaction(req.body.data);
+    const transaction = await verifyFlutterwaveTransaction(String(req.body.data.id));
+    const result = await activateFromTransaction(transaction);
     if (result.status === 'rejected') {
       return res.status(400).json({ success: false, message: result.reason });
     }

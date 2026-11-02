@@ -152,7 +152,9 @@ cp client/.env.example client/.env
 | `JWT_SECRET` | Yes | Long, private, randomly generated secret for signing authentication tokens |
 | `VITE_API_URL` | Yes for local client setup | API base URL, including `/api` |
 | `CLIENT_URL` | Required for payments | Frontend origin used for CORS, generated links, and payment callbacks |
-| `PAYSTACK_SECRET_KEY` | Required for payments | Paystack secret key used to initialize and verify transactions and validate webhooks |
+| `FLW_SECRET_KEY` | Required for payments | Flutterwave secret key used by the API to verify transactions |
+| `FLW_SECRET_HASH` | Required for payment webhooks | Secret hash configured in the Flutterwave dashboard to authenticate webhook requests |
+| `VITE_FLUTTERWAVE_PUBLIC_KEY` | Required for checkout | Flutterwave public key used by the client checkout |
 | `PORT` | No | API port; defaults to `5000` |
 | `GAME_SHOW_OUTBOX_DIR` | Recommended for production | Directory for pending Game Show results and active match snapshots; point this to a persistent mounted disk to recover them after an API restart |
 
@@ -164,7 +166,8 @@ For local development, use these values where appropriate:
 # server/.env
 PORT=5000
 CLIENT_URL=http://localhost:5173
-PAYSTACK_SECRET_KEY=your_paystack_secret_key
+FLW_SECRET_KEY=your_flutterwave_secret_key
+FLW_SECRET_HASH=your_flutterwave_webhook_secret_hash
 
 # Configure these with your actual values:
 MONGO_URI=your_mongodb_connection_string
@@ -174,6 +177,7 @@ JWT_SECRET=your_long_random_secret
 ```env
 # client/.env
 VITE_API_URL=http://localhost:5000/api
+VITE_FLUTTERWAVE_PUBLIC_KEY=your_flutterwave_public_key
 ```
 
 The examples above illustrate the core settings. Keep any additional values already present in your `.env.example` files.
@@ -225,15 +229,15 @@ Configure the corresponding credentials for the media features you intend to use
 </details>
 
 <details>
-<summary><strong>💳 Paystack payments</strong></summary>
+<summary><strong>💳 Flutterwave payments</strong></summary>
 
-Set `PAYSTACK_SECRET_KEY` in the server environment and `CLIENT_URL` to the deployed frontend origin. The pricing checkout initializes payments on the server using the plan prices in `server/config/prices.js`; never put the secret key in the client environment. The callback verifies the transaction directly with Paystack, and the signed webhook provides server-to-server confirmation. Configure the webhook URL as:
+Set `FLW_SECRET_KEY` and `FLW_SECRET_HASH` in the server environment, `VITE_FLUTTERWAVE_PUBLIC_KEY` in the client environment, and `CLIENT_URL` to the deployed frontend origin. Configure the webhook secret hash in the Flutterwave dashboard to match `FLW_SECRET_HASH`. Keep the secret key and webhook hash on the server only; the client public key is safe to expose. The API verifies each transaction directly with Flutterwave before activating the plan, and the webhook handler re-verifies successful events with Flutterwave. Configure this webhook URL:
 
 ```text
 https://your-api-host/api/payment/webhook
 ```
 
-The checkout returns to `/checkout` to verify the transaction, while the webhook handles server-to-server confirmation.
+The checkout uses Flutterwave's inline payment flow and asks the API to verify the returned transaction ID and reference before activation. The webhook provides server-to-server confirmation.
 
 </details>
 
