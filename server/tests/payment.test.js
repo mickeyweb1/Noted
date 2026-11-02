@@ -44,7 +44,7 @@ test('initializes a Flutterwave checkout with server-selected amount and metadat
 
     assert.equal(requestUrl, 'https://api.flutterwave.com/v3/payments');
     assert.equal(requestOptions.method, 'POST');
-    assert.equal(requestOptions.headers.Authorization, 'Bearer sk_test_not_a_real_key');
+    assert.equal(requestOptions.headers.Authorization, `Bearer ${process.env.FLW_SECRET_KEY}`);
     assert.equal(requestBody.amount, 2000);
     assert.equal(requestBody.currency, 'NGN');
     assert.equal(requestBody.meta.userId, userId);
