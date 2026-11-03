@@ -11,6 +11,7 @@ import {
   Field, SelectField, NumberInput, ErrorNote, CodeChip, QuestionReviewList,
   useClipboard, newId, readInt, normalizeQuestions, validateQuestions, toPayloadQuestion,
 } from "../components/QuizFormKit";
+import MathEditor from "../components/MathEditor"; // ✅ ADD THIS LINE
 
 /* ------------------------------------------------------------------ */
 /* Hard caps. The user's PLAN limits (from /quiz/my-limits) can only   */
@@ -678,13 +679,10 @@ export default function AdminQuizGenerator() {
                   )}
                 </div>
 
-               <textarea
-  aria-label={`Question ${idx + 1} text`}
-  placeholder="Question text (Press Enter for new line)"
-  value={q.question}
-  onChange={(e) => { setErrorMessage(""); updateManualQuestion(q.cid, { question: e.target.value }); }}
-  className={`${inputCls} min-h-[80px] resize-y`}
-  rows={3}
+<MathEditor 
+  value={q.question} 
+  onChange={(val) => { setErrorMessage(""); updateManualQuestion(q.cid, { question: val }); }} 
+  placeholder="Question text (Use the toolbar or $...$ for math)" 
 />
 
                 <input
