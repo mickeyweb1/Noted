@@ -4,6 +4,7 @@ import { Clock, CheckCircle2, XCircle, Loader2, User, School, ArrowRight, ArrowL
 import api from "../utils/api";
 import MathRenderer from "../components/MathRenderer";
 import { scheduleReviewItems } from "../utils/spacedReview";
+import QuizCalculator from "../components/QuizCalculator";
 
 /* ---------- Shared styles ---------- */
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -1077,6 +1078,8 @@ export default function TakeQuiz() {
             </div>
           </div>
         )}
+
+        <QuizCalculator raised={isPaginated} />
   
       </div>
     );
