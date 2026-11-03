@@ -8,6 +8,7 @@ import api from "../utils/api";
 import Modal from "../components/Modal";
 import { useClipboard } from "../components/QuizFormKit";
 import MathRenderer from "../components/MathRenderer";
+import QuestionsExport from "../components/QuestionsExport";
 
 /* ---------- Styles ---------- */
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -472,6 +473,7 @@ export default function QuizResultsPage() {
     const [showCodeHistory, setShowCodeHistory] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [duplicatedData, setDuplicatedData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -1321,11 +1323,14 @@ const handleRevokeShare = async (shareCode) => {
             {/* VIEW: Read-Only Questions */}
             {!isEditingQuestions && !newDuplicateData && (
               <>
-                <div className="flex justify-end">
-                  <button onClick={handleStartEditing} className={`${secondaryBtn} w-full sm:w-auto`}>
-                    <Plus className="h-4 w-4" /> Edit Questions & Duplicate
-                  </button>
-                </div>
+<div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+  <button onClick={() => setShowExport(true)} className={`${secondaryBtn} w-full sm:w-auto`}>
+    <Download className="h-4 w-4" /> Download / Export
+  </button>
+  <button onClick={handleStartEditing} className={`${secondaryBtn} w-full sm:w-auto`}>
+    <Plus className="h-4 w-4" /> Edit Questions & Duplicate
+  </button>
+</div>
                 {questions.map((q, idx) => {
                   const correct = q.correctAnswer?.trim();
                   return (
@@ -1349,6 +1354,8 @@ const handleRevokeShare = async (shareCode) => {
                           <span className="font-semibold text-foreground">Explanation:</span> <MathRenderer>{q.explanation}</MathRenderer>
                         </div>
                       )}
+
+                      
                     </div>
                   );
                 })}
@@ -1460,6 +1467,9 @@ const handleRevokeShare = async (shareCode) => {
     </div>
   </Modal>
 )}
+       {showExport && (
+        <QuestionsExport quiz={quizData} questions={questions} onClose={() => setShowExport(false)} />
+      )}
     </div>
   );
 }
