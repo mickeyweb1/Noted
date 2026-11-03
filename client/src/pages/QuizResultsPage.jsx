@@ -8,7 +8,7 @@ import api from "../utils/api";
 import Modal from "../components/Modal";
 import { useClipboard } from "../components/QuizFormKit";
 import MathRenderer from "../components/MathRenderer";
-import QuestionsExport from "../components/QuestionsExport";
+import QuestionsExport from "../components/Questionsexport.jsx";
 
 /* ---------- Styles ---------- */
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
