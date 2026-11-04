@@ -67,7 +67,8 @@ export default function LoginPage() {
       // then updates Axios before the protected dashboard route mounts.
       login(user, token);
       toast.success('Welcome back!');
-      const defaultDestination = user.role === 'school_admin' || user.role === 'super_admin' || user.role === 'teacher'
+      // ✅ Added 'hod' so Head of Departments go to the correct admin dashboard
+      const defaultDestination = user.role === 'school_admin' || user.role === 'super_admin' || user.role === 'teacher' || user.role === 'hod'
         ? '/admin/dashboard'
         : '/dashboard';
       const requestedDestination = location.state?.from;
