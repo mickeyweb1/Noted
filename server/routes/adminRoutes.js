@@ -14,18 +14,18 @@ import {
 
 const router = express.Router();
 
-const schoolManagementRoles = ['school_admin', 'super_admin', 'hod'];
-const dashboardRoles = [...schoolManagementRoles, 'teacher'];
+// ✅ SECURE: Split roles so HODs can only manage teachers, not the whole school
+const ownerRoles = ['school_admin', 'super_admin'];
+const teacherManagerRoles = [...ownerRoles, 'hod']; 
+const dashboardRoles = [...teacherManagerRoles, 'teacher'];
 
-router.post('/organization', protect, checkRole(schoolManagementRoles), createOrganization);
+router.post('/organization', protect, checkRole(ownerRoles), createOrganization); // ❌ HODs CANNOT do this
 router.get('/stats', protect, checkRole(dashboardRoles), getAdminStats);
-router.get('/students', protect, checkRole(schoolManagementRoles), getAdminStudents);
-router.post('/add-student', protect, checkRole(schoolManagementRoles), addStudent);
-router.patch('/students/:id/status', protect, checkRole(schoolManagementRoles), toggleStudentStatus);
-router.post('/add-teacher', protect, checkRole(schoolManagementRoles), addTeacher);
-router.get('/teachers', protect, checkRole(schoolManagementRoles), getAdminTeachers);
-
-router.get('/school-results', protect, checkRole(schoolManagementRoles), getSchoolQuizResults);
-
+router.get('/students', protect, checkRole(ownerRoles), getAdminStudents); // ❌ HODs CANNOT do this
+router.post('/add-student', protect, checkRole(ownerRoles), addStudent); // ❌ HODs CANNOT do this
+router.patch('/students/:id/status', protect, checkRole(ownerRoles), toggleStudentStatus); // ❌ HODs CANNOT do this
+router.post('/add-teacher', protect, checkRole(teacherManagerRoles), addTeacher); // ✅ HODs CAN do this
+router.get('/teachers', protect, checkRole(teacherManagerRoles), getAdminTeachers); // ✅ HODs CAN do this
+router.get('/school-results', protect, checkRole(teacherManagerRoles), getSchoolQuizResults); // ✅ HODs CAN do this
 
 export default router;
