@@ -318,22 +318,33 @@ const generateTeacherCode = async () => {
   return code;
 };
 
-// ✅ NEW & FIXED: Add a Teacher to the School (with proper slot tracking)
 export const addTeacher = async (req, res, next) => {
   let reserved = false;
+  let schoolOwnerId = null; // ✅ Declared outside try so catch can use it
+  
   try {
     const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
     const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
     
-    // ✅ NEW: Accept 'hod' or 'teacher' from the frontend (default to 'teacher')
-    const role = req.body?.role === 'hod' ? 'hod' : 'teacher'; 
-    
     if (!fullName || !email) return res.status(400).json({ success: false, message: 'Name and email are required.' });
+
+    const creatorIsHod = req.user.role === 'hod';
+    const creatorIsOwner = ['school_admin', 'super_admin'].includes(req.user.role);
+
+    // ✅ Only the school owner can create a Head of Department
+    const wantsHod = req.body?.role === 'hod';
+    if (wantsHod && !creatorIsOwner) {
+      return res.status(403).json({ success: false, message: 'Only the school owner can add a Head of Department.' });
+    }
+    const role = wantsHod ? 'hod' : 'teacher';
+
     if (await User.exists({ email })) return res.status(400).json({ success: false, message: 'A user with this email already exists.' });
-    
-    const isHod = req.user.role === 'hod';
-    const schoolOwnerId = isHod ? req.user.schoolOwnerId : req.user._id;
-    const hodId = isHod ? req.user._id : null;
+
+    schoolOwnerId = creatorIsHod ? req.user.schoolOwnerId : req.user._id;
+    if (!schoolOwnerId) {
+      return res.status(400).json({ success: false, message: 'Your account is not linked to a school owner yet.' });
+    }
+    const hodId = creatorIsHod ? req.user._id : null;
 
     let org = await Organization.findOne({ adminId: schoolOwnerId });
     if (!org) {
@@ -372,11 +383,11 @@ export const addTeacher = async (req, res, next) => {
       fullName, 
       email, 
       password: tempPassword, 
-      role: role, // ✅ NEW: Use the dynamic role ('hod' or 'teacher')
+      role: role, // ✅ Uses the validated role
       schoolId: org._id, 
       schoolName: org.name,
       schoolOwnerId: schoolOwnerId, 
-      hodId: hodId,                 // ✅ If it's a teacher, this links them to the HOD
+      hodId: hodId,                 
       uniqueInviteCode: teacherCode, 
       isActive: false
     });
@@ -386,14 +397,17 @@ export const addTeacher = async (req, res, next) => {
       success: true, 
       message: `${role === 'hod' ? 'Head of Department' : 'Teacher'} added successfully.`, 
       data: { 
-        teacher: { fullName: user.fullName, email: user.email }, 
+        teacher: { fullName: user.fullName, email: user.email, role: user.role }, 
         teacherCode, 
         tempPassword 
       } 
     });
   } catch (error) {
-    if (reserved) {
+    if (reserved && schoolOwnerId) {
       await User.findByIdAndUpdate(schoolOwnerId, { $inc: { currentTeachersCount: -1 } }).catch(() => {});
+    }
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: 'A user with this email already exists.' });
     }
     next(error);
   }
