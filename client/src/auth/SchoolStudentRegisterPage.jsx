@@ -72,7 +72,8 @@ export default function SchoolStudentRegisterPage() {
         login(userData, token);
         
         const userRole = userData.role;
-        if (userRole === "teacher" || userRole === "school_admin" || userRole === "super_admin") {
+        // ✅ Added 'hod' to the admin dashboard redirect list
+        if (userRole === "teacher" || userRole === "hod" || userRole === "school_admin" || userRole === "super_admin") {
           navigate("/admin/dashboard", { replace: true });
         } else {
           navigate("/dashboard", { replace: true });
