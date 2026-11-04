@@ -167,7 +167,7 @@ function App() {
         <Route path="/admin/shared-quiz-results" element={<SharedQuizResults />} />
  
         <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
-        <Route path="/admin/add-teacher" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><AddTeacher /></ProtectedRoute>} />
+       <Route path="/admin/add-teacher" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><AddTeacher /></ProtectedRoute>} />
         <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
         <Route path="/admin/support" element={<SupportPage />} />
       </Route>
