@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { 
   UserPlus, Mail, User, Copy, Check, Loader2, ArrowLeft, 
-  ShieldCheck, AlertTriangle , Users
+  ShieldCheck, AlertTriangle, Users
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../utils/api";
+import { useUserContext } from "../../context/userContext"; // ✅ ADDED
 
 // Shared styles for consistency
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -14,13 +15,17 @@ const secondaryBtn = `inline-flex items-center justify-center gap-2 rounded-xl b
 
 export default function AddTeacher() {
   const navigate = useNavigate();
+  const { user } = useUserContext(); // ✅ ADDED
+  
+  // ✅ Only School Admins or Super Admins can choose the role
+  const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
   
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successData, setSuccessData] = useState(null);
-  const [role, setRole] = useState("teacher"); // ✅ NEW: Default to teacher
+  const [role, setRole] = useState("teacher"); 
   const [copiedField, setCopiedField] = useState(null);
 
   const handleSubmit = async (e) => {
@@ -38,7 +43,8 @@ export default function AddTeacher() {
       const response = await api.post("/admin/add-teacher", {
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
-        role: role,
+        // ✅ If an HOD is adding someone, force it to be "teacher". Only owners can send "hod".
+        role: isOwner ? role : "teacher", 
       });
 
       if (response.data.success) {
@@ -89,7 +95,10 @@ export default function AddTeacher() {
             </div>
             
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-foreground">Teacher Added Successfully!</h2>
+              {/* ✅ Dynamic success message based on role */}
+              <h2 className="text-xl font-bold text-foreground">
+                {successData.teacher?.role === "hod" ? "Head of Department Added Successfully!" : "Teacher Added Successfully!"}
+              </h2>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 Share the <strong>Invite Code</strong> and <strong>Temporary Password</strong> below with <strong>{successData.teacher.fullName}</strong>. 
                 They will use these to create their account and link to your school.
@@ -99,7 +108,7 @@ export default function AddTeacher() {
             <div className="mx-auto max-w-md space-y-4 text-left">
               {/* Invite Code Box */}
               <div className="rounded-xl border border-brand/20 bg-brand/5 p-4">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-brand">Teacher Invite Code</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-brand">Invite Code</label>
                 <div className="flex items-center gap-3">
                   <span className="flex-1 font-mono text-2xl font-bold tracking-widest text-foreground">
                     {successData.teacherCode}
@@ -165,25 +174,28 @@ export default function AddTeacher() {
               />
             </div>
 
-            <div className="space-y-2">
-  <label htmlFor="role" className="flex items-center gap-2 text-sm font-medium text-foreground">
-    <Users className="h-4 w-4 text-muted-foreground" /> Account Role
-  </label>
-  <select
-    id="role"
-    value={role}
-    onChange={(e) => setRole(e.target.value)}
-    className={inputCls}
-    required
-    disabled={isLoading}
-  >
-    <option value="teacher">Teacher</option>
-    <option value="hod">Head of Department (Mini-Admin)</option>
-  </select>
-  <p className="text-xs text-muted-foreground">
-    Heads of Department can manage their own teachers and view their results, while the main admin oversees everything.
-  </p>
-</div>
+            {/* ✅ ONLY SHOW ROLE DROPDOWN TO SCHOOL OWNERS / SUPER ADMINS */}
+            {isOwner && (
+              <div className="space-y-2">
+                <label htmlFor="role" className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Users className="h-4 w-4 text-muted-foreground" /> Account Role
+                </label>
+                <select
+                  id="role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className={inputCls}
+                  required
+                  disabled={isLoading}
+                >
+                  <option value="teacher">Teacher</option>
+                  <option value="hod">Head of Department (Mini-Admin)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Heads of Department can manage their own teachers and view their results, while the main admin oversees everything.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label htmlFor="email" className="flex items-center gap-2 text-sm font-medium text-foreground">
