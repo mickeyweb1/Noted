@@ -153,8 +153,8 @@ function App() {
       >
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/students" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><StudentDirectory /></ProtectedRoute>} />
-        <Route path="/admin/teachers" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><MyTeachers /></ProtectedRoute>} />
-        <Route path="/admin/add-student" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><AddStudent /></ProtectedRoute>} />
+        <Route path="/admin/teachers" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><MyTeachers /></ProtectedRoute>} />
+        <Route path="/admin/add-student" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><AddStudent /></ProtectedRoute>} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
         <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
