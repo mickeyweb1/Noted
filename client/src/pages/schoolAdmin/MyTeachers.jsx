@@ -69,44 +69,57 @@ export default function MyTeachers() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[38rem] text-sm">
-              <thead className="bg-muted/30 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Teacher Name</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Email</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Invite Code</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Status</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Date Added</th>
-                </tr>
-              </thead>
+<thead className="bg-muted/30 text-muted-foreground">
+  <tr>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Teacher Name</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Role</th> {/* ✅ NEW COLUMN */}
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Email</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Invite Code</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Status</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Date Added</th>
+  </tr>
+</thead>
               <tbody className="divide-y divide-border">
-                {teachers.map((teacher) => (
-                  <tr key={teacher.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="whitespace-nowrap px-4 py-4 font-medium text-foreground sm:px-5">{teacher.fullName}</td>
-                    <td className="whitespace-nowrap px-4 py-4 text-muted-foreground sm:px-5">{teacher.email}</td>
-                    <td className="px-4 py-4 sm:px-5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold tracking-wider text-foreground">{teacher.uniqueInviteCode}</span>
-                        <button 
-                          onClick={() => handleCopy(teacher.uniqueInviteCode, teacher.id)}
-                          className="rounded p-1 text-muted-foreground hover:bg-brand-soft hover:text-brand transition-colors"
-                        >
-                          {copiedId === teacher.id ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 sm:px-5">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        teacher.status === 'active' 
-                          ? "bg-green-500/10 text-green-600 dark:text-green-400" 
-                          : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                      }`}>
-                        {teacher.status === 'active' ? 'Active' : 'Pending'}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground sm:px-5">{teacher.dateAdded}</td>
-                  </tr>
-                ))}
-              </tbody>
+  {teachers.map((teacher) => (
+    <tr key={teacher.id} className="hover:bg-muted/20 transition-colors">
+      <td className="whitespace-nowrap px-4 py-4 font-medium text-foreground sm:px-5">{teacher.fullName}</td>
+      
+      {/* ✅ NEW: Role Badge */}
+      <td className="px-4 py-4 sm:px-5">
+        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+          teacher.role === 'hod' 
+            ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" 
+            : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+        }`}>
+          {teacher.role === 'hod' ? 'Head of Dept' : 'Teacher'}
+        </span>
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-4 text-muted-foreground sm:px-5">{teacher.email}</td>
+      <td className="px-4 py-4 sm:px-5">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs font-bold tracking-wider text-foreground">{teacher.uniqueInviteCode}</span>
+          <button 
+            onClick={() => handleCopy(teacher.uniqueInviteCode, teacher.id)}
+            className="rounded p-1 text-muted-foreground hover:bg-brand-soft hover:text-brand transition-colors"
+          >
+            {copiedId === teacher.id ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </td>
+      <td className="px-4 py-4 sm:px-5">
+        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+          teacher.status === 'active' 
+            ? "bg-green-500/10 text-green-600 dark:text-green-400" 
+            : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+        }`}>
+          {teacher.status === 'active' ? 'Active' : 'Pending'}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground sm:px-5">{teacher.dateAdded}</td>
+    </tr>
+  ))}
+</tbody>
             </table>
           </div>
         )}

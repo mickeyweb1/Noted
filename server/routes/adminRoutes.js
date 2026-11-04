@@ -14,7 +14,7 @@ import {
 
 const router = express.Router();
 
-const schoolManagementRoles = ['school_admin', 'super_admin'];
+const schoolManagementRoles = ['school_admin', 'super_admin', 'hod'];
 const dashboardRoles = [...schoolManagementRoles, 'teacher'];
 
 router.post('/organization', protect, checkRole(schoolManagementRoles), createOrganization);

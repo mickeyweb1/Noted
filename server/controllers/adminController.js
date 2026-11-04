@@ -4,6 +4,7 @@ import { Quiz } from '../models/Quiz.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { SCHOOL_PLAN_TIERS } from '../config/plans.js';
 import crypto from 'crypto'; 
+import bcrypt from 'bcryptjs';
 
 // Helper to generate a unique SCHOOL code
 const generateUniqueCode = async () => {
@@ -122,26 +123,47 @@ export const getAdminStats = async (req, res, next) => {
         
       schoolName = "Global Platform";
       inviteCode = "N/A (Super Admin)";
-    } else {
-      // 🏫 SCHOOL STATS: Only count users in this specific admin's school
-      let org = await Organization.findOne({ adminId: req.user._id });
+        } else {
+      // 🏫 SCHOOL STATS: Handle BOTH School Admins and HODs
+      let org = null;
+      
+      if (req.user.role === 'school_admin' || req.user.role === 'super_admin') {
+        org = await Organization.findOne({ adminId: req.user._id });
+      } else if (req.user.role === 'hod' || req.user.role === 'teacher') {
+        // ✅ HODs and Teachers belong to a school, find it via schoolId
+        org = await Organization.findOne({ _id: req.user.schoolId });
+      }
+
+      // ✅ Prevent crashes if org is somehow still not found
       if (!org) {
-        const generatedCode = await generateUniqueCode();
-        org = await Organization.create({ name: "My School", adminId: req.user._id, inviteCode: generatedCode });
-        await User.findByIdAndUpdate(req.user._id, { schoolName: "My School", schoolId: org._id });
+        return res.status(200).json({
+          success: true,
+          data: {
+            schoolName: req.user.schoolName || "My School",
+            inviteCode: "N/A",
+            stats: { totalStudents: 0, activeStudents: 0, inactiveStudents: 0, totalTeachers: 0, activeTeachers: 0, inactiveTeachers: 0 },
+            recentStudents: [],
+            recentTeachers: []
+          }
+        });
       }
       
-      // Student Stats (Kept so existing "View Students" pages don't break)
+      // Student Stats
       totalStudents = await User.countDocuments({ schoolId: org._id, role: 'student' });
       activeStudents = await User.countDocuments({ schoolId: org._id, role: 'student', isActive: true });
       inactiveStudents = totalStudents - activeStudents;
       recentStudents = await User.find({ schoolId: org._id, role: 'student' }).select('fullName className createdAt').sort({ createdAt: -1 }).limit(5);
 
-      // ✅ NEW: Teacher Stats for School Owner
-      totalTeachers = await User.countDocuments({ schoolId: org._id, role: 'teacher' });
-      activeTeachers = await User.countDocuments({ schoolId: org._id, role: 'teacher', isActive: true });
+      // ✅ Teacher Stats: If HOD, only show teachers under them. If Admin, show all.
+      const teacherQuery = { schoolId: org._id, role: 'teacher' };
+      if (req.user.role === 'hod') {
+        teacherQuery.hodId = req.user._id; // ✅ HOD only sees their department
+      }
+
+      totalTeachers = await User.countDocuments(teacherQuery);
+      activeTeachers = await User.countDocuments({ ...teacherQuery, isActive: true });
       inactiveTeachers = totalTeachers - activeTeachers;
-      recentTeachers = await User.find({ schoolId: org._id, role: 'teacher' }).select('fullName createdAt').sort({ createdAt: -1 }).limit(5);
+      recentTeachers = await User.find(teacherQuery).select('fullName createdAt').sort({ createdAt: -1 }).limit(5);
         
       schoolName = org.name;
       inviteCode = org.inviteCode;
@@ -303,25 +325,32 @@ export const addTeacher = async (req, res, next) => {
     const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
     const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
     
+    // ✅ NEW: Accept 'hod' or 'teacher' from the frontend (default to 'teacher')
+    const role = req.body?.role === 'hod' ? 'hod' : 'teacher'; 
+    
     if (!fullName || !email) return res.status(400).json({ success: false, message: 'Name and email are required.' });
     if (await User.exists({ email })) return res.status(400).json({ success: false, message: 'A user with this email already exists.' });
     
-    let org = await Organization.findOne({ adminId: req.user._id });
+    const isHod = req.user.role === 'hod';
+    const schoolOwnerId = isHod ? req.user.schoolOwnerId : req.user._id;
+    const hodId = isHod ? req.user._id : null;
+
+    let org = await Organization.findOne({ adminId: schoolOwnerId });
     if (!org) {
       org = await Organization.create({ 
         name: (req.user.schoolName && req.user.schoolName !== 'Global') ? req.user.schoolName : 'My School', 
-        adminId: req.user._id, 
+        adminId: schoolOwnerId, 
         inviteCode: await generateUniqueCode() 
       });
-      await User.findByIdAndUpdate(req.user._id, { schoolName: org.name, schoolId: org._id });
+      await User.findByIdAndUpdate(schoolOwnerId, { schoolName: org.name, schoolId: org._id });
     }
     
-    const hasDevelopmentLimitBypass =
-      req.user.role === 'school_admin' && ['development', 'test'].includes(process.env.NODE_ENV);
+    const hasDevelopmentLimitBypass = req.user.role === 'school_admin' && ['development', 'test'].includes(process.env.NODE_ENV);
+    
     if (req.user.role !== 'super_admin' && !hasDevelopmentLimitBypass) {
       const owner = await User.findOneAndUpdate(
         {
-          _id: req.user._id,
+          _id: schoolOwnerId,
           subscriptionTier: { $in: SCHOOL_PLAN_TIERS },
           subscriptionStatus: 'active',
           $or: [{ subscriptionEndsAt: null }, { subscriptionEndsAt: { $gt: new Date() } }],
@@ -331,7 +360,7 @@ export const addTeacher = async (req, res, next) => {
         { new: true }
       );
       if (!owner) {
-        return res.status(403).json({ success: false, message: 'An active School plan with available teacher slots is required to add a teacher.' });
+        return res.status(403).json({ success: false, message: 'An active School plan with available teacher slots is required.' });
       }
       reserved = true;
     }
@@ -343,10 +372,11 @@ export const addTeacher = async (req, res, next) => {
       fullName, 
       email, 
       password: tempPassword, 
-      role: 'teacher',
+      role: role, // ✅ NEW: Use the dynamic role ('hod' or 'teacher')
       schoolId: org._id, 
       schoolName: org.name,
-      schoolOwnerId: req.user._id, // ✅ CRITICAL: Links the teacher to the owner for limits + results access
+      schoolOwnerId: schoolOwnerId, 
+      hodId: hodId,                 // ✅ If it's a teacher, this links them to the HOD
       uniqueInviteCode: teacherCode, 
       isActive: false
     });
@@ -354,7 +384,7 @@ export const addTeacher = async (req, res, next) => {
     reserved = false;
     res.status(201).json({ 
       success: true, 
-      message: 'Teacher added successfully.', 
+      message: `${role === 'hod' ? 'Head of Department' : 'Teacher'} added successfully.`, 
       data: { 
         teacher: { fullName: user.fullName, email: user.email }, 
         teacherCode, 
@@ -363,26 +393,34 @@ export const addTeacher = async (req, res, next) => {
     });
   } catch (error) {
     if (reserved) {
-      await User.findByIdAndUpdate(req.user._id, { $inc: { currentTeachersCount: -1 } }).catch(() => {});
+      await User.findByIdAndUpdate(schoolOwnerId, { $inc: { currentTeachersCount: -1 } }).catch(() => {});
     }
     next(error);
   }
 };
 
-// ✅ NEW: Get all Teachers in the School
 export const getAdminTeachers = async (req, res, next) => {
   try {
-    const org = await Organization.findOne({ adminId: req.user._id });
+    const isHod = req.user.role === 'hod';
+    const schoolOwnerId = isHod ? req.user.schoolOwnerId : req.user._id;
+    
+    const org = await Organization.findOne({ adminId: schoolOwnerId });
     if (!org) return res.status(200).json({ success: true, data: { teachers: [] } });
 
-    const teachers = await User.find({ schoolId: org._id, role: 'teacher' })
-      .select('fullName email uniqueInviteCode isActive createdAt')
+    const query = { schoolId: org._id, role: { $in: ['teacher', 'hod'] } }; // ✅ Get both teachers and HODs
+    if (isHod) {
+      query.hodId = req.user._id;
+    }
+
+    const teachers = await User.find(query)
+      .select('fullName email uniqueInviteCode isActive createdAt role') // ✅ Added 'role'
       .sort({ createdAt: -1 });
 
     const formattedTeachers = teachers.map(t => ({
       id: t._id,
       fullName: t.fullName,
       email: t.email,
+      role: t.role, // ✅ Return the role
       uniqueInviteCode: t.uniqueInviteCode || 'N/A',
       status: t.isActive ? 'active' : 'inactive',
       dateAdded: new Date(t.createdAt).toLocaleDateString()
@@ -397,16 +435,24 @@ export const getAdminTeachers = async (req, res, next) => {
 // ✅ NEW: Get ALL Quiz Results across all teachers in the school
 export const getSchoolQuizResults = async (req, res, next) => {
   try {
-    const org = await Organization.findOne({ adminId: req.user._id });
+    const isHod = req.user.role === 'hod';
+    const schoolOwnerId = isHod ? req.user.schoolOwnerId : req.user._id;
+
+    const org = await Organization.findOne({ adminId: schoolOwnerId });
     if (!org) return res.status(200).json({ success: true, data: { quizzes: [] } });
 
-    // 1. Get all teacher IDs in this school (plus the admin's own ID)
-    const teachers = await User.find({ schoolId: org._id, role: 'teacher' }).select('_id fullName');
+    // ✅ 1. Get teacher IDs based on who is logged in
+    const query = { schoolId: org._id, role: 'teacher' };
+    if (isHod) {
+      query.hodId = req.user._id; // ✅ HOD only sees their department's teachers
+    }
+    
+    const teachers = await User.find(query).select('_id fullName');
     const teacherIds = teachers.map(t => t._id);
-    teacherIds.push(req.user._id); // Include admin's own quizzes
+    
+    // Include the logged-in user's ID (in case the HOD/Admin creates quizzes too)
+    teacherIds.push(req.user._id); 
 
-    // 2. Import Quiz model at the top of this file if not already there:
-    // import { Quiz } from '../models/Quiz.js';
     const quizzes = await Quiz.find({ createdBy: { $in: teacherIds } })
       .select('title difficulty numberOfStudents createdAt gameMode accessCodes createdBy')
       .populate('createdBy', 'fullName')

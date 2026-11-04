@@ -146,7 +146,7 @@ function App() {
       <Route
         element={
           // ✅ FIX: Added "teacher" so they can access the admin layout
-          <ProtectedRoute allowedRoles={["school_admin", "super_admin", "teacher"]}>
+          <ProtectedRoute allowedRoles={["school_admin", "super_admin", "teacher", "hod"]}>
             <AdminDashboardLayout />
           </ProtectedRoute>
         }

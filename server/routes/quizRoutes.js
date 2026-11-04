@@ -134,13 +134,21 @@ const hasBranding = async (creatorId) => {
   return (await resolvePlan(creator)).branding;
 };
 
-// Is `user` the school owner of the teacher who created a quiz?
+// Is `user` the school owner OR HOD of the teacher who created a quiz?
 const isSchoolOwnerOf = async (user, creatorId) => {
   if (user.role === 'super_admin') return true;
-  if (user.role !== 'school_admin') return false;
-  const creator = await User.findById(creatorId).select('role schoolId schoolOwnerId');
+  if (user.role !== 'school_admin' && user.role !== 'hod') return false;
+  
+  const creator = await User.findById(creatorId).select('role schoolOwnerId hodId');
   if (!creator || creator.role !== 'teacher') return false;
-  if (creator.schoolOwnerId && String(creator.schoolOwnerId) === String(user._id)) return true;
+  
+  // If user is HOD, check if they are the creator's HOD
+  if (user.role === 'hod' && String(creator.hodId) === String(user._id)) return true;
+  
+  // If user is school_admin, check if they are the school owner
+  if (user.role === 'school_admin' && creator.schoolOwnerId && String(creator.schoolOwnerId) === String(user._id)) return true;
+  
+  // Fallback to org check
   const org = await Organization.findOne({ adminId: user._id }).select('_id');
   return Boolean(org && creator.schoolId && String(creator.schoolId) === String(org._id));
 };

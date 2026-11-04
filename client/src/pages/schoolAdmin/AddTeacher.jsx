@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { 
   UserPlus, Mail, User, Copy, Check, Loader2, ArrowLeft, 
-  ShieldCheck, AlertTriangle 
+  ShieldCheck, AlertTriangle , Users
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../utils/api";
@@ -20,6 +20,7 @@ export default function AddTeacher() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successData, setSuccessData] = useState(null);
+  const [role, setRole] = useState("teacher"); // ✅ NEW: Default to teacher
   const [copiedField, setCopiedField] = useState(null);
 
   const handleSubmit = async (e) => {
@@ -37,6 +38,7 @@ export default function AddTeacher() {
       const response = await api.post("/admin/add-teacher", {
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
+        role: role,
       });
 
       if (response.data.success) {
@@ -162,6 +164,26 @@ export default function AddTeacher() {
                 disabled={isLoading}
               />
             </div>
+
+            <div className="space-y-2">
+  <label htmlFor="role" className="flex items-center gap-2 text-sm font-medium text-foreground">
+    <Users className="h-4 w-4 text-muted-foreground" /> Account Role
+  </label>
+  <select
+    id="role"
+    value={role}
+    onChange={(e) => setRole(e.target.value)}
+    className={inputCls}
+    required
+    disabled={isLoading}
+  >
+    <option value="teacher">Teacher</option>
+    <option value="hod">Head of Department (Mini-Admin)</option>
+  </select>
+  <p className="text-xs text-muted-foreground">
+    Heads of Department can manage their own teachers and view their results, while the main admin oversees everything.
+  </p>
+</div>
 
             <div className="space-y-2">
               <label htmlFor="email" className="flex items-center gap-2 text-sm font-medium text-foreground">

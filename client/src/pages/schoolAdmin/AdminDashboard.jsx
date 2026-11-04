@@ -102,7 +102,7 @@ export default function AdminDashboard() {
             <Calendar className="h-4 w-4 shrink-0" /> {today}
           </p>
           <h1 className="mt-1 text-2xl font-display font-bold leading-tight text-foreground sm:text-3xl lg:text-4xl">
-            Welcome back, {data?.stats?.isTeacher ? 'Teacher' : (user?.role === 'super_admin' ? 'Super Admin' : 'School Owner')}! 👋
+Welcome back, {data?.stats?.isTeacher ? 'Teacher' : (user?.role === 'super_admin' ? 'Super Admin' : (user?.role === 'hod' ? 'Head of Department' : 'School Owner'))}! 👋
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
             {data?.stats?.isTeacher 
