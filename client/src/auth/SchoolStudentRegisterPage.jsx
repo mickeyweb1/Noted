@@ -71,13 +71,13 @@ export default function SchoolStudentRegisterPage() {
         
         login(userData, token);
         
-        const userRole = userData.role;
-        // ✅ Added 'hod' to the admin dashboard redirect list
-        if (userRole === "teacher" || userRole === "hod" || userRole === "school_admin" || userRole === "super_admin") {
-          navigate("/admin/dashboard", { replace: true });
-        } else {
-          navigate("/dashboard", { replace: true });
-        }
+const userRole = userData.role;
+// ✅ Added "hod" so Head of Departments go to the correct admin dashboard
+if (userRole === "teacher" || userRole === "hod" || userRole === "school_admin" || userRole === "super_admin") {
+  navigate("/admin/dashboard", { replace: true });
+} else {
+  navigate("/dashboard", { replace: true });
+}
       }
     } catch (err) {
       setError(err.response?.data?.message || "Activation failed. Check your details and try again.");
