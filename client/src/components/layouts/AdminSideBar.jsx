@@ -28,7 +28,8 @@ export default function AdminSideBar({ isOpen, onClose }) {
     avatar: null,
   };
 
-  const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
+ const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
+const canManageTeachers = isOwner || user?.role === "hod"; // ✅ Added HOD here
   const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
   const isFree = !user?.subscriptionTier || user.subscriptionTier === "free" || user.subscriptionStatus !== "active" || subscriptionExpired;
   const isSchoolAdmin = user?.role === "school_admin";
@@ -40,10 +41,13 @@ export default function AdminSideBar({ isOpen, onClose }) {
   const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
     { to: "/admin/join-shared-quiz", icon: Share2, label: "Join Shared Quiz" },
-    ...(isOwner ? [
+    
+    // ✅ CHANGED: Use canManageTeachers instead of isOwner
+    ...(canManageTeachers ? [
       { to: "/admin/teachers", icon: GraduationCap, label: "My Teachers" },
       { to: "/admin/add-teacher", icon: UserPlus, label: "Add Teacher" },
     ] : []),
+    
     { to: "/admin/quizzes", icon: Brain, label: "Formal Test" }, 
     { to: "/admin/game-show-creator", icon: Trophy, label: "Game Show Creator" }, 
     { to: "/admin/quiz-results", icon: BarChart3, label: "My Results" },
