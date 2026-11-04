@@ -1,19 +1,7 @@
+import { useState, useEffect } from "react"; // ✅ ADD useEffect
 import {
-  LayoutDashboard,
-  Users,
-  CreditCard,
-  Settings,
-  LogOut,
-  Brain,
-  Building2,
-  BarChart3,
-  UserPlus,
-  X,
-  MessageSquare,
-  Trophy,
-  Share2,
-  GraduationCap,
-  Crown
+  LayoutDashboard, Users, CreditCard, Settings, LogOut, Brain, Building2,
+  BarChart3, UserPlus, X, MessageSquare, Trophy, Share2, GraduationCap, Crown
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -29,11 +17,20 @@ export default function AdminSideBar({ isOpen, onClose }) {
   const isOwner = userRole === "school_admin" || userRole === "super_admin";
   const canManageTeachers = isOwner || userRole === "hod"; // ✅ HOD can manage teachers
   
-  const subscriptionExpired = user?.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
-  const isFree = !user?.subscriptionTier || user.subscriptionTier === "free" || user.subscriptionStatus !== "active" || subscriptionExpired;
   const isSchoolAdmin = userRole === "school_admin";
   const isIndependentTeacher = userRole === "teacher" && !user?.schoolOwnerId;
+
+  // ✅ FIX: Move date calculation into a state to prevent hydration mismatch
+  const [isFree, setIsFree] = useState(true);
   
+  useEffect(() => {
+    if (user) {
+      const subscriptionExpired = user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
+      const freeStatus = !user.subscriptionTier || user.subscriptionTier === "free" || user.subscriptionStatus !== "active" || subscriptionExpired;
+      setIsFree(freeStatus);
+    }
+  }, [user]); // Only recalculate when the user object changes
+
   const showUpgrade = (isSchoolAdmin && (user?.subscriptionTier !== "school_premium" || isFree)) || (isIndependentTeacher && isFree);
   const pricingAudience = isSchoolAdmin ? "schools" : "teachers";
 
@@ -57,6 +54,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
     if (typeof logout === "function") logout();
     navigate("/login");
   };
+
 
   return (
     <aside className={`fixed inset-y-0 left-0 z-50 flex flex-col h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
