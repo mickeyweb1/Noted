@@ -213,7 +213,13 @@ export default function AdminQuizGenerator() {
       const formData = new FormData();
       formData.append("image", file);
       const res = await api.post("/quiz/upload/quiz-image", formData);
-      setManualQuestions((prev) => prev.map((q) => (q.cid === cid ? { ...q, imageUrl: res.data.imageUrl } : q)));
+      
+      // ✅ Update the correct state based on which tab is active
+      if (activeTab === "ai" && isReviewing) {
+        setPreviewQuestions((prev) => prev.map((q) => (q.cid === cid ? { ...q, imageUrl: res.data.imageUrl } : q)));
+      } else {
+        setManualQuestions((prev) => prev.map((q) => (q.cid === cid ? { ...q, imageUrl: res.data.imageUrl } : q)));
+      }
     } catch (err) {
       setErrorMessage(err.response?.data?.message || "Couldn't upload the image. Try again.");
     } finally {
@@ -244,7 +250,13 @@ export default function AdminQuizGenerator() {
         difficulty: s.value.difficulty,
         numQuestions: s.value.numQuestions,
       });
-      const questions = normalizeQuestions(res.data?.data?.questions);
+      
+      // ✅ ADD imageUrl: "" to every AI-generated question
+      const questions = normalizeQuestions(res.data?.data?.questions).map(q => ({
+        ...q,
+        imageUrl: q.imageUrl || "" 
+      }));
+      
       if (questions.length === 0) {
         return setErrorMessage("The AI didn't return usable questions. Add more detail to your notes and try again.");
       }
@@ -255,7 +267,7 @@ export default function AdminQuizGenerator() {
       setErrorMessage(err.response?.data?.message || "Couldn't generate questions. Try again.");
     } finally {
       setIsGenerating(false);
-      refreshLimits(); // credits changed (spent, or refunded after a failure)
+      refreshLimits();
     }
   };
 
@@ -524,7 +536,12 @@ export default function AdminQuizGenerator() {
               <Plus className="h-4 w-4" /> Add Custom Question
             </button>
 
-            <QuestionReviewList questions={previewQuestions} onChange={setPreviewQuestions} />
+<QuestionReviewList 
+  questions={previewQuestions} 
+  onChange={setPreviewQuestions} 
+  onImageUpload={handleImageUpload} 
+  uploadingCid={uploadingCid} 
+/>
 
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
               <button onClick={() => { setIsReviewing(false); setErrorMessage(""); }} disabled={isGenerating} className={`${secondaryBtn} flex-1`}>
