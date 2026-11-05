@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronDown, Copy, Pencil, Trash2 } from "lucide-react";
-import MathRenderer from "../components/MathRenderer"; // ✅ ADD THIS IMPORT
+import { AlertTriangle, Check, ChevronDown, Copy, Pencil, Trash2, ImageIcon, Loader2 } from "lucide-react"; // ✅ Added ImageIcon, Loader2
+import MathRenderer from "../components/MathRenderer";
 
 /* ------------------------------------------------------------------ */
 /* Shared styles                                                       */
@@ -193,7 +193,7 @@ export function CodeChip({ code, label, copied, onCopy }) {
 /* ------------------------------------------------------------------ */
 /* Editable review list for generated questions                        */
 /* ------------------------------------------------------------------ */
-export function QuestionReviewList({ questions, onChange }) {
+export function QuestionReviewList({ questions, onChange, onImageUpload, uploadingCid }) {
   const [editingId, setEditingId] = useState(null);
 
   const update = (cid, patch) =>
@@ -217,6 +217,44 @@ export function QuestionReviewList({ questions, onChange }) {
 
   return (
     <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
+
+                  {/* ✅ NEW: Image Upload Section for AI Questions */}
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <input
+                id={`ai-q-img-${q.cid}`}
+                type="file"
+                accept="image/*"
+                onChange={(e) => { 
+                  if (onImageUpload) {
+                    onImageUpload(q.cid, e.target.files[0]); 
+                    e.target.value = ""; 
+                  }
+                }}
+                disabled={uploadingCid === q.cid}
+                className="peer sr-only"
+              />
+              <label
+                htmlFor={`ai-q-img-${q.cid}`}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm transition hover:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-brand"
+              >
+                <ImageIcon className="h-4 w-4" /> {q.imageUrl ? "Replace Image" : "Add Diagram/Image"}
+              </label>
+              {uploadingCid === q.cid && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              {q.imageUrl && (
+                <>
+                  <img src={q.imageUrl} alt="Question diagram" className="h-10 w-10 rounded-md border border-border object-cover" />
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
+                    <Check className="h-3.5 w-3.5" /> Image attached
+                  </span>
+                  <button
+                    onClick={() => onChange(questions.map((item) => item.cid === q.cid ? { ...item, imageUrl: "" } : item))}
+                    className="rounded-md px-2 py-1 text-xs text-muted-foreground transition hover:text-destructive"
+                  >
+                    Remove image
+                  </button>
+                </>
+              )}
+            </div>
       {questions.map((q, idx) => {
         const editing = editingId === q.cid;
         const correctIdx = q.options.findIndex((o) => o === q.correctAnswer);
