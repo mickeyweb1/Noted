@@ -260,14 +260,16 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     const topicInstruction = topics ? `\n\nCRITICAL INSTRUCTION: ONLY generate questions about these specific topics: "${topics}". Ignore all other parts of the notes.` : '';
     const level = typeof difficulty === 'string' ? difficulty.slice(0, 30) : 'Intermediate';
 
-    const systemPrompt = `You are an expert examiner. Generate EXACTLY ${count} multiple-choice questions based on the provided notes. Difficulty: ${level}.${topicInstruction}
+    const systemPrompt = `You are an expert examiner and mathematics teacher. Generate EXACTLY ${count} multiple-choice questions based on the provided notes. Difficulty: ${level}.${topicInstruction}
 
-IMPORTANT FORMATTING RULES:
-1. Output VALID JSON ONLY. Do not include markdown like \`\`\`json.
-2. For mathematical expressions, use LaTeX wrapped in single dollar signs, e.g., $\\frac{numerator}{denominator}$, $\\sqrt{x}$, $x^{2}$.
-3. Ordinary words and sentences must stay OUTSIDE the dollar signs.
-4. Keep explanations to ONE short sentence maximum.
-5. Each question has exactly 4 options and "correctAnswer" must be the EXACT text of one option (never just a letter).
+IMPORTANT FORMATTING RULES FOR MATH AND SHAPES:
+1. You MUST use LaTeX for ALL mathematical expressions, formulas, and geometry symbols.
+2. Use single dollar signs for inline math: $\sin(\theta)$, $\triangle ABC$, $\angle 90^\circ$, $\frac{a}{b}$.
+3. Use double dollar signs for block equations if needed: $$ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} $$
+4. For geometry, use standard LaTeX symbols: \triangle for triangle, \angle for angle, \circ for degrees, \perp for perpendicular.
+5. If a question involves a geometric construction or complex diagram, describe the steps clearly in text and use LaTeX for all labels (e.g., "Draw line segment $AB$ and construct a perpendicular bisector at point $M$").
+6. Output VALID JSON ONLY. Do not include markdown like \`\`\`json.
+7. Each question has exactly 4 options and "correctAnswer" must be the EXACT text of one option (never just a letter).
 
 Required JSON format:
 { "questions": [ { "question": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "exact option text", "explanation": "..." } ] }`;
