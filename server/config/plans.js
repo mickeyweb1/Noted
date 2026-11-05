@@ -40,16 +40,18 @@ const UNLIMITED = {
 const isLive = (u) =>
   u.subscriptionStatus === 'active' && (!u.subscriptionEndsAt || new Date(u.subscriptionEndsAt) > new Date());
 
+
 /**
  * Works out which plan a user is really on right now.
  * - super_admin: unlimited
- * - teacher/student under a school owner: the OWNER's school plan, if it is live (otherwise locked)
+ * - teacher/student/HOD under a school owner: the OWNER's school plan, if it is live (otherwise locked)
  * - everyone else: their own plan, if live (otherwise free)
  */
 export const resolvePlan = async (user) => {
   if (user.role === 'super_admin') return { ...UNLIMITED, locked: null };
 
-  if ((user.role === 'teacher' || user.role === 'student') && (user.schoolOwnerId || user.schoolId)) {
+  // ✅ FIX: Added 'hod' to this check so Head of Departments inherit the school's paid plan!
+  if ((user.role === 'teacher' || user.role === 'student' || user.role === 'hod') && (user.schoolOwnerId || user.schoolId)) {
     let schoolOwnerId = user.schoolOwnerId;
     if (!schoolOwnerId && user.schoolId) {
       const organization = await Organization.findById(user.schoolId).select('adminId');
@@ -58,12 +60,16 @@ export const resolvePlan = async (user) => {
     const owner = schoolOwnerId
       ? await User.findById(schoolOwnerId).select('subscriptionTier subscriptionStatus subscriptionEndsAt')
       : null;
+      
     if (owner && isLive(owner) && PLANS[owner.subscriptionTier] && owner.subscriptionTier.startsWith('school_')) {
       return { key: owner.subscriptionTier, ...PLANS[owner.subscriptionTier], locked: null };
     }
+    
+    // If the school owner's plan expired or doesn't exist, lock the HOD/Teacher out of paid features
     return { key: 'free', ...PLANS.free, locked: LOCKED_MESSAGE };
   }
 
+  // For independent teachers or personal users, check their own subscription
   const tier = isLive(user) && PLANS[user.subscriptionTier] ? user.subscriptionTier : 'free';
   return { key: tier, ...PLANS[tier], locked: null };
 };
