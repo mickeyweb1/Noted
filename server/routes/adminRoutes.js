@@ -9,9 +9,8 @@ import {
   toggleStudentStatus,
   addTeacher,         
   getAdminTeachers,    
-  getSchoolQuizResults
+  getSchoolQuizResults, getAllManageableUsers, activateUserPlan
 } from '../controllers/adminController.js';
-import { getAllManageableUsers, activateUserPlan } from '../controllers/superAdminController.js';
 
 
 const router = express.Router();
