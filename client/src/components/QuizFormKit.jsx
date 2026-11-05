@@ -217,8 +217,13 @@ export function QuestionReviewList({ questions, onChange, onImageUpload, uploadi
 
   return (
     <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-
-                  {/* ✅ NEW: Image Upload Section for AI Questions */}
+      {questions.map((q, idx) => {
+        const editing = editingId === q.cid;
+        const correctIdx = q.options.findIndex((o) => o === q.correctAnswer);
+        return (
+          <div key={q.cid} className="rounded-xl border border-border bg-muted/50 p-4">
+            
+            {/* ✅ CORRECT: Image Upload Section is NOW inside the map loop */}
             <div className="mb-3 flex flex-wrap items-center gap-3">
               <input
                 id={`ai-q-img-${q.cid}`}
@@ -255,11 +260,7 @@ export function QuestionReviewList({ questions, onChange, onImageUpload, uploadi
                 </>
               )}
             </div>
-      {questions.map((q, idx) => {
-        const editing = editingId === q.cid;
-        const correctIdx = q.options.findIndex((o) => o === q.correctAnswer);
-        return (
-          <div key={q.cid} className="rounded-xl border border-border bg-muted/50 p-4">
+
             <div className="mb-3 flex items-start gap-3">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-bold text-brand">
                 {idx + 1}
@@ -372,4 +373,3 @@ export function QuestionReviewList({ questions, onChange, onImageUpload, uploadi
       })}
     </div>
   );
-}
