@@ -1,91 +1,122 @@
+import mongoose from 'mongoose'; 
 import { User } from '../models/User.js';
 import { Organization } from '../models/Organization.js';
 import { Quiz } from '../models/Quiz.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
-import { SCHOOL_PLAN_TIERS } from '../config/plans.js';
+import { SCHOOL_PLAN_TIERS, PLANS, countGameShowsThisMonth } from '../config/plans.js';
 import crypto from 'crypto'; 
 import bcrypt from 'bcryptjs';
 import { PLANS } from '../config/plans.js';
 
-// 1. Get all Teachers, HODs, and School Admins for the Super Admin to manage
 export const getAllManageableUsers = async (req, res, next) => {
   try {
-    // We only want to show accounts that can have subscriptions (not regular students)
-    const users = await User.find({ 
-      role: { $in: ['teacher', 'hod', 'school_admin'] } 
-    })
-    .select('fullName email role subscriptionTier subscriptionStatus subscriptionEndsAt schoolName createdAt')
-    .sort({ createdAt: -1 });
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 100);
+    const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 80) : '';
 
-    const formattedUsers = users.map(u => ({
-      id: u._id,
-      fullName: u.fullName,
-      email: u.email,
-      role: u.role,
-      schoolName: u.schoolName || 'Independent',
-      currentPlan: u.subscriptionTier || 'free',
-      status: u.subscriptionStatus || 'inactive',
-      expiresAt: u.subscriptionEndsAt ? new Date(u.subscriptionEndsAt).toLocaleDateString() : 'N/A',
-      dateJoined: new Date(u.createdAt).toLocaleDateString()
-    }));
-
-    res.status(200).json({ success: true, data: formattedUsers });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// 2. Manually activate/upgrade a user's plan (For Bank Transfers)
-export const activateUserPlan = async (req, res, next) => {
-  try {
-    const { userId, newPlan, billingCycle } = req.body;
-
-    if (!userId || !newPlan || !billingCycle) {
-      return res.status(400).json({ success: false, message: 'Missing required fields.' });
+    const filter = { role: { $in: ['teacher', 'hod', 'school_admin'] } };
+    if (search) {
+      const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ fullName: rx }, { email: rx }];
     }
 
-    if (!PLANS[newPlan]) {
+    const [users, total] = await Promise.all([
+      User.find(filter).select('fullName email role subscriptionTier subscriptionStatus subscriptionEndsAt schoolName schoolOwnerId createdAt')
+        .sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      User.countDocuments(filter),
+    ]);
+
+    const now = new Date();
+    const data = users.map((u) => {
+      const tier = u.subscriptionTier || 'free';
+      const ended = Boolean(u.subscriptionEndsAt) && new Date(u.subscriptionEndsAt) <= now;
+      const live = u.subscriptionStatus === 'active' && !ended;
+      return {
+        id: u._id,
+        fullName: u.fullName,
+        email: u.email,
+        role: u.role,
+        schoolName: u.schoolName || 'Independent',
+        currentPlan: tier,
+        effectivePlan: live ? tier : 'free',
+        isExpired: tier !== 'free' && !live,
+        coveredBySchool: Boolean(u.schoolOwnerId),
+        expiresAt: u.subscriptionEndsAt || null,
+        dateJoined: u.createdAt,
+      };
+    });
+
+    res.status(200).json({ success: true, data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  } catch (error) { next(error); }
+};
+
+const addMonths = (date, n) => {
+  const d = new Date(date);
+  const day = d.getDate();
+  d.setMonth(d.getMonth() + n);
+  if (d.getDate() < day) d.setDate(0);
+  return d;
+};
+
+export const activateUserPlan = async (req, res, next) => {
+  try {
+    const { userId, newPlan, billingCycle } = req.body || {};
+    const reference = typeof req.body?.reference === 'string' ? req.body.reference.trim().slice(0, 100) : '';
+
+    if (!mongoose.isValidObjectId(userId) || !['monthly', 'termly'].includes(billingCycle)) {
+      return res.status(400).json({ success: false, message: 'A valid user and billing cycle are required.' });
+    }
+    if (!PLANS[newPlan] || newPlan === 'free') {
       return res.status(400).json({ success: false, message: 'Invalid plan selected.' });
     }
 
-    // Calculate expiry date: +1 month for monthly, +3 months for termly
-    const now = new Date();
-    const monthsToAdd = billingCycle === 'termly' ? 3 : 1;
-    const expiresAt = new Date(now.setMonth(now.getMonth() + monthsToAdd));
+    const target = await User.findById(userId).select('role subscriptionTier subscriptionStatus subscriptionEndsAt maxTeachersAllowed schoolOwnerId');
+    if (!target) return res.status(404).json({ success: false, message: 'User not found.' });
 
-    const updateData = {
+    const isSchoolPlan = SCHOOL_PLAN_TIERS.includes(newPlan);
+    if (target.schoolOwnerId) {
+      return res.status(400).json({ success: false, message: 'This account is covered by its school. Activate the school owner\'s plan instead.' });
+    }
+    if (isSchoolPlan && target.role !== 'school_admin') {
+      return res.status(400).json({ success: false, message: 'School plans can only be activated for school admins.' });
+    }
+    if (!isSchoolPlan && target.role !== 'teacher') {
+      return res.status(400).json({ success: false, message: 'Teacher plans can only be activated for independent teachers.' });
+    }
+
+    const now = new Date();
+    const live = target.subscriptionStatus === 'active' && target.subscriptionEndsAt && target.subscriptionEndsAt > now;
+    const sameTier = Boolean(live) && target.subscriptionTier === newPlan;
+    const expiresAt = addMonths(sameTier ? target.subscriptionEndsAt : now, billingCycle === 'termly' ? 3 : 1);
+
+    const set = {
       subscriptionTier: newPlan,
       subscriptionStatus: 'active',
       subscriptionEndsAt: expiresAt,
-      billingCycle: billingCycle,
-      aiCreditsUsed: 0, // Reset credits for the new period
-      creditsPeriodStart: new Date()
+      billingCycle,
     };
-
-    // If it's a school plan, ensure maxTeachersAllowed is set correctly
-    if (newPlan.startsWith('school_')) {
-      updateData.isSchoolOwner = true;
-      updateData.maxTeachersAllowed = PLANS[newPlan].teachers;
+    if (!sameTier) {
+      set.aiCreditsUsed = 0;
+      set.creditsPeriodStart = now;
+    }
+    if (isSchoolPlan) {
+      set.isSchoolOwner = true;
+      set.maxTeachersAllowed = Math.max(target.maxTeachersAllowed || 0, PLANS[newPlan].teachers);
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    ).select('fullName email subscriptionTier subscriptionEndsAt');
+    const ref = reference ? `manual_${reference}` : null;
+    const filter = { _id: target._id, ...(ref ? { paymentReferences: { $ne: ref } } : {}) };
+    const update = { $set: set, ...(ref ? { $addToSet: { paymentReferences: ref } } : {}) };
 
-    if (!updatedUser) {
-      return res.status(404).json({ success: false, message: 'User not found.' });
-    }
+    const updated = await User.findOneAndUpdate(filter, update, { new: true, runValidators: true }).select('fullName email subscriptionTier subscriptionEndsAt');
+    if (!updated) return res.status(409).json({ success: false, message: 'That payment reference was already used.' });
 
-    res.status(200).json({ 
-      success: true, 
-      message: `${updatedUser.fullName}'s plan successfully upgraded to ${PLANS[newPlan].label}!`,
-      data: updatedUser 
+    res.status(200).json({
+      success: true,
+      message: `${updated.fullName}'s plan is now ${PLANS[newPlan].label}.`,
+      data: updated,
     });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 // Helper to generate a unique SCHOOL code
@@ -150,15 +181,13 @@ export const getAdminStats = async (req, res, next) => {
     let schoolName, inviteCode, totalPersonalUsers = 0, totalAdmins = 0;
 
         // ✅ NEW: Handle Teacher-specific stats
-    if (req.user.role === 'teacher') {
+    
+        if (req.user.role === 'teacher') {
       const teacherId = req.user._id;
-      
-      const totalQuizzes = await Quiz.countDocuments({ createdBy: teacherId });
-      const teacherQuizzes = await Quiz.find({ createdBy: teacherId });
-      const totalQuizSubmissions = await QuizSubmission.countDocuments({
-        quiz: { $in: teacherQuizzes.map((quiz) => quiz._id) }
-      });
-      const activeGameShows = await Quiz.countDocuments({ createdBy: teacherId, gameMode: 'gameShow' });
+      const teacherQuizIds = await Quiz.find({ createdBy: teacherId }).distinct('_id');
+      const totalQuizzes = teacherQuizIds.length;
+      const totalQuizSubmissions = await QuizSubmission.countDocuments({ quiz: { $in: teacherQuizIds } });
+      const activeGameShows = await countGameShowsThisMonth(teacherId); // ✅ Fixed to monthly
       
       const recentQuizzes = await Quiz.find({ createdBy: teacherId })
         .select('title numberOfStudents createdAt gameMode')
@@ -169,18 +198,10 @@ export const getAdminStats = async (req, res, next) => {
         data: {
           schoolName: req.user.schoolName || "My School",
           inviteCode: "N/A (Teacher Account)",
-          stats: {
-            totalQuizzes,
-            totalQuizSubmissions,
-            activeGameShows,
-            isTeacher: true // ✅ Flag for the frontend
-          },
+          stats: { totalQuizzes, totalQuizSubmissions, activeGameShows, isTeacher: true },
           recentQuizzes: recentQuizzes.map(q => ({
-            id: q._id,
-            name: q.title,
-            class: q.gameMode === 'gameShow' ? 'Game Show' : 'Quiz',
-            status: 'Active',
-            date: new Date(q.createdAt).toLocaleDateString()
+            id: q._id, name: q.title, class: q.gameMode === 'gameShow' ? 'Game Show' : 'Quiz',
+            status: 'Active', date: new Date(q.createdAt).toLocaleDateString()
           }))
         }
       });
@@ -248,7 +269,8 @@ export const getAdminStats = async (req, res, next) => {
       recentTeachers = await User.find(teacherQuery).select('fullName createdAt').sort({ createdAt: -1 }).limit(5);
         
       schoolName = org.name;
-      inviteCode = org.inviteCode;
+      // ✅ HODs do not get to see or copy the school's main invite code
+      inviteCode = req.user.role === 'hod' ? null : org.inviteCode;
     }
 
     res.status(200).json({
@@ -267,9 +289,11 @@ export const getAdminStats = async (req, res, next) => {
           school: s.schoolName || 'Personal', status: s.isActive ? 'Active' : 'Inactive', 
           date: new Date(s.createdAt).toLocaleDateString() 
         })),
-        // ✅ ADDED: Recent teachers data for the new dashboard UI
+              // ✅ ADDED: Recent teachers data for the new dashboard UI
         recentTeachers: recentTeachers.map(t => ({ 
-          id: t._id, name: t.fullName, role: 'Teacher', 
+          id: t._id, 
+          name: t.fullName, 
+          role: t.role === 'hod' ? 'Head of Dept' : 'Teacher', // ✅ Fixed to show correct role
           status: t.isActive ? 'Active' : 'Inactive', 
           date: new Date(t.createdAt).toLocaleDateString() 
         }))
@@ -308,84 +332,69 @@ export const getAdminStudents = async (req, res, next) => {
   }
 };
 
-// ✅ FIX: Removed hardcoded 'role: student' so it validates BOTH "T-" and "STU-" codes
 export const validateInviteCode = async (req, res, next) => {
   try {
-    const { code } = req.body;
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+    if (!code) return res.status(400).json({ success: false, message: 'An invite code is required.' });
     
-    const user = await User.findOne({ uniqueInviteCode: code.trim() }); 
+    const user = await User.findOne({ uniqueInviteCode: code }); 
+    if (!user) return res.status(404).json({ success: false, message: "Invalid or expired invite code." });
     
-    if (!user) {
-      return res.status(404).json({ success: false, message: "Invalid or expired invite code." });
-    }
-    
-    res.status(200).json({ 
-      success: true, 
-      data: { schoolName: user.schoolName, schoolId: user.schoolId } 
-    });
-  } catch (error) {
-    next(error);
-  }
+    res.status(200).json({ success: true, data: { schoolName: user.schoolName, schoolId: user.schoolId } });
+  } catch (error) { next(error); }
 };
 
 export const toggleStudentStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id);
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ success: false, message: 'Invalid student id.' });
+    
+    // ✅ Only allow toggling actual students
+    const user = await User.findOne({ _id: id, role: 'student' });
     if (!user) { const error = new Error("Student not found"); error.status = 404; throw error; }
+    
     const org = await Organization.findOne({ adminId: req.user._id });
     if (!org || !user.schoolId || user.schoolId.toString() !== org._id.toString()) { 
-      const error = new Error("Unauthorized"); 
-      error.status = 403; 
-      throw error; 
+      const error = new Error("Unauthorized"); error.status = 403; throw error; 
     }
     user.isActive = !user.isActive;
     await user.save();
     res.status(200).json({ success: true, message: `Student ${user.isActive ? 'activated' : 'deactivated'} successfully`, data: { id: user._id, isActive: user.isActive } });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 export const addStudent = async (req, res, next) => {
   try {
-    const { fullName, email, className, phone, parentName } = req.body;
-    let org = await Organization.findOne({ adminId: req.user._id });
+    const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const { className, phone, parentName } = req.body || {};
     
+    if (!fullName || !email) return res.status(400).json({ success: false, message: 'Name and email are required.' });
+    if (await User.exists({ email })) return res.status(409).json({ success: false, message: 'A user with this email already exists.' });
+
+    let org = await Organization.findOne({ adminId: req.user._id });
     if (!org) {
       const inviteCode = await generateUniqueCode();
       org = await Organization.create({ name: "My School", adminId: req.user._id, inviteCode });
       await User.findByIdAndUpdate(req.user._id, { schoolName: "My School", schoolId: org._id });
     }
 
-    // Generate unique code and temp password for THIS specific student
     const studentCode = await generateStudentCode();
     const tempPassword = crypto.randomBytes(6).toString('hex').toUpperCase() + '!' + crypto.randomInt(10, 99);
     
     const user = await User.create({
-      fullName, 
-      email, 
-      password: tempPassword, 
-      role: 'student',
-      schoolId: org._id, 
-      schoolName: org.name, 
-      className: className || '',
-      phone: phone || '', 
-      parentInfo: parentName ? { name: parentName } : {},
-      uniqueInviteCode: studentCode,
-      isActive: false // ✅ Start as inactive until they claim it
+      fullName, email, password: tempPassword, role: 'student',
+      schoolId: org._id, schoolName: org.name, className: className || '',
+      phone: phone || '', parentInfo: parentName ? { name: parentName } : {},
+      uniqueInviteCode: studentCode, isActive: false
     });
 
     res.status(201).json({ 
-      success: true, 
-      message: "Student added successfully.",
-      data: { 
-        student: { fullName: user.fullName, email: user.email }, 
-        studentCode,
-        tempPassword // ✅ SEND THIS so the frontend can display it to the admin
-      }
+      success: true, message: "Student added successfully.",
+      data: { student: { fullName: user.fullName, email: user.email }, studentCode, tempPassword }
     });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: 'A user with this email already exists.' });
     next(error);
   }
 };
