@@ -11,6 +11,8 @@ import {
   getAdminTeachers,    
   getSchoolQuizResults
 } from '../controllers/adminController.js';
+import { getAllManageableUsers, activateUserPlan } from '../controllers/superAdminController.js';
+
 
 const router = express.Router();
 
@@ -27,5 +29,8 @@ router.patch('/students/:id/status', protect, checkRole(ownerRoles), toggleStude
 router.post('/add-teacher', protect, checkRole(teacherManagerRoles), addTeacher); // ✅ HODs CAN do this
 router.get('/teachers', protect, checkRole(teacherManagerRoles), getAdminTeachers); // ✅ HODs CAN do this
 router.get('/school-results', protect, checkRole(teacherManagerRoles), getSchoolQuizResults); // ✅ HODs CAN do this
+router.get('/super/users', protect, checkRole(['super_admin']), getAllManageableUsers);
+router.post('/super/activate-plan', protect, checkRole(['super_admin']), activateUserPlan);
+
 
 export default router;
