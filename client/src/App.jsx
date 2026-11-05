@@ -152,6 +152,12 @@ function App() {
         }
       >
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              {/* ✅ ADD THIS NEW ROUTE HERE */}
+        <Route path="/admin/manage-plans" element={
+          <ProtectedRoute allowedRoles={["super_admin"]}>
+            <ManagePlans />
+          </ProtectedRoute>
+        } />
         <Route path="/admin/students" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><StudentDirectory /></ProtectedRoute>} />
         <Route path="/admin/teachers" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><MyTeachers /></ProtectedRoute>} />
         <Route path="/admin/add-student" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><AddStudent /></ProtectedRoute>} />
