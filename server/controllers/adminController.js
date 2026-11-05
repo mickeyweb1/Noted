@@ -5,6 +5,88 @@ import { QuizSubmission } from '../models/QuizSubmission.js';
 import { SCHOOL_PLAN_TIERS } from '../config/plans.js';
 import crypto from 'crypto'; 
 import bcrypt from 'bcryptjs';
+import { PLANS } from '../config/plans.js';
+
+// 1. Get all Teachers, HODs, and School Admins for the Super Admin to manage
+export const getAllManageableUsers = async (req, res, next) => {
+  try {
+    // We only want to show accounts that can have subscriptions (not regular students)
+    const users = await User.find({ 
+      role: { $in: ['teacher', 'hod', 'school_admin'] } 
+    })
+    .select('fullName email role subscriptionTier subscriptionStatus subscriptionEndsAt schoolName createdAt')
+    .sort({ createdAt: -1 });
+
+    const formattedUsers = users.map(u => ({
+      id: u._id,
+      fullName: u.fullName,
+      email: u.email,
+      role: u.role,
+      schoolName: u.schoolName || 'Independent',
+      currentPlan: u.subscriptionTier || 'free',
+      status: u.subscriptionStatus || 'inactive',
+      expiresAt: u.subscriptionEndsAt ? new Date(u.subscriptionEndsAt).toLocaleDateString() : 'N/A',
+      dateJoined: new Date(u.createdAt).toLocaleDateString()
+    }));
+
+    res.status(200).json({ success: true, data: formattedUsers });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 2. Manually activate/upgrade a user's plan (For Bank Transfers)
+export const activateUserPlan = async (req, res, next) => {
+  try {
+    const { userId, newPlan, billingCycle } = req.body;
+
+    if (!userId || !newPlan || !billingCycle) {
+      return res.status(400).json({ success: false, message: 'Missing required fields.' });
+    }
+
+    if (!PLANS[newPlan]) {
+      return res.status(400).json({ success: false, message: 'Invalid plan selected.' });
+    }
+
+    // Calculate expiry date: +1 month for monthly, +3 months for termly
+    const now = new Date();
+    const monthsToAdd = billingCycle === 'termly' ? 3 : 1;
+    const expiresAt = new Date(now.setMonth(now.getMonth() + monthsToAdd));
+
+    const updateData = {
+      subscriptionTier: newPlan,
+      subscriptionStatus: 'active',
+      subscriptionEndsAt: expiresAt,
+      billingCycle: billingCycle,
+      aiCreditsUsed: 0, // Reset credits for the new period
+      creditsPeriodStart: new Date()
+    };
+
+    // If it's a school plan, ensure maxTeachersAllowed is set correctly
+    if (newPlan.startsWith('school_')) {
+      updateData.isSchoolOwner = true;
+      updateData.maxTeachersAllowed = PLANS[newPlan].teachers;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('fullName email subscriptionTier subscriptionEndsAt');
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: `${updatedUser.fullName}'s plan successfully upgraded to ${PLANS[newPlan].label}!`,
+      data: updatedUser 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // Helper to generate a unique SCHOOL code
 const generateUniqueCode = async () => {
