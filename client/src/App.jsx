@@ -101,7 +101,7 @@ function App() {
          <Route 
         path="/settings" 
         element={
-          <ProtectedRoute allowedRoles={["student", "personal_user", "teacher", "school_admin", "super_admin"]}>
+          <ProtectedRoute allowedRoles={["student", "personal_user", "teacher", "school_admin", "super_admin", "hod"]}>
             <SettingsPage />
           </ProtectedRoute>
         } 
@@ -161,7 +161,7 @@ function App() {
         } />
         <Route path="/admin/students" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><StudentDirectory /></ProtectedRoute>} />
         <Route path="/admin/teachers" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><MyTeachers /></ProtectedRoute>} />
-        <Route path="/admin/add-student" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><AddStudent /></ProtectedRoute>} />
+        <Route path="/admin/add-student" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><AddStudent /></ProtectedRoute>} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
         <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
@@ -173,9 +173,17 @@ function App() {
  <Route path="/admin/join-shared-quiz" element={<JoinSharedQuiz />} />
         <Route path="/admin/shared-quiz-results" element={<SharedQuizResults />} />
  
-        <Route path="/admin/feedback" element={<SuperAdminFeedback />} /> 
+        <Route path="/admin/feedback" element={
+  <ProtectedRoute allowedRoles={["super_admin"]}>
+    <SuperAdminFeedback />
+  </ProtectedRoute>
+} />
        <Route path="/admin/add-teacher" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin", "hod"]}><AddTeacher /></ProtectedRoute>} />
-        <Route path="/admin/support-inbox" element={<SuperAdminSupportInbox />} />
+       <Route path="/admin/support-inbox" element={
+  <ProtectedRoute allowedRoles={["super_admin"]}>
+    <SuperAdminSupportInbox />
+  </ProtectedRoute>
+} />
         <Route path="/admin/support" element={<SupportPage />} />
       </Route>
 
