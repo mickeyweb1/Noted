@@ -6,7 +6,6 @@ import { QuizSubmission } from '../models/QuizSubmission.js';
 import { SCHOOL_PLAN_TIERS, PLANS, countGameShowsThisMonth } from '../config/plans.js';
 import crypto from 'crypto'; 
 import bcrypt from 'bcryptjs';
-import { PLANS } from '../config/plans.js';
 
 export const getAllManageableUsers = async (req, res, next) => {
   try {
