@@ -36,6 +36,7 @@ export default function AdminSideBar({ isOpen, onClose }) {
 
   const navItems = [
     { to: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" }, 
+     ...(userRole === "super_admin" ? [{ to: "/admin/manage-plans", icon: Crown, label: "Manage Subscriptions" }] : []),
     { to: "/admin/join-shared-quiz", icon: Share2, label: "Join Shared Quiz" },
     // ✅ Show these links to Owners AND HODs
     ...(canManageTeachers ? [
