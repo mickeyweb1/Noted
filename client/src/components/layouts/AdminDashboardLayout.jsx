@@ -1,41 +1,28 @@
-import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import AdminSideBar from "./AdminSideBar";
 import AdminTopBar from "./AdminTopBar";
+import AdminBottomNav from "./AdminBottomNav";
 
 export default function AdminDashboardLayout() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const closeSidebar = () => setIsSidebarOpen(false);
-  const toggleSidebar = () => setIsSidebarOpen((isOpen) => !isOpen);
-
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* Mobile Overlay */}
-      {isSidebarOpen && (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm md:hidden"
-          onClick={closeSidebar}
-          aria-label="Close admin menu"
-        />
-      )}
+      {/* Desktop sidebar: hidden on mobile, visible from the md breakpoint. */}
+      <AdminSideBar />
 
-      {/* Sidebar */}
-      <AdminSideBar isOpen={isSidebarOpen} onClose={closeSidebar} />
-
-      {/* Main Content Area */}
+      {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top Bar */}
-        <AdminTopBar onToggleSidebar={toggleSidebar} />
+        <AdminTopBar />
 
-        {/* Page Content */}
         <main className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
-          <div className="p-4 md:p-6 lg:p-8">
+          {/* Extra bottom padding keeps content clear of the fixed mobile nav. */}
+          <div className="p-4 pb-28 md:p-6 md:pb-6 lg:p-8">
             <Outlet />
           </div>
         </main>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <AdminBottomNav />
     </div>
   );
 }
