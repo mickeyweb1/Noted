@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react"; // ✅ ADD useEffect
 import {
   LayoutDashboard, Users, CreditCard, Settings, LogOut, Brain, Building2,
   BarChart3, UserPlus, X, MessageSquare, Trophy, Share2, GraduationCap, Crown
@@ -10,26 +9,20 @@ export default function AdminSideBar({ isOpen, onClose }) {
   const { user, logout } = useUserContext();
   const navigate = useNavigate();
 
-  // ✅ SAFELY extract role to prevent crashes if user is still loading
   const userRole = user?.role;
   const userData = user || { fullName: "Admin", email: "admin@noted.com", avatar: null };
 
   const isOwner = userRole === "school_admin" || userRole === "super_admin";
-  const canManageTeachers = isOwner || userRole === "hod"; // ✅ HOD can manage teachers
+  const canManageTeachers = isOwner || userRole === "hod"; 
   
   const isSchoolAdmin = userRole === "school_admin";
   const isIndependentTeacher = userRole === "teacher" && !user?.schoolOwnerId;
 
-  // ✅ FIX: Move date calculation into a state to prevent hydration mismatch
-  const [isFree, setIsFree] = useState(true);
-  
-  useEffect(() => {
-    if (user) {
-      const subscriptionExpired = user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date();
-      const freeStatus = !user.subscriptionTier || user.subscriptionTier === "free" || user.subscriptionStatus !== "active" || subscriptionExpired;
-      setIsFree(freeStatus);
-    }
-  }, [user]); // Only recalculate when the user object changes
+  // ✅ Direct calculation prevents flashing and removes need for useState/useEffect
+  const isFree = !user?.subscriptionTier || 
+                 user.subscriptionTier === "free" || 
+                 user.subscriptionStatus !== "active" || 
+                 Boolean(user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) <= new Date());
 
   const showUpgrade = (isSchoolAdmin && (user?.subscriptionTier !== "school_premium" || isFree)) || (isIndependentTeacher && isFree);
   const pricingAudience = isSchoolAdmin ? "schools" : "teachers";
