@@ -150,62 +150,7 @@ export default function StudentSideBar({ isOpen, onClose }) {
               {planName}
             </span>
           </div>
-          {limits?.credits && (
-            <div className="mt-3">
-              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Gauge className="h-3.5 w-3.5" />
-                  AI credits
-                </span>
-                <span className="font-medium text-foreground">
-                  {limits.credits.total === null
-                    ? "Unlimited"
-                    : `${limits.credits.remaining} / ${limits.credits.total} left`}
-                </span>
-              </div>
-              {limits.credits.total !== null && limits.credits.total > 0 && (
-                <div
-                  className="h-1.5 overflow-hidden rounded-full bg-muted"
-                  role="progressbar"
-                  aria-label="AI credits used"
-                  aria-valuemin={0}
-                  aria-valuemax={limits.credits.total}
-                  aria-valuenow={limits.credits.used}
-                >
-                  <div
-                    className="h-full rounded-full bg-brand transition-all"
-                    style={{ width: `${Math.min((limits.credits.used / limits.credits.total) * 100, 100)}%` }}
-                  />
-                </div>
-              )}
-              {formatDate(limits.credits.resetsAt) && (
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Credits reset {formatDate(limits.credits.resetsAt)}
-                </p>
-              )}
-            </div>
-          )}
-          {formatDate(subscriptionEndsAt) && (
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <CalendarDays className="h-3.5 w-3.5" />
-              Active until {formatDate(subscriptionEndsAt)}
-            </p>
-          )}
-          {!limits && (
-            <p className="mt-2 text-[11px] text-muted-foreground">Usage details unavailable.</p>
-          )}
         </section>
-
-        {isIndependentLearner && isFree && (
-          <NavLink
-            to="/pricing?audience=teachers"
-            onClick={onClose}
-            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-brand/80 px-4 py-3 text-sm font-semibold text-brand-foreground shadow-md transition-all hover:scale-[1.02] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <Crown className="h-4 w-4" />
-            <span>Upgrade to Pro</span>
-          </NavLink>
-        )}
 
         {/* ✅ RESTORED: XP and Level Display */}
         <div className="rounded-xl bg-gradient-to-r from-brand/10 to-brand/5 p-3 border border-brand/20">
