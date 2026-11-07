@@ -143,14 +143,6 @@ export default function StudentSideBar({ isOpen, onClose }) {
 
       {/* Footer / XP & Profile */}
       <div className="shrink-0 border-t border-border p-4 space-y-4">
-        <section className="rounded-xl border border-border bg-card p-3" aria-label="My plan">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">My plan</h2>
-            <span className="truncate rounded-full bg-brand/10 px-2 py-1 text-xs font-semibold text-brand">
-              {planName}
-            </span>
-          </div>
-        </section>
 
         {/* ✅ RESTORED: XP and Level Display */}
         <div className="rounded-xl bg-gradient-to-r from-brand/10 to-brand/5 p-3 border border-brand/20">
