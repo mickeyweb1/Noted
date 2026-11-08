@@ -25,6 +25,25 @@ const teamMembers = [
     avatar: "/images/kayode.jpeg",
     isFounder: true,
   },
+    {
+    name: "Sulaimon Oluwaseun",
+    role: "Nation Builder Team Lead",
+    bio: "Coordinates the Nation Builder team and supports the planning and day-to-day work needed to move the initiative forward.",
+    avatar: "/images/seun.jpg",
+  },
+    {
+    name: "Olabode Joshua",
+    role: "Co-Developer & Quality Assurance",
+    bio: "Contributes to development and tests features to identify issues and improve the reliability of the platform.",
+    avatar: "/images/olabode-joshua.png",
+  },
+    {
+    name: "Okafor Adaobi",
+    role: "Product Advisor",
+    bio: "Provides feedback on product ideas and helps evaluate which improvements will create the most value for students and teachers.",
+    avatar:
+      "https://ui-avatars.com/api/?name=Okafor+Adaobi&background=random&color=fff&size=256",
+  },
   {
     name: "Oyelusi Daniel",
     role: "Product & Strategy",
@@ -46,30 +65,11 @@ const teamMembers = [
       "https://ui-avatars.com/api/?name=Akeasa+Samuel&background=random&color=fff&size=256",
   },
   {
-    name: "Sulaimon Oluwaseun",
-    role: "Nation Builder Team Lead",
-    bio: "Coordinates the Nation Builder team and supports the planning and day-to-day work needed to move the initiative forward.",
-    avatar: "/images/seun.jpg",
-  },
-  {
-    name: "Olabode Joshua",
-    role: "Co-Developer & Quality Assurance",
-    bio: "Contributes to development and tests features to identify issues and improve the reliability of the platform.",
-    avatar: "/images/olabode-joshua.png",
-  },
-  {
     name: "Akhibi Owen",
     role: "Community & Outreach",
     bio: "Builds relationships with students and educational communities and helps introduce Noted AI to potential users.",
     avatar:
       "https://ui-avatars.com/api/?name=Akhibi+Owen&background=random&color=fff&size=256",
-  },
-  {
-    name: "Okafor Adaobi",
-    role: "Product Advisor",
-    bio: "Provides feedback on product ideas and helps evaluate which improvements will create the most value for students and teachers.",
-    avatar:
-      "https://ui-avatars.com/api/?name=Okafor+Adaobi&background=random&color=fff&size=256",
   },
 ];
 
