@@ -43,7 +43,7 @@ export default function LoginPage() {
     if (loading || submissionLock.current) return;
 
     const normalizedEmail = email.toLowerCase().trim();
-    const trimmedPassword = password.trim();
+ const trimmedPassword = password; 
     const nextValidationErrors = {
       email: !normalizedEmail ? 'Enter your email address.' : !isValidEmail(normalizedEmail) ? 'Enter a valid email address.' : '',
       password: !trimmedPassword ? 'Enter your password.' : '',
@@ -163,7 +163,6 @@ export default function LoginPage() {
                 <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded border-input accent-brand focus-visible:ring-2 focus-visible:ring-ring" />
                 Remember me
               </label>
-              <Link to="/forgot-password" className="font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Forgot password?</Link>
             </div>
 
             <Button type="submit" disabled={loading} className="group h-12 w-full bg-zinc-950 text-sm text-white shadow-sm hover:scale-[1.01] hover:bg-zinc-800 active:scale-[0.99] dark:bg-zinc-950 dark:text-white dark:hover:bg-zinc-800">

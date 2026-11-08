@@ -1,5 +1,5 @@
 import { AudioLines } from "lucide-react";
-import { ThemeToggle } from "../../../components/ThemeToggle";
+import { ThemeToggle } from "../../../components/themeToggle.jsx";
 import { useUserContext } from "../../../context/userContext";
 import {NavLink} from "react-router-dom"
 
