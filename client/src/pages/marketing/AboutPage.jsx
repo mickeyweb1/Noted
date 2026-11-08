@@ -6,6 +6,7 @@ import {
   Music,
   Video,
   ScanLine,
+  Building2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
@@ -19,8 +20,8 @@ import UnsplashCredit from "../../components/UnsplashCredit";
 const teamMembers = [
   {
     name: "Ogunleye Kayode",
-    role: "Founder & Lead Developer",
-    bio: "The technical architect behind Noted AI. Passionate about using technology to democratize education and make learning accessible to every student.",
+    role: "Founder, Owner & Lead Developer",
+    bio: "The technical architect and visionary behind Noted AI. Passionate about using technology to democratize education and make learning accessible to every student.",
     avatar: "/images/kayode.jpeg",
     isFounder: true,
   },
@@ -43,10 +44,16 @@ const teamMembers = [
     avatar: "https://ui-avatars.com/api/?name=Akeasa+Samuel&background=random&color=fff&size=128",
   },
   {
-    name: "Korole Israel",
-    role: "UI/UX Design",
-    bio: "Crafting the intuitive, engaging, and accessible interfaces that make studying with Noted AI a seamless experience.",
-    avatar: "https://ui-avatars.com/api/?name=Korole+Israel&background=random&color=fff&size=128",
+    name: "Sulaimon Oluwaseun",
+    role: "Head of Nation Builder Team",
+    bio: "Leads the Nation Builder initiative, managing operations, resources, and ensuring the team has everything needed to build and scale our educational impact.",
+    avatar: "/images/seun.jpg",
+  },
+  {
+    name: "Olabode Joshua",
+    role: "Co-Developer & Quality Assurance",
+    bio: "A key technical contributor who helps build and refine the codebase, rigorously testing every feature to guarantee a bug-free, reliable experience.",
+    avatar: "/images/olabode-joshua.png",
   },
   {
     name: "Akhibi Owen",
@@ -55,22 +62,33 @@ const teamMembers = [
     avatar: "https://ui-avatars.com/api/?name=Akhibi+Owen&background=random&color=fff&size=128",
   },
   {
-    name: "Sulaimon Oluwaseun",
-    role: "Operations & Logistics",
-    bio: "Keeping the project on track, managing resources, and ensuring the team has everything needed to build and scale.",
-    avatar: "/images/seun.jpg",
-  },
-  {
-    name: "Olabode Joshua",
-    role: "Quality Assurance",
-    bio: "Rigorously testing every feature to guarantee a bug-free, reliable, and smooth experience for all users.",
-    avatar: "/images/olabode-joshua.png",
-  },
-  {
     name: "Okafor Adaobi",
-    role: "Marketing & Communications",
-    bio: "Crafting the message and vision of Noted AI to inspire students and educators across the nation.",
+    role: "Product Advisor & Strategy",
+    bio: "The trusted sounding board for new ideas. She helps shape the product direction by advising on what features to add, refine, or remove to best serve students.",
     avatar: "https://ui-avatars.com/api/?name=Okafor+Adaobi&background=random&color=fff&size=128",
+  },
+];
+
+// ==========================================
+// TRUSTED SCHOOLS
+// To add real logos, replace the 'logo' placeholder with your image path (e.g., "/logos/petra.png")
+// ==========================================
+const trustedSchools = [
+  {
+    name: "Petra School Ota",
+    logo: "https://ui-avatars.com/api/?name=Petra+School&background=0D8ABC&color=fff&size=128", // Replace with real logo
+  },
+  {
+    name: "God Pride School",
+    logo: "https://ui-avatars.com/api/?name=God+Pride&background=10B981&color=fff&size=128", // Replace with real logo
+  },
+  {
+    name: "Elite Foundation School",
+    logo: "https://ui-avatars.com/api/?name=Elite+Foundation&background=8B5CF6&color=fff&size=128", // Replace with real logo
+  },
+  {
+    name: "College - Eminence Schools Ota",
+    logo: "https://ui-avatars.com/api/?name=Eminence+Schools&background=F59E0B&color=fff&size=128", // Replace with real logo
   },
 ];
 
@@ -251,99 +269,136 @@ export default function AboutPage() {
         </p>
       </section>
 
-      {/* ================= NATIONAL VISION ================= */}
+      {/* ================= TRUSTED BY SCHOOLS (NEW SECTION) ================= */}
       <section className="border-y border-border bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-                The National Impact
-              </p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Building the nation's brightest minds.
-              </h2>
-              <p className="mt-5 text-lg leading-8 text-muted-foreground">
-                A nation is only as strong as its education system. Right now, too many 
-                brilliant students are left behind because they can't afford private tutors 
-                or extra lessons. 
-              </p>
-              <p className="mt-4 text-lg leading-8 text-muted-foreground">
-                We want to help make learning support more approachable. Noted brings study
-                tools like summaries, audio, and practice quizzes together to help students
-                work through complex material in ways that suit them.
-              </p>
-            </div>
-            <div className="group relative isolate min-h-[420px] overflow-hidden rounded-[30px] bg-slate-950 shadow-soft">
-              <img
-                src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=1400&q=85"
-                alt="Students learning together in a classroom"
-                loading="lazy"
-                className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-              />
-              <div className="absolute inset-0 z-0 bg-gradient-to-t from-slate-950/95 via-slate-950/35 to-slate-950/10" />
-              <div className="absolute bottom-0 left-0 right-0 z-10 p-7 text-white sm:p-9">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
-                  Learning without barriers
-                </p>
-                <h3 className="mt-3 max-w-lg text-2xl font-bold sm:text-3xl">
-                  Clear explanations should be within reach for every learner.
-                </h3>
-                <p className="mt-3 max-w-lg leading-7 text-white/80">
-                  We are building practical study tools that help make difficult material
-                  easier to approach, understand, and revisit.
-                </p>
-              </div>
-              <a
-                href="https://unsplash.com/license"
-                target="_blank"
-                rel="noreferrer"
-                className="absolute right-4 top-4 text-xs text-white/75 underline underline-offset-2"
+          <div className="text-center mb-12">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              Trusted Partners
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Empowering classrooms across the nation.
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+              We are proud to partner with forward-thinking schools that are transforming how their students learn and engage with technology.
+            </p>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {trustedSchools.map((school) => (
+              <div
+                key={school.name}
+                className="landing-interactive flex flex-col items-center justify-center rounded-3xl border border-border bg-card p-8 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg text-center"
               >
-                Photo via Unsplash
-              </a>
+                {/* ✅ REPLACE THE SRC BELOW WITH THE REAL SCHOOL LOGO WHEN YOU HAVE IT */}
+                <img
+                  src={school.logo}
+                  alt={`${school.name} logo`}
+                  className="mb-4 h-20 w-20 rounded-full object-cover bg-muted"
+                />
+                <h3 className="text-base font-bold text-foreground">{school.name}</h3>
+                <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand">
+                  <Building2 className="h-3 w-3" /> Active School
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================= NATIONAL VISION ================= */}
+      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              The National Impact
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Building the nation's brightest minds.
+            </h2>
+            <p className="mt-5 text-lg leading-8 text-muted-foreground">
+              A nation is only as strong as its education system. Right now, too many 
+              brilliant students are left behind because they can't afford private tutors 
+              or extra lessons. 
+            </p>
+            <p className="mt-4 text-lg leading-8 text-muted-foreground">
+              We want to help make learning support more approachable. Noted brings study
+              tools like summaries, audio, and practice quizzes together to help students
+              work through complex material in ways that suit them.
+            </p>
+          </div>
+          <div className="group relative isolate min-h-[420px] overflow-hidden rounded-[30px] bg-slate-950 shadow-soft">
+            <img
+              src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=1400&q=85"
+              alt="Students learning together in a classroom"
+              loading="lazy"
+              className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+            />
+            <div className="absolute inset-0 z-0 bg-gradient-to-t from-slate-950/95 via-slate-950/35 to-slate-950/10" />
+            <div className="absolute bottom-0 left-0 right-0 z-10 p-7 text-white sm:p-9">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
+                Learning without barriers
+              </p>
+              <h3 className="mt-3 max-w-lg text-2xl font-bold sm:text-3xl">
+                Clear explanations should be within reach for every learner.
+              </h3>
+              <p className="mt-3 max-w-lg leading-7 text-white/80">
+                We are building practical study tools that help make difficult material
+                easier to approach, understand, and revisit.
+              </p>
             </div>
+            <a
+              href="https://unsplash.com/license"
+              target="_blank"
+              rel="noreferrer"
+              className="absolute right-4 top-4 text-xs text-white/75 underline underline-offset-2"
+            >
+              Photo via Unsplash
+            </a>
           </div>
         </div>
       </section>
 
       {/* ================= THE TEAM SECTION ================= */}
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-            The Builders
-          </p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Driven by one vision, built by a dedicated team.
-          </h2>
-          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Noted AI is a collaborative effort. Meet the passionate individuals working behind the scenes to make this nation builder initiative a reality.
-          </p>
-        </div>
+      <section className="border-y border-border bg-muted/30">
+        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              The Builders
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Driven by one vision, built by a dedicated team.
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+              Noted AI is a collaborative effort. Meet the passionate individuals working behind the scenes to make this nation builder initiative a reality.
+            </p>
+          </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {teamMembers.map((member) => (
-            <div
-              key={member.name}
-              className={`landing-interactive rounded-3xl border bg-card p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg flex flex-col items-center text-center ${
-                member.isFounder ? "border-brand/30 ring-1 ring-brand/10" : "border-border"
-              }`}
-            >
-              <img
-                src={member.avatar}
-                alt={member.name}
-                loading="lazy"
-                decoding="async"
-                className="mb-4 h-24 w-24 rounded-full border-4 border-background object-cover shadow-md"
-              />
-              <h3 className="text-xl font-bold text-foreground">{member.name}</h3>
-              <p className={`text-sm font-medium mb-3 ${member.isFounder ? "text-brand" : "text-muted-foreground"}`}>
-                {member.role}
-              </p>
-              <p className="text-sm leading-6 text-muted-foreground">
-                {member.bio}
-              </p>
-            </div>
-          ))}
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {teamMembers.map((member) => (
+              <div
+                key={member.name}
+                className={`landing-interactive rounded-3xl border bg-card p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg flex flex-col items-center text-center ${
+                  member.isFounder ? "border-brand/30 ring-1 ring-brand/10" : "border-border"
+                }`}
+              >
+                <img
+                  src={member.avatar}
+                  alt={member.name}
+                  loading="lazy"
+                  decoding="async"
+                  className="mb-4 h-24 w-24 rounded-full border-4 border-background object-cover shadow-md"
+                />
+                <h3 className="text-xl font-bold text-foreground">{member.name}</h3>
+                <p className={`text-sm font-medium mb-3 ${member.isFounder ? "text-brand" : "text-muted-foreground"}`}>
+                  {member.role}
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {member.bio}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
