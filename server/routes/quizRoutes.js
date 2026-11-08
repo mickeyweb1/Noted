@@ -482,6 +482,11 @@ router.post('/submit', async (req, res, next) => {
     const rawTaken = Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000);
     const timeTakenSeconds = Math.min(maxTimeSeconds, Math.max(0, rawTaken));
 
+    // ✅ NEW: Strictly reject submissions that are way past the deadline (60s grace period for network lag)
+    if (rawTaken > maxTimeSeconds + 60) {
+      return res.status(400).json({ success: false, message: 'Exam time has expired. Late submissions are not allowed.' });
+    }
+
     // The client's own tab count counts too (it keeps counting offline); never lower than the server's
     const clientTabs = Math.min(Math.max(parseInt(req.body?.tabSwitchCount, 10) || 0, 0), 1000);
     const finalTabs = Math.max(session.tabSwitchCount || 0, clientTabs);
