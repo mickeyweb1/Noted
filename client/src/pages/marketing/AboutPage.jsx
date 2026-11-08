@@ -7,168 +7,205 @@ import {
   Video,
   ScanLine,
   Building2,
+  BookOpen,
+  Headphones,
+  ClipboardCheck,
+  MessageCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import MarketingLayout from "./MarketingLayout";
 import UnsplashCredit from "../../components/UnsplashCredit";
 
-// ==========================================
-// THE NATION BUILDER TEAM
-// Edit the 'role' and 'bio' for each member as needed.
-// To add real photos, replace the 'avatar' URL with your image path (e.g., "/images/kayode.jpg")
-// ==========================================
+// Replace the avatar paths with the team's approved photos when available.
 const teamMembers = [
   {
     name: "Ogunleye Kayode",
-    role: "Founder, Owner & Lead Developer",
-    bio: "The technical architect and visionary behind Noted AI. Passionate about using technology to democratize education and make learning accessible to every student.",
+    role: "Founder & Lead Developer",
+    bio: "Leads the product's technical direction and development, with a focus on using practical technology to make learning more accessible and engaging.",
     avatar: "/images/kayode.jpeg",
     isFounder: true,
   },
   {
     name: "Oyelusi Daniel",
     role: "Product & Strategy",
-    bio: "Dedicated to shaping the product roadmap and ensuring every feature directly solves real student challenges.",
+    bio: "Contributes to product planning and helps ensure that new features address real needs in the classroom.",
     avatar: "/images/oyelusi-daniel.jpg",
   },
   {
     name: "Fakorede Oluwafeyishikemi",
     role: "Research & Development",
-    bio: "Focused on gathering student feedback and researching the best pedagogical methods to integrate into our AI models.",
-    avatar: "https://ui-avatars.com/api/?name=Fakorede+Oluwafeyishikemi&background=random&color=fff&size=128",
+    bio: "Gathers feedback and explores learning approaches that can make Noted AI more useful for students and teachers.",
+    avatar:
+      "https://ui-avatars.com/api/?name=Fakorede+Oluwafeyishikemi&background=random&color=fff&size=256",
   },
   {
     name: "Akeasa Samuel",
     role: "Content & Curriculum",
-    bio: "Ensures that all AI-generated content remains accurate, educational, and perfectly aligned with academic standards.",
-    avatar: "https://ui-avatars.com/api/?name=Akeasa+Samuel&background=random&color=fff&size=128",
+    bio: "Supports the quality of educational content and helps keep learning materials clear, relevant, and aligned with classroom needs.",
+    avatar:
+      "https://ui-avatars.com/api/?name=Akeasa+Samuel&background=random&color=fff&size=256",
   },
   {
     name: "Sulaimon Oluwaseun",
-    role: "Head of Nation Builder Team",
-    bio: "Leads the Nation Builder initiative, managing operations, resources, and ensuring the team has everything needed to build and scale our educational impact.",
+    role: "Nation Builder Team Lead",
+    bio: "Coordinates the Nation Builder team and supports the planning and day-to-day work needed to move the initiative forward.",
     avatar: "/images/seun.jpg",
   },
   {
     name: "Olabode Joshua",
     role: "Co-Developer & Quality Assurance",
-    bio: "A key technical contributor who helps build and refine the codebase, rigorously testing every feature to guarantee a bug-free, reliable experience.",
+    bio: "Contributes to development and tests features to identify issues and improve the reliability of the platform.",
     avatar: "/images/olabode-joshua.png",
   },
   {
     name: "Akhibi Owen",
     role: "Community & Outreach",
-    bio: "Building bridges with student communities and educational institutions to spread the word about accessible learning.",
-    avatar: "https://ui-avatars.com/api/?name=Akhibi+Owen&background=random&color=fff&size=128",
+    bio: "Builds relationships with students and educational communities and helps introduce Noted AI to potential users.",
+    avatar:
+      "https://ui-avatars.com/api/?name=Akhibi+Owen&background=random&color=fff&size=256",
   },
   {
     name: "Okafor Adaobi",
-    role: "Product Advisor & Strategy",
-    bio: "The trusted sounding board for new ideas. She helps shape the product direction by advising on what features to add, refine, or remove to best serve students.",
-    avatar: "https://ui-avatars.com/api/?name=Okafor+Adaobi&background=random&color=fff&size=128",
+    role: "Product Advisor",
+    bio: "Provides feedback on product ideas and helps evaluate which improvements will create the most value for students and teachers.",
+    avatar:
+      "https://ui-avatars.com/api/?name=Okafor+Adaobi&background=random&color=fff&size=256",
   },
 ];
 
-// ==========================================
-// TRUSTED SCHOOLS
-// To add real logos, replace the 'logo' placeholder with your image path (e.g., "/logos/petra.png")
-// ==========================================
-const trustedSchools = [
-  {
-    name: "Petra School Ota",
-    logo: "https://ui-avatars.com/api/?name=Petra+School&background=0D8ABC&color=fff&size=128", // Replace with real logo
-  },
-  {
-    name: "God Pride School",
-    logo: "https://ui-avatars.com/api/?name=God+Pride&background=10B981&color=fff&size=128", // Replace with real logo
-  },
-  {
-    name: "Elite Foundation School",
-    logo: "https://ui-avatars.com/api/?name=Elite+Foundation&background=8B5CF6&color=fff&size=128", // Replace with real logo
-  },
-  {
-    name: "College - Eminence Schools Ota",
-    logo: "https://ui-avatars.com/api/?name=Eminence+Schools&background=F59E0B&color=fff&size=128", // Replace with real logo
-  },
+// Use real school logos here when the schools have approved their use.
+// Until then, the page displays initials instead of presenting placeholder images as official logos.
+const schools = [
+  { name: "Petra School Ota", initials: "PS" },
+  { name: "God Pride School", initials: "GP" },
+  { name: "Elite Foundation School", initials: "EF" },
+  { name: "College - Eminence Schools Ota", initials: "ES" },
 ];
 
 const coreFeatures = [
   {
     icon: ScanLine,
-    title: "Smart Note Scanner (OCR)",
-    description: "Snap a photo of messy handwritten notes and instantly convert them into clean, editable digital text.",
+    title: "Smart Note Scanner",
+    description:
+      "Turn photos of handwritten or printed notes into digital text that you can use to create and review study materials.",
     image: "photo-1434030216411-0b793f4b4173",
-    imageAlt: "Student's handwritten notes open on a desk",
+    imageAlt: "Study notes and writing materials on a desk",
   },
   {
-    icon: Music,
-    title: "AI Study Music & Lyrics",
-    description: "Turn dense textbook chapters into catchy, rhythmic rap songs and lo-fi beats to help concepts stick.",
-    image: "photo-1516280440614-37939bbacd81",
-    imageAlt: "Singer performing with a microphone",
+    icon: MessageCircle,
+    title: "AI Study Companion",
+    description:
+      "Ask questions about difficult topics and get explanations that help you work through concepts step by step.",
+    image: "photo-1523580494863-6f3031224c94",
+    imageAlt: "Students working together in a learning environment",
+  },
+  {
+    icon: BookOpen,
+    title: "Summaries & Study Materials",
+    description:
+      "Break long notes and topics into clearer summaries and organized materials that are easier to revisit.",
+    image: "photo-1456513080510-7bf3a84b82f8",
+    imageAlt: "Open books and study materials",
   },
   {
     icon: Brain,
-    title: "Interactive AI Quizzes",
-    description: "Instantly generate custom multiple-choice quizzes and flashcards from any topic to test your knowledge.",
+    title: "Quizzes & Flashcards",
+    description:
+      "Practise what you have learned with topic-based quizzes and flashcards designed to help you check your understanding.",
     image: "photo-1523240795612-9a054b0db644",
     imageAlt: "Students studying together around a table",
   },
   {
+    icon: Headphones,
+    title: "Audio & Music Learning",
+    description:
+      "Explore study content through audio, podcasts, and music-based learning formats that offer another way to revise.",
+    image: "photo-1516280440614-37939bbacd81",
+    imageAlt: "Microphone in a recording environment",
+  },
+  {
     icon: Video,
-    title: "Animated Video Storyboards",
-    description: "Transform boring text into engaging, scene-by-scene visual guides and animated video prompts.",
+    title: "Visual Learning Guides",
+    description:
+      "Turn topics into structured visual storyboards that help break ideas into scenes and easier-to-follow steps.",
     image: "photo-1509062522246-3755977927d7",
     imageAlt: "Teacher leading a classroom lesson",
   },
+  {
+    icon: ClipboardCheck,
+    title: "CBT & Teacher Tools",
+    description:
+      "Help teachers prepare computer-based tests, organize assessments, issue student access codes, and review performance.",
+    image: "photo-1501290741922-a9c6e9d4a1f3",
+    imageAlt: "Student completing an assessment at a desk",
+  },
+  {
+    icon: Globe2,
+    title: "Offline-friendly CBT",
+    description:
+      "For supported assessments, students can continue working through temporary network interruptions, with saved progress available to sync when the connection returns.",
+    image: "photo-1516321318423-f06f85e504b3",
+    imageAlt: "A student working on a laptop",
+  },
 ];
+
+const unsplashImage = (photoId, width = 1400) =>
+  `https://images.unsplash.com/${photoId}?auto=format&fit=crop&w=${width}&q=85`;
 
 export default function AboutPage() {
   return (
     <MarketingLayout>
-      {/* ================= HERO / MISSION SECTION ================= */}
+      {/* HERO */}
       <section className="relative isolate flex min-h-[min(680px,calc(100svh-4rem))] overflow-hidden bg-slate-950">
         <img
-          src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=2000&q=85"
+          src={unsplashImage("photo-1522202176988-66273c2fd55f", 2000)}
           alt=""
           aria-hidden="true"
           fetchPriority="high"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover object-center motion-safe:animate-ken-burns"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/70 to-slate-950/30" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-slate-950/10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/75 to-slate-950/35" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-slate-950/10" />
 
         <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-          <div className="max-w-3xl landing-enter">
+          <div className="landing-enter max-w-3xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
-              <Globe2 className="h-4 w-4" />
+              <Globe2 className="h-4 w-4" aria-hidden="true" />
               A Nation Builder Initiative
             </div>
+
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-white/75">
+              One Note. Many Ways to Learn.
+            </p>
             <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-7xl">
-              Making complex textbooks feel like your favorite story.
+              Making learning clearer, more engaging, and more accessible.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/85 sm:text-xl">
-              Noted exists to make learning clearer, more focused, and more engaging.
-              We combine thoughtful design with practical AI tools to help students
-              learn with confidence.
+              Noted AI brings practical AI-powered study and classroom tools into
+              one platform. Students can explore topics in different ways, while
+              teachers can prepare learning activities and assessments more
+              efficiently.
             </p>
+
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
               <Link
                 to="/signup"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
-                Join the movement
-                <ArrowRight className="h-4 w-4" />
+                Get started for free
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
               <Link
                 to="/contact"
-                className="inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-6 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/20"
+                className="inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-6 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 Partner with us
               </Link>
             </div>
           </div>
         </div>
+
         <a
           href="https://unsplash.com/license"
           target="_blank"
@@ -179,24 +216,29 @@ export default function AboutPage() {
         </a>
       </section>
 
-      {/* ================= THE ORIGIN STORY ================= */}
+      {/* WHY WE STARTED */}
       <section className="border-y border-border bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center mb-12">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-              How it started
+              Why we started
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              It started with a moment of realization in class.
+              Learning should not feel harder than it needs to be.
             </h2>
+            <p className="mt-4 text-lg leading-7 text-muted-foreground">
+              A difficult topic can become easier to approach when students have
+              the right explanation, tools, and opportunities to practise.
+            </p>
           </div>
 
           <div className="grid overflow-hidden rounded-[30px] border border-border bg-card shadow-soft lg:grid-cols-[0.9fr_1.1fr]">
             <div className="group relative min-h-72 overflow-hidden bg-slate-900 lg:min-h-full">
               <img
-                src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1200&q=80"
-                alt="A student taking notes while studying"
+                src={unsplashImage("photo-1434030216411-0b793f4b4173", 1200)}
+                alt="A student reviewing notes while studying"
                 loading="lazy"
+                decoding="async"
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
@@ -209,59 +251,74 @@ export default function AboutPage() {
                 Photo via Unsplash
               </a>
             </div>
+
             <div className="p-7 sm:p-10 lg:p-12">
-              <Quote className="mb-5 h-9 w-9 text-brand/40" />
+              <Quote className="mb-5 h-9 w-9 text-brand/50" aria-hidden="true" />
               <p className="text-lg leading-relaxed text-foreground sm:text-xl">
-                During a particularly dense college lecture, I looked around and noticed my classmates and I
-                completely losing focus. The textbooks were full of "big English" that made simple concepts
-                feel impossible. One of my friends sighed and asked:
-                <em className="font-semibold text-brand"> "Which anime character would you wish was your class teacher?"</em>
+                The idea behind Noted grew from a familiar classroom challenge:
+                students can struggle to stay engaged when learning materials
+                feel difficult to understand or remember. During one of those
+                conversations, a friend asked:
+                <em className="font-semibold text-brand">
+                  {" "}
+                  “Which anime character would you wish was your class teacher?”
+                </em>
               </p>
-              <p className="mt-5 leading-relaxed text-muted-foreground sm:text-lg">
-                That question changed everything. We realized the problem wasn't that students
-                were lazy or not smart enough. If we could make learning feel as engaging,
-                visual, and memorable as our favorite shows, we wouldn't just be building an app.
-                We'd be rethinking how our generation learns.
+              <p className="mt-5 text-base leading-relaxed text-muted-foreground sm:text-lg">
+                It got us thinking about how learning could become more
+                interactive, visual, and memorable. Noted AI is our effort to
+                bring different ways of learning together and give students and
+                teachers practical tools they can use in and beyond the
+                classroom.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ================= CORE FEATURES ================= */}
+      {/* CORE FEATURES */}
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
+        <div className="mx-auto mb-12 max-w-3xl text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-            What we build
+            What Noted AI offers
           </p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Tools designed for the modern student.
+            Tools for learning and teaching.
           </h2>
+          <p className="mt-4 text-lg leading-7 text-muted-foreground">
+            From understanding a difficult topic to preparing a classroom
+            assessment, Noted AI brings useful learning tools into one place.
+          </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {coreFeatures.map(({ icon: Icon, title, description, image, imageAlt }) => (
-            <div
+            <article
               key={title}
               className="landing-interactive group overflow-hidden rounded-3xl border border-border bg-card shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
             >
               <div className="relative h-44 overflow-hidden bg-muted">
                 <img
-                  src={`https://images.unsplash.com/${image}?auto=format&fit=crop&w=900&q=80`}
+                  src={unsplashImage(image, 900)}
                   alt={imageAlt}
                   loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/35 to-transparent" />
-                <div className="absolute bottom-4 left-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/90 text-brand shadow-soft">
-                  <Icon className="h-5 w-5" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent" />
+                <div className="absolute bottom-4 left-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/95 text-brand shadow-soft">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
                 </div>
               </div>
               <div className="p-6">
-                <h3 className="mb-2 text-lg font-semibold text-foreground">{title}</h3>
-                <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+                <h3 className="mb-2 text-lg font-semibold text-foreground">
+                  {title}
+                </h3>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {description}
+                </p>
               </div>
-            </div>
+            </article>
           ))}
         </div>
         <p className="mt-5 text-right text-xs text-muted-foreground">
@@ -269,36 +326,40 @@ export default function AboutPage() {
         </p>
       </section>
 
-      {/* ================= TRUSTED BY SCHOOLS (NEW SECTION) ================= */}
+      {/* SCHOOLS */}
       <section className="border-y border-border bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-              Trusted Partners
+              Our school community
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Empowering classrooms across the nation.
+              Working with schools to improve learning.
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              We are proud to partner with forward-thinking schools that are transforming how their students learn and engage with technology.
+            <p className="mt-4 text-lg leading-7 text-muted-foreground">
+              We value the schools and educators exploring Noted AI with us.
+              Their experiences and feedback help guide how the platform grows.
             </p>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {trustedSchools.map((school) => (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {schools.map((school) => (
               <div
                 key={school.name}
-                className="landing-interactive flex flex-col items-center justify-center rounded-3xl border border-border bg-card p-8 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg text-center"
+                className="landing-interactive flex min-h-44 flex-col items-center justify-center rounded-3xl border border-border bg-card p-7 text-center shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
               >
-                {/* ✅ REPLACE THE SRC BELOW WITH THE REAL SCHOOL LOGO WHEN YOU HAVE IT */}
-                <img
-                  src={school.logo}
-                  alt={`${school.name} logo`}
-                  className="mb-4 h-20 w-20 rounded-full object-cover bg-muted"
-                />
-                <h3 className="text-base font-bold text-foreground">{school.name}</h3>
-                <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand">
-                  <Building2 className="h-3 w-3" /> Active School
+                <div
+                  className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10 text-xl font-bold tracking-wide text-brand"
+                  aria-hidden="true"
+                >
+                  {school.initials}
+                </div>
+                <h3 className="text-base font-bold leading-6 text-foreground">
+                  {school.name}
+                </h3>
+                <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  School community
                 </span>
               </div>
             ))}
@@ -306,52 +367,54 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* ================= NATIONAL VISION ================= */}
+      {/* OUR VISION */}
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-              The National Impact
+              Our vision
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Building the nation's brightest minds.
+              More students should have access to useful learning support.
             </h2>
             <p className="mt-5 text-lg leading-8 text-muted-foreground">
-              A nation is only as strong as its education system. Right now, too many 
-              brilliant students are left behind because they can't afford private tutors 
-              or extra lessons. 
+              Many students need extra explanations and practice outside the
+              classroom, but access to personal tutoring and additional
+              learning resources can be limited.
             </p>
             <p className="mt-4 text-lg leading-8 text-muted-foreground">
-              We want to help make learning support more approachable. Noted brings study
-              tools like summaries, audio, and practice quizzes together to help students
-              work through complex material in ways that suit them.
+              We are building Noted AI to make study support easier to access
+              through summaries, explanations, quizzes, audio learning, and
+              tools that help teachers manage classroom activities.
             </p>
           </div>
+
           <div className="group relative isolate min-h-[420px] overflow-hidden rounded-[30px] bg-slate-950 shadow-soft">
             <img
-              src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=1400&q=85"
-              alt="Students learning together in a classroom"
+              src={unsplashImage("photo-1509062522246-3755977927d7", 1400)}
+              alt="A teacher guiding students in a classroom"
               loading="lazy"
+              decoding="async"
               className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
             />
             <div className="absolute inset-0 z-0 bg-gradient-to-t from-slate-950/95 via-slate-950/35 to-slate-950/10" />
             <div className="absolute bottom-0 left-0 right-0 z-10 p-7 text-white sm:p-9">
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
-                Learning without barriers
+                Learning without unnecessary barriers
               </p>
               <h3 className="mt-3 max-w-lg text-2xl font-bold sm:text-3xl">
-                Clear explanations should be within reach for every learner.
+                Better learning support, one useful tool at a time.
               </h3>
               <p className="mt-3 max-w-lg leading-7 text-white/80">
-                We are building practical study tools that help make difficult material
-                easier to approach, understand, and revisit.
+                Our goal is to help students understand more confidently and
+                help educators spend less time on repetitive preparation.
               </p>
             </div>
             <a
               href="https://unsplash.com/license"
               target="_blank"
               rel="noreferrer"
-              className="absolute right-4 top-4 text-xs text-white/75 underline underline-offset-2"
+              className="absolute right-4 top-4 z-10 text-xs text-white/75 underline underline-offset-2"
             >
               Photo via Unsplash
             </a>
@@ -359,85 +422,101 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* ================= THE TEAM SECTION ================= */}
+      {/* TEAM */}
       <section className="border-y border-border bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-              The Builders
+              Meet the team
             </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Driven by one vision, built by a dedicated team.
+              The people building Noted AI.
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Noted AI is a collaborative effort. Meet the passionate individuals working behind the scenes to make this nation builder initiative a reality.
+            <p className="mt-4 text-lg leading-7 text-muted-foreground">
+              Noted AI is developed by a team contributing across technology,
+              research, content, product planning, and community outreach.
             </p>
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {teamMembers.map((member) => (
-              <div
+              <article
                 key={member.name}
-                className={`landing-interactive rounded-3xl border bg-card p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg flex flex-col items-center text-center ${
-                  member.isFounder ? "border-brand/30 ring-1 ring-brand/10" : "border-border"
+                className={`landing-interactive flex flex-col items-center rounded-3xl border bg-card p-6 text-center shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg ${
+                  member.isFounder
+                    ? "border-brand/30 ring-1 ring-brand/10"
+                    : "border-border"
                 }`}
               >
                 <img
                   src={member.avatar}
-                  alt={member.name}
+                  alt={`${member.name}`}
                   loading="lazy"
                   decoding="async"
-                  className="mb-4 h-24 w-24 rounded-full border-4 border-background object-cover shadow-md"
+                  className="mb-4 h-24 w-24 rounded-full border-4 border-background bg-muted object-cover shadow-md"
                 />
-                <h3 className="text-xl font-bold text-foreground">{member.name}</h3>
-                <p className={`text-sm font-medium mb-3 ${member.isFounder ? "text-brand" : "text-muted-foreground"}`}>
+                <h3 className="text-lg font-bold text-foreground">
+                  {member.name}
+                </h3>
+                <p
+                  className={`mb-3 mt-1 text-sm font-medium ${
+                    member.isFounder ? "text-brand" : "text-muted-foreground"
+                  }`}
+                >
                   {member.role}
                 </p>
                 <p className="text-sm leading-6 text-muted-foreground">
                   {member.bio}
                 </p>
-              </div>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ================= CALL TO ACTION ================= */}
+      {/* CALL TO ACTION */}
       <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
         <div className="landing-interactive group relative isolate overflow-hidden rounded-[30px] bg-slate-950 px-6 py-14 text-center shadow-2xl sm:px-10 sm:py-16">
           <img
-            src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1800&q=85"
+            src={unsplashImage("photo-1523240795612-9a054b0db644", 1800)}
             alt=""
             aria-hidden="true"
             loading="lazy"
+            decoding="async"
             className="absolute inset-0 z-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
           />
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-950/60" />
+          <div className="absolute inset-0 z-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-slate-950/65" />
+
           <div className="relative z-10 mx-auto max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Start learning differently</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">
+              Start learning differently
+            </p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Ready to transform how you study?
+              Make your next learning session count.
             </h2>
             <p className="mx-auto mb-8 mt-4 max-w-2xl text-lg leading-7 text-white/80">
-              Explore study tools designed to make challenging material easier to understand.
-              Have questions or want to partner with us? Reach out to our team.
+              Explore tools that help make difficult topics easier to study.
+              Are you an educator or school interested in using Noted AI? Get in
+              touch with our team.
             </p>
+
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
                 to="/signup"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-slate-950 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-slate-950 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               >
                 Get started for free
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
               <Link
                 to="/contact"
-                className="inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-8 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/20"
+                className="inline-flex items-center justify-center rounded-full border border-white/40 bg-white/10 px-8 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 Contact the team
               </Link>
             </div>
           </div>
+
           <a
             href="https://unsplash.com/license"
             target="_blank"
