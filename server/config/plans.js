@@ -5,19 +5,14 @@ import { Organization } from '../models/Organization.js';
 /*
  * SINGLE SOURCE OF TRUTH for plan limits.
  * Keep this in sync with the pricing page.
- *   credits   = AI question credits per 30 days (1 generated question = 1 credit)
- *   maxQ      = max AI questions per quiz
- *   codes     = max student codes per test
- *   gameShows = Game Shows per 30 days (per teacher)
- *   teachers  = teacher accounts a school owner may have (use in your invite route)
  */
 export const PLANS = {
   free:           { label: 'Free',            credits: 120, maxQ: 30,  codes: 15,  gameShows: 0,  teachers: 0,  branding: true,  share: false, duplicate: false, insights: false },
   pro:            { label: 'Teacher Pro',     credits: 400, maxQ: 60,  codes: 40,  gameShows: 12, teachers: 0,  branding: false, share: true,  duplicate: false, insights: false },
   premium:        { label: 'Teacher Premium', credits: 800, maxQ: 100, codes: 100, gameShows: 30, teachers: 0,  branding: false, share: true,  duplicate: true,  insights: true  },
-  school_owner:   { label: 'School Starter',  credits: 200, maxQ: 50,  codes: 30,  gameShows: 8,  teachers: 4,  branding: false, share: true,  duplicate: false, insights: false },
-  school_pro:     { label: 'School Pro',      credits: 400, maxQ: 80,  codes: 50,  gameShows: 15, teachers: 13, branding: false, share: true,  duplicate: false, insights: true  },
-  school_premium: { label: 'School Premium',  credits: 600, maxQ: 150, codes: 100, gameShows: 30, teachers: 30, branding: false, share: true,  duplicate: true,  insights: true  },
+  school_owner:   { label: 'School Starter',  credits: 400, maxQ: 50,  codes: 30,  gameShows: 8,  teachers: 4,  branding: false, share: true,  duplicate: false, insights: false },
+  school_pro:     { label: 'School Pro',      credits: 500, maxQ: 80,  codes: 50,  gameShows: 15, teachers: 13, branding: false, share: true,  duplicate: false, insights: true  },
+  school_premium: { label: 'School Premium',  credits: 800, maxQ: 150, codes: 100, gameShows: 30, teachers: 27, branding: false, share: true,  duplicate: true,  insights: true  },
 };
 
 export const SCHOOL_PLAN_TIERS = Object.keys(PLANS).filter((tier) => tier.startsWith('school_'));
@@ -28,7 +23,6 @@ export const CREDIT_PERIOD_DAYS = 30;
 export const LOCKED_MESSAGE =
   'Upgrade Required: This feature is locked because your school admin has not upgraded the subscription yet. Please contact your admin to unlock full access.';
 
-// Fields resolvePlan needs. Use this in .select() when loading a user just to resolve their plan.
 export const PLAN_FIELDS = 'role subscriptionTier subscriptionStatus subscriptionEndsAt schoolOwnerId schoolId aiCreditsUsed creditsPeriodStart';
 
 const UNLIMITED = {
@@ -36,21 +30,12 @@ const UNLIMITED = {
   teachers: 9999, branding: false, share: true, duplicate: true, insights: true,
 };
 
-// A paid plan counts only if it is active AND has not passed its end date.
 const isLive = (u) =>
   u.subscriptionStatus === 'active' && (!u.subscriptionEndsAt || new Date(u.subscriptionEndsAt) > new Date());
 
-
-/**
- * Works out which plan a user is really on right now.
- * - super_admin: unlimited
- * - teacher/student/HOD under a school owner: the OWNER's school plan, if it is live (otherwise locked)
- * - everyone else: their own plan, if live (otherwise free)
- */
 export const resolvePlan = async (user) => {
   if (user.role === 'super_admin') return { ...UNLIMITED, locked: null };
 
-  // ✅ FIX: Added 'hod' to this check so Head of Departments inherit the school's paid plan!
   if ((user.role === 'teacher' || user.role === 'student' || user.role === 'hod') && (user.schoolOwnerId || user.schoolId)) {
     let schoolOwnerId = user.schoolOwnerId;
     if (!schoolOwnerId && user.schoolId) {
@@ -65,16 +50,13 @@ export const resolvePlan = async (user) => {
       return { key: owner.subscriptionTier, ...PLANS[owner.subscriptionTier], locked: null };
     }
     
-    // If the school owner's plan expired or doesn't exist, lock the HOD/Teacher out of paid features
     return { key: 'free', ...PLANS.free, locked: LOCKED_MESSAGE };
   }
 
-  // For independent teachers or personal users, check their own subscription
   const tier = isLive(user) && PLANS[user.subscriptionTier] ? user.subscriptionTier : 'free';
   return { key: tier, ...PLANS[tier], locked: null };
 };
 
-/** Credits used/remaining for display. Treats an expired period as zero used. */
 export const getCreditsInfo = (user, plan) => {
   if (!Number.isFinite(plan.credits)) return { total: null, used: 0, remaining: null, resetsAt: null };
   const start = user.creditsPeriodStart ? new Date(user.creditsPeriodStart) : null;
@@ -88,16 +70,11 @@ export const getCreditsInfo = (user, plan) => {
   };
 };
 
-/**
- * Atomically spends `n` credits. Returns true if spent, false if not enough credits.
- * Two parallel requests can never overspend because the check and the increment are one DB operation.
- */
 export const spendCredits = async (user, plan, n) => {
   if (!Number.isFinite(plan.credits)) return true;
   const now = new Date();
   const periodAgo = new Date(now.getTime() - CREDIT_PERIOD_DAYS * DAY);
 
-  // Start a fresh period if there is none or the old one ended.
   await User.updateOne(
     { _id: user._id, $or: [{ creditsPeriodStart: null }, { creditsPeriodStart: { $lt: periodAgo } }] },
     { $set: { aiCreditsUsed: 0, creditsPeriodStart: now } }
@@ -110,7 +87,6 @@ export const spendCredits = async (user, plan, n) => {
   return result.modifiedCount === 1;
 };
 
-/** Gives credits back (AI failed, or it returned fewer questions than charged). */
 export const refundCredits = async (userId, n) => {
   if (!(n > 0)) return;
   await User.updateOne({ _id: userId, aiCreditsUsed: { $gte: n } }, { $inc: { aiCreditsUsed: -n } });
@@ -119,7 +95,6 @@ export const refundCredits = async (userId, n) => {
 export const countGameShowsThisMonth = (userId) =>
   Quiz.countDocuments({ createdBy: userId, gameMode: 'gameShow', createdAt: { $gte: new Date(Date.now() - 30 * DAY) } });
 
-/** Returns an error message if the user may NOT create another Game Show, otherwise null. */
 export const gameShowQuotaError = async (user, plan) => {
   if (plan.gameShows === Infinity) return null;
   if (plan.gameShows === 0) return 'Game Show mode is available on Teacher Pro and School plans. Upgrade to unlock it!';
