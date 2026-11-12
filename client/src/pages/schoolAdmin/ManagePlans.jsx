@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, CheckCircle, Loader2, Crown, X } from "lucide-react";
+import { Search, CheckCircle, Loader2, Crown, X, Plus } from "lucide-react"; // ✅ Added Plus
 import { Link } from "react-router-dom";
 import api from "../../utils/api";
 
@@ -10,7 +10,6 @@ export default function ManagePlans() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   
-  // Modal State
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState("pro");
   const [billingCycle, setBillingCycle] = useState("monthly");
@@ -32,7 +31,6 @@ export default function ManagePlans() {
   };
 
   const openActivationModal = (user) => {
-    // Smart default: if they are a school admin, default to school_owner, else pro
     const defaultPlan = user.role === "school_admin" ? "school_owner" : "pro";
     setSelectedPlan(defaultPlan);
     setBillingCycle("monthly");
@@ -50,13 +48,25 @@ export default function ManagePlans() {
       });
       if (res.data.success) {
         alert(res.data.message);
-        setSelectedUser(null); // Close modal
-        fetchUsers(); // Refresh the list
+        setSelectedUser(null);
+        fetchUsers();
       }
     } catch (err) {
       alert(err.response?.data?.message || "Failed to activate plan.");
     } finally {
       setIsActivating(false);
+    }
+  };
+
+  // ✅ NEW: Handle adding a teacher slot
+  const handleAddSlot = async (userId, userName) => {
+    if (!window.confirm(`Add 1 extra teacher slot for ${userName}'s school?`)) return;
+    try {
+      const res = await api.post("/admin/super/add-teacher-slot", { userId });
+      alert(res.data.message);
+      fetchUsers();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to add slot.");
     }
   };
 
@@ -75,11 +85,11 @@ export default function ManagePlans() {
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">
       <div className="flex items-center gap-4">
         <Link to="/admin/dashboard" className={`p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ${focusRing}`}>
-          <ArrowLeftIcon className="h-5 w-5" />
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
         </Link>
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground md:text-3xl">Manage Subscriptions</h1>
-          <p className="text-sm text-muted-foreground">Manually activate plans for users who paid via bank transfer.</p>
+          <p className="text-sm text-muted-foreground">Manually activate plans or add slots for users who paid via bank transfer.</p>
         </div>
       </div>
 
@@ -131,12 +141,26 @@ export default function ManagePlans() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{user.expiresAt}</td>
                     <td className="px-4 py-3 text-right">
-                      <button 
-                        onClick={() => openActivationModal(user)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:bg-brand/90 transition-colors"
-                      >
-                        <Crown className="h-3.5 w-3.5" /> Activate / Upgrade
-                      </button>
+                      {/* ✅ NEW: Conditional Action Buttons */}
+                      {user.currentPlan === 'free' || user.isExpired ? (
+                        <button 
+                          onClick={() => openActivationModal(user)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-brand-foreground hover:bg-brand/90 transition-colors"
+                        >
+                          <Crown className="h-3.5 w-3.5" /> Activate
+                        </button>
+                      ) : user.role === 'school_admin' ? (
+                        <button 
+                          onClick={() => handleAddSlot(user.id, user.fullName)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10 transition-colors"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add 1 Slot
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium">
+                          <CheckCircle className="h-3.5 w-3.5" /> Active
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -233,8 +257,3 @@ export default function ManagePlans() {
     </div>
   );
 }
-
-// Simple arrow icon component
-const ArrowLeftIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-);

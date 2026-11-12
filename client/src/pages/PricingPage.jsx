@@ -144,7 +144,7 @@ const schoolTiers = [
     features: [
       "All School Starter features, plus higher limits:",
       "Up to 13 teacher accounts",
-      "Each teacher: 500 AI question credits per month",
+      "Each teacher: 600 AI question credits per month",
       "Up to 80 AI questions per quiz",
       "Up to 50 student codes per test",
       "15 Game Shows per teacher per month",

@@ -577,3 +577,50 @@ export const getSchoolQuizResults = async (req, res, next) => {
     next(error);
   }
 };
+
+// ✅ Add 1 extra teacher slot to a school owner
+export const addTeacherSlot = async (req, res, next) => {
+  try {
+    const { userId } = req.body; // The school owner's ID
+    
+    const user = await User.findById(userId);
+    if (!user || !user.isSchoolOwner) {
+      return res.status(404).json({ success: false, message: 'School owner not found.' });
+    }
+
+    // Increment maxTeachersAllowed by 1
+    await User.findByIdAndUpdate(userId, { $inc: { maxTeachersAllowed: 1 } });
+
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully added 1 teacher slot. New limit: ${user.maxTeachersAllowed + 1}` 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ✅ Top up a specific teacher's AI credits (resets their usage for the month)
+export const topUpTeacherCredits = async (req, res, next) => {
+  try {
+    const { teacherId } = req.params;
+    
+    const teacher = await User.findById(teacherId);
+    if (!teacher || (teacher.role !== 'teacher' && teacher.role !== 'hod')) {
+      return res.status(404).json({ success: false, message: 'Teacher not found.' });
+    }
+
+    // Reset their used credits to 0 and start a new 30-day period
+    await User.findByIdAndUpdate(teacherId, {
+      aiCreditsUsed: 0,
+      creditsPeriodStart: new Date()
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully topped up credits for ${teacher.fullName}. They now have a fresh monthly allowance.` 
+    });
+  } catch (error) {
+    next(error);
+  }
+};

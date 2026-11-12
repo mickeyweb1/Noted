@@ -9,7 +9,11 @@ import {
   toggleStudentStatus,
   addTeacher,         
   getAdminTeachers,    
-  getSchoolQuizResults, getAllManageableUsers, activateUserPlan
+  getSchoolQuizResults, 
+  getAllManageableUsers, 
+  activateUserPlan,  
+  addTeacherSlot,        
+  topUpTeacherCredits   
 } from '../controllers/adminController.js';
 
 
@@ -29,6 +33,11 @@ router.post('/add-teacher', protect, checkRole(teacherManagerRoles), addTeacher)
 router.get('/teachers', protect, checkRole(teacherManagerRoles), getAdminTeachers); // ✅ HODs CAN do this
 router.get('/school-results', protect, checkRole(teacherManagerRoles), getSchoolQuizResults); // ✅ HODs CAN do this
 router.get('/super/users', protect, checkRole(['super_admin']), getAllManageableUsers);
+// ✅ NEW: Super Admin can add extra teacher slots to a school
+router.post('/super/add-teacher-slot', protect, checkRole(['super_admin']), addTeacherSlot);
+
+// ✅ NEW: School Admin or Super Admin can top up a specific teacher's credits
+router.post('/teachers/:teacherId/topup-credits', protect, checkRole(['school_admin', 'super_admin']), topUpTeacherCredits);
 router.post('/super/activate-plan', protect, checkRole(['super_admin']), activateUserPlan);
 
 
