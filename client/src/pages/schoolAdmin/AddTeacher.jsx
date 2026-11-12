@@ -95,18 +95,17 @@ export default function AddTeacher() {
             </div>
             
             <div className="space-y-2">
-              {/* ✅ Dynamic success message based on role */}
               <h2 className="text-xl font-bold text-foreground">
                 {successData.teacher?.role === "hod" ? "Head of Department Added Successfully!" : "Teacher Added Successfully!"}
               </h2>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Share the <strong>Invite Code</strong> and <strong>Temporary Password</strong> below with <strong>{successData.teacher.fullName}</strong>. 
-                They will use these to create their account and link to your school.
+                Share the <strong>Invite Code</strong> below with <strong>{successData.teacher.fullName}</strong>. 
+                They will use this code along with their email to claim their account and set their own password.
               </p>
             </div>
 
             <div className="mx-auto max-w-md space-y-4 text-left">
-              {/* Invite Code Box */}
+              {/* Invite Code Box ONLY (Temp Password Box Removed) */}
               <div className="rounded-xl border border-brand/20 bg-brand/5 p-4">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-brand">Invite Code</label>
                 <div className="flex items-center gap-3">
@@ -118,22 +117,6 @@ export default function AddTeacher() {
                     className={`rounded-lg p-2 transition-colors ${copiedField === "code" ? "bg-green-500 text-white" : "bg-background text-muted-foreground hover:text-foreground"}`}
                   >
                     {copiedField === "code" ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Temp Password Box */}
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Temporary Password</label>
-                <div className="flex items-center gap-3">
-                  <span className="flex-1 font-mono text-lg font-bold text-foreground">
-                    {successData.tempPassword}
-                  </span>
-                  <button 
-                    onClick={() => handleCopy(successData.tempPassword, "password")}
-                    className={`rounded-lg p-2 transition-colors ${copiedField === "password" ? "bg-green-500 text-white" : "bg-background text-muted-foreground hover:text-foreground"}`}
-                  >
-                    {copiedField === "password" ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
                   </button>
                 </div>
               </div>

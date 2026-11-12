@@ -446,7 +446,7 @@ export const addTeacher = async (req, res, next) => {
       await User.findByIdAndUpdate(schoolOwnerId, { schoolName: org.name, schoolId: org._id });
     }
     
-    const hasDevelopmentLimitBypass = req.user.role === 'school_admin' && ['development', 'test'].includes(process.env.NODE_ENV);
+    // ✅ REMOVED hasDevelopmentLimitBypass and tempPassword generation
     
     if (req.user.role !== 'super_admin') {
       const owner = await User.findOneAndUpdate(
@@ -462,30 +462,30 @@ export const addTeacher = async (req, res, next) => {
       );
       
       if (!owner) {
-        // ✅ Give a clear, helpful error message instead of a vague one
-        const school = await User.findById(schoolOwnerId).select('subscriptionTier subscriptionEndsAt maxTeachersAllowed currentTeachersCount billingCycle');
-        const isExpired = school && (!school.subscriptionEndsAt || school.subscriptionEndsAt <= new Date());
+        const school = await User.findById(schoolOwnerId).select('subscriptionTier subscriptionEndsAt maxTeachersAllowed currentTeachersCount');
+        const isExpired = school && school.subscriptionEndsAt && new Date(school.subscriptionEndsAt) <= new Date();
         
         if (isExpired) {
-          return res.status(403).json({ success: false, message: 'Your school plan has expired. Please renew it to add more teachers.' });
+          return res.status(403).json({ success: false, code: 'PLAN_EXPIRED', message: 'Your school subscription has expired. Please renew your plan to add more teachers.' });
         }
         
         return res.status(403).json({ 
           success: false, 
-          message: `You have reached your limit of ${school?.maxTeachersAllowed || 0} teachers. Contact support to add extra teacher slots.` 
+          code: 'LIMIT_REACHED',
+          message: `You have reached your limit of ${school?.maxTeachersAllowed || 0} teachers. To add an extra teacher, please contact support to purchase an additional slot.`,
+          data: { used: school?.currentTeachersCount, max: school?.maxTeachersAllowed }
         });
       }
       reserved = true;
     }
     
     const teacherCode = await generateTeacherCode();
-    const tempPassword = crypto.randomBytes(6).toString('hex').toUpperCase() + '!' + crypto.randomInt(10, 99);
     
+    // ✅ NO tempPassword. The teacher will set their own password when they claim the account.
     const user = await User.create({
       fullName, 
       email, 
-      password: tempPassword, 
-      role: role, // ✅ Uses the validated role
+      role: role, 
       schoolId: org._id, 
       schoolName: org.name,
       schoolOwnerId: schoolOwnerId, 
@@ -497,11 +497,10 @@ export const addTeacher = async (req, res, next) => {
     reserved = false;
     res.status(201).json({ 
       success: true, 
-      message: `${role === 'hod' ? 'Head of Department' : 'Teacher'} added successfully.`, 
+      message: `${role === 'hod' ? 'Head of Department' : 'Teacher'} added successfully. They must claim their account using the invite code.`, 
       data: { 
         teacher: { fullName: user.fullName, email: user.email, role: user.role }, 
-        teacherCode, 
-        tempPassword 
+        teacherCode 
       } 
     });
   } catch (error) {
@@ -521,28 +520,35 @@ export const getAdminTeachers = async (req, res, next) => {
     const schoolOwnerId = isHod ? req.user.schoolOwnerId : req.user._id;
     
     const org = await Organization.findOne({ adminId: schoolOwnerId });
-    if (!org) return res.status(200).json({ success: true, data: { teachers: [] } });
+    if (!org) return res.status(200).json({ success: true, data: { teachers: [], schoolName: 'Unknown', slots: null } });
 
-    const query = { schoolId: org._id, role: { $in: ['teacher', 'hod'] } }; // ✅ Get both teachers and HODs
+    const query = { schoolId: org._id, role: { $in: ['teacher', 'hod'] } };
     if (isHod) {
       query.hodId = req.user._id;
     }
 
     const teachers = await User.find(query)
-      .select('fullName email uniqueInviteCode isActive createdAt role') // ✅ Added 'role'
+      .select('fullName email uniqueInviteCode isActive createdAt role')
       .sort({ createdAt: -1 });
 
     const formattedTeachers = teachers.map(t => ({
       id: t._id,
       fullName: t.fullName,
       email: t.email,
-      role: t.role, // ✅ Return the role
+      role: t.role,
       uniqueInviteCode: t.uniqueInviteCode || 'N/A',
       status: t.isActive ? 'active' : 'inactive',
       dateAdded: new Date(t.createdAt).toLocaleDateString()
     }));
 
-    res.status(200).json({ success: true, data: { teachers: formattedTeachers, schoolName: org.name } });
+    // ✅ NEW: Calculate and return slot usage for the frontend
+    const owner = await User.findById(schoolOwnerId).select('maxTeachersAllowed currentTeachersCount');
+    const slots = owner ? {
+      used: owner.currentTeachersCount || 0,
+      max: owner.maxTeachersAllowed || 0
+    } : null;
+
+    res.status(200).json({ success: true, data: { teachers: formattedTeachers, schoolName: org.name, slots } });
   } catch (error) {
     next(error);
   }
@@ -655,6 +661,26 @@ export const topUpTeacherCredits = async (req, res, next) => {
       success: true, 
       message: `Successfully topped up credits for ${teacher.fullName}. They now have a fresh monthly allowance.` 
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ✅ NEW: Remove a teacher and free up their slot
+export const removeTeacher = async (req, res, next) => {
+  try {
+    const { teacherId } = req.params;
+    
+    const teacher = await User.findOne({ _id: teacherId, role: { $in: ['teacher', 'hod'] } }).select('schoolOwnerId');
+    if (!teacher) return res.status(404).json({ success: false, message: 'Teacher not found.' });
+
+    await User.findByIdAndDelete(teacherId);
+
+    if (teacher.schoolOwnerId) {
+      await User.findByIdAndUpdate(teacher.schoolOwnerId, { $inc: { currentTeachersCount: -1 } });
+    }
+
+    res.status(200).json({ success: true, message: 'Teacher removed and slot freed up successfully.' });
   } catch (error) {
     next(error);
   }
