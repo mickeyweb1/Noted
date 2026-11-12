@@ -612,18 +612,36 @@ export const addTeacherSlot = async (req, res, next) => {
   }
 };
 
-// ✅ Top up a specific teacher's AI credits (with strict ownership check)
+// ✅ Top up a specific teacher's AI credits (with robust ownership check)
 export const topUpTeacherCredits = async (req, res, next) => {
   try {
     const { teacherId } = req.params;
     
-    // ✅ Check ownership: Super Admin can do anything, School Admin can only do their own teachers
-    const teacher = await User.findOne({ _id: teacherId, role: { $in: ['teacher', 'hod'] } }).select('fullName schoolOwnerId');
+    // Fetch the teacher and their school links
+    const teacher = await User.findOne({ _id: teacherId, role: { $in: ['teacher', 'hod'] } }).select('fullName schoolOwnerId schoolId');
     if (!teacher) {
       return res.status(404).json({ success: false, message: 'Teacher not found.' });
     }
     
-    if (req.user.role !== 'super_admin' && String(teacher.schoolOwnerId) !== String(req.user._id)) {
+    let isAuthorized = false;
+    
+    // 1. Super Admin can do anything
+    if (req.user.role === 'super_admin') {
+      isAuthorized = true;
+    } 
+    // 2. Direct match (for newly created teachers)
+    else if (teacher.schoolOwnerId && String(teacher.schoolOwnerId) === String(req.user._id)) {
+      isAuthorized = true;
+    } 
+    // 3. ✅ FALLBACK: Check if the teacher belongs to the Organization this user owns (fixes old accounts!)
+    else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select('_id');
+      if (org && teacher.schoolId && String(teacher.schoolId) === String(org._id)) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
       return res.status(403).json({ success: false, message: 'That teacher is not part of your school.' });
     }
 

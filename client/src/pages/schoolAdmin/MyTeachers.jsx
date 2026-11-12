@@ -78,17 +78,17 @@ export default function MyTeachers() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[38rem] text-sm">
-              <thead className="bg-muted/30 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Teacher Name</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Role</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Email</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Invite Code</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Status</th>
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Actions</th> {/* ✅ NEW COLUMN */}
-                  <th className="px-4 py-3 text-left font-medium sm:px-5">Date Added</th>
-                </tr>
-              </thead>
+            <thead className="bg-muted/30 text-muted-foreground">
+  <tr>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Teacher Name</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Role</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Email</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Invite Code</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Status</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Actions</th>
+    <th className="px-4 py-3 text-left font-medium sm:px-5">Date Added</th>
+  </tr>
+</thead>
               <tbody className="divide-y divide-border">
                 {teachers.map((teacher) => (
                   <tr key={teacher.id} className="hover:bg-muted/20 transition-colors">
