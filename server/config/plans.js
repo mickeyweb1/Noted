@@ -11,7 +11,8 @@ export const PLANS = {
   pro:            { label: 'Teacher Pro',     credits: 400, maxQ: 60,  codes: 40,  gameShows: 12, teachers: 0,  branding: false, share: true,  duplicate: false, insights: false },
   premium:        { label: 'Teacher Premium', credits: 800, maxQ: 100, codes: 100, gameShows: 30, teachers: 0,  branding: false, share: true,  duplicate: true,  insights: true  },
   school_owner:   { label: 'School Starter',  credits: 400, maxQ: 50,  codes: 30,  gameShows: 8,  teachers: 4,  branding: false, share: true,  duplicate: false, insights: false },
-  school_pro:     { label: 'School Pro',      credits: 500, maxQ: 80,  codes: 50,  gameShows: 15, teachers: 13, branding: false, share: true,  duplicate: false, insights: true  },
+ // Change credits from 500 to 600
+school_pro: { label: 'School Pro', credits: 600, maxQ: 80, codes: 50, gameShows: 15, teachers: 13, branding: false, share: true, duplicate: false, insights: true },
   school_premium: { label: 'School Premium',  credits: 800, maxQ: 150, codes: 100, gameShows: 30, teachers: 27, branding: false, share: true,  duplicate: true,  insights: true  },
 };
 

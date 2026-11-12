@@ -266,7 +266,7 @@ IMPORTANT FORMATTING RULES FOR MATH AND SHAPES:
 1. You MUST use LaTeX for ALL mathematical expressions, formulas, and geometry symbols.
 2. Use single dollar signs for inline math: $\\sin(\\theta)$, $\\triangle ABC$, $\\angle 90^\\circ$, $\\frac{a}{b}$.
 3. Use double dollar signs for block equations if needed: $$ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} $$
-4. For geometry, use standard LaTeX symbols: \triangle for triangle, \angle for angle, \circ for degrees, \perp for perpendicular.
+4. For geometry, use standard LaTeX symbols: \\triangle for triangle, \\angle for angle, \\circ for degrees, \\perp for perpendicular.
 5. If a question involves a geometric construction or complex diagram, describe the steps clearly in text and use LaTeX for all labels (e.g., "Draw line segment $AB$ and construct a perpendicular bisector at point $M$").
 6. Output VALID JSON ONLY. Do not include markdown like \`\`\`json.
 7. Each question has exactly 4 options and "correctAnswer" must be the EXACT text of one option (never just a letter).

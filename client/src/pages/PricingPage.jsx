@@ -81,7 +81,7 @@ const teacherTiers = [
     name: "Teacher Premium",
     monthlyPrice: "₦5,000",
     termlyPrice: "₦13,000",
-    oldPrice: "₦6,000",
+    oldPrice: "₦7,500",
     icon: Star,
     tierKey: "premium",
     checkoutPlan: "teacher_premium",

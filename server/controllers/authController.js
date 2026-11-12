@@ -141,12 +141,14 @@ if (finalRole === 'teacher' && !code) {
 // @route POST /api/auth/login
 export const loginUser = async (req, res, next) => {
   try {
-    const email = normalizeEmail(req.body?.email);
-    const rawPassword = req.body?.password;
-    if (!email || typeof rawPassword !== 'string' || !rawPassword.trim()) {
-      return res.status(400).json({ success: false, message: 'Email and password are required.' });
-    }
-    const user = await User.findOne({ email }).select('+password');
+  const email = normalizeEmail(req.body?.email);
+  const rawPassword = req.body?.password;
+  if (!email || typeof rawPassword !== 'string' || !rawPassword.trim()) {
+    return res.status(400).json({ success: false, message: 'Email and password are required.' });
+  }
+  
+  // ✅ MUST include .select('+password') or login will fail!
+  const user = await User.findOne({ email: email }).select('+password'); // ✅ FIXED
     if (!user) return res.status(401).json({ success: false, message: 'Invalid email or password' });
     const isPasswordCorrect = await bcrypt.compare(rawPassword, user.password);
     if (!isPasswordCorrect) return res.status(401).json({ success: false, message: 'Invalid email or password' });

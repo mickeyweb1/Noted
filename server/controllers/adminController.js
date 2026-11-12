@@ -448,7 +448,7 @@ export const addTeacher = async (req, res, next) => {
     
     const hasDevelopmentLimitBypass = req.user.role === 'school_admin' && ['development', 'test'].includes(process.env.NODE_ENV);
     
-    if (req.user.role !== 'super_admin' && !hasDevelopmentLimitBypass) {
+    if (req.user.role !== 'super_admin') {
       const owner = await User.findOneAndUpdate(
         {
           _id: schoolOwnerId,
@@ -460,8 +460,20 @@ export const addTeacher = async (req, res, next) => {
         { $inc: { currentTeachersCount: 1 } }, 
         { new: true }
       );
+      
       if (!owner) {
-        return res.status(403).json({ success: false, message: 'An active School plan with available teacher slots is required.' });
+        // ✅ Give a clear, helpful error message instead of a vague one
+        const school = await User.findById(schoolOwnerId).select('subscriptionTier subscriptionEndsAt maxTeachersAllowed currentTeachersCount billingCycle');
+        const isExpired = school && (!school.subscriptionEndsAt || school.subscriptionEndsAt <= new Date());
+        
+        if (isExpired) {
+          return res.status(403).json({ success: false, message: 'Your school plan has expired. Please renew it to add more teachers.' });
+        }
+        
+        return res.status(403).json({ 
+          success: false, 
+          message: `You have reached your limit of ${school?.maxTeachersAllowed || 0} teachers. Contact support to add extra teacher slots.` 
+        });
       }
       reserved = true;
     }
@@ -600,14 +612,19 @@ export const addTeacherSlot = async (req, res, next) => {
   }
 };
 
-// ✅ Top up a specific teacher's AI credits (resets their usage for the month)
+// ✅ Top up a specific teacher's AI credits (with strict ownership check)
 export const topUpTeacherCredits = async (req, res, next) => {
   try {
     const { teacherId } = req.params;
     
-    const teacher = await User.findById(teacherId);
-    if (!teacher || (teacher.role !== 'teacher' && teacher.role !== 'hod')) {
+    // ✅ Check ownership: Super Admin can do anything, School Admin can only do their own teachers
+    const teacher = await User.findOne({ _id: teacherId, role: { $in: ['teacher', 'hod'] } }).select('fullName schoolOwnerId');
+    if (!teacher) {
       return res.status(404).json({ success: false, message: 'Teacher not found.' });
+    }
+    
+    if (req.user.role !== 'super_admin' && String(teacher.schoolOwnerId) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'That teacher is not part of your school.' });
     }
 
     // Reset their used credits to 0 and start a new 30-day period
