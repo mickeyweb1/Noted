@@ -264,7 +264,7 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
 
 IMPORTANT FORMATTING RULES FOR MATH AND SHAPES:
 1. You MUST use LaTeX for ALL mathematical expressions, formulas, and geometry symbols.
-2. Use single dollar signs for inline math: $\sin(\theta)$, $\triangle ABC$, $\angle 90^\circ$, $\frac{a}{b}$.
+2. Use single dollar signs for inline math: $\\sin(\\theta)$, $\\triangle ABC$, $\\angle 90^\\circ$, $\\frac{a}{b}$.
 3. Use double dollar signs for block equations if needed: $$ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} $$
 4. For geometry, use standard LaTeX symbols: \triangle for triangle, \angle for angle, \circ for degrees, \perp for perpendicular.
 5. If a question involves a geometric construction or complex diagram, describe the steps clearly in text and use LaTeX for all labels (e.g., "Draw line segment $AB$ and construct a perpendicular bisector at point $M$").
@@ -481,11 +481,6 @@ router.post('/submit', async (req, res, next) => {
     const maxTimeSeconds = (quiz.timeType === 'perQuestion' ? quiz.timeLimit * quiz.questions.length : quiz.timeLimit) * (quiz.timeUnit === 'minutes' ? 60 : 1);
     const rawTaken = Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000);
     const timeTakenSeconds = Math.min(maxTimeSeconds, Math.max(0, rawTaken));
-
-    // ✅ NEW: Strictly reject submissions that are way past the deadline (60s grace period for network lag)
-    if (rawTaken > maxTimeSeconds + 60) {
-      return res.status(400).json({ success: false, message: 'Exam time has expired. Late submissions are not allowed.' });
-    }
 
     // The client's own tab count counts too (it keeps counting offline); never lower than the server's
     const clientTabs = Math.min(Math.max(parseInt(req.body?.tabSwitchCount, 10) || 0, 0), 1000);
