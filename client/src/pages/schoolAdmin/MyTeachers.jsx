@@ -83,15 +83,9 @@ export default function MyTeachers() {
           <div className="flex items-center justify-center p-12">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand/20 border-t-brand"></div>
           </div>
-        ) : teachers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center">
-            <Users className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="text-lg font-semibold text-foreground">No teachers added yet</h3>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">Click "Add New Teacher" to generate an invite code for your staff.</p>
-          </div>
         ) : (
           <div className="p-4 sm:p-6">
-            {/* ✅ NEW: Slot Counter UI */}
+            {/* ✅ MOVED: Slot Counter is now ALWAYS visible if slots data exists, even if 0 teachers */}
             {slots && (
               <div className="mb-6 rounded-xl border border-border bg-muted/30 p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -112,8 +106,17 @@ export default function MyTeachers() {
               </div>
             )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[38rem] text-sm">
+            {teachers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <Users className="mb-4 h-12 w-12 text-muted-foreground" />
+                <h3 className="text-lg font-semibold text-foreground">No teachers added yet</h3>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Click "Add New Teacher" to generate an invite code for your staff.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[38rem] text-sm">
                 <thead className="bg-muted/30 text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 text-left font-medium sm:px-5">Teacher Name</th>
