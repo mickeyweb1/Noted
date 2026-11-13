@@ -486,6 +486,7 @@ export const addTeacher = async (req, res, next) => {
       fullName, 
       email, 
       role: role, 
+      password: randomPassword,
       schoolId: org._id, 
       schoolName: org.name,
       schoolOwnerId: schoolOwnerId, 
@@ -666,18 +667,47 @@ export const topUpTeacherCredits = async (req, res, next) => {
   }
 };
 
-// ✅ NEW: Remove a teacher and free up their slot
+
+// ✅ NEW: Remove a teacher and free up their slot (with strict security and fallback)
 export const removeTeacher = async (req, res, next) => {
   try {
     const { teacherId } = req.params;
     
-    const teacher = await User.findOne({ _id: teacherId, role: { $in: ['teacher', 'hod'] } }).select('schoolOwnerId');
-    if (!teacher) return res.status(404).json({ success: false, message: 'Teacher not found.' });
+    const teacher = await User.findOne({ _id: teacherId, role: { $in: ['teacher', 'hod'] } })
+      .select('schoolOwnerId schoolId');
+      
+    if (!teacher) {
+      return res.status(404).json({ success: false, message: 'Teacher not found.' });
+    }
 
+    // ✅ SECURITY CHECK: Verify the requesting user owns this teacher
+    let isAuthorized = false;
+    if (req.user.role === 'super_admin') {
+      isAuthorized = true;
+    } else if (teacher.schoolOwnerId && String(teacher.schoolOwnerId) === String(req.user._id)) {
+      isAuthorized = true;
+    } else if (teacher.schoolId) {
+      // Fallback: Check if the teacher's school is owned by the requesting user
+      const org = await Organization.findOne({ _id: teacher.schoolId, adminId: req.user._id }).select('_id');
+      if (org) isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ success: false, message: 'You do not have permission to remove this teacher.' });
+    }
+
+    // Delete the teacher
     await User.findByIdAndDelete(teacherId);
 
-    if (teacher.schoolOwnerId) {
-      await User.findByIdAndUpdate(teacher.schoolOwnerId, { $inc: { currentTeachersCount: -1 } });
+    // ✅ FREE UP THE SLOT (with fallback for older accounts missing schoolOwnerId)
+    let ownerIdToUpdate = teacher.schoolOwnerId;
+    if (!ownerIdToUpdate && teacher.schoolId) {
+      const org = await Organization.findOne({ _id: teacher.schoolId }).select('adminId');
+      if (org) ownerIdToUpdate = org.adminId;
+    }
+
+    if (ownerIdToUpdate) {
+      await User.findByIdAndUpdate(ownerIdToUpdate, { $inc: { currentTeachersCount: -1 } });
     }
 
     res.status(200).json({ success: true, message: 'Teacher removed and slot freed up successfully.' });
