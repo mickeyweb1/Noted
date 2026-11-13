@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; // ✅ ADDED useEffect
 import { 
   UserPlus, Mail, User, Copy, Check, Loader2, ArrowLeft, 
   ShieldCheck, AlertTriangle, Users
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../utils/api";
-import { useUserContext } from "../../context/userContext"; // ✅ ADDED
+import { useUserContext } from "../../context/userContext";
 
-// Shared styles for consistency
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const inputCls = `w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-brand ${focusRing}`;
 const primaryBtn = `inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
@@ -15,9 +14,8 @@ const secondaryBtn = `inline-flex items-center justify-center gap-2 rounded-xl b
 
 export default function AddTeacher() {
   const navigate = useNavigate();
-  const { user } = useUserContext(); // ✅ ADDED
+  const { user } = useUserContext();
   
-  // ✅ Only School Admins or Super Admins can choose the role
   const isOwner = user?.role === "school_admin" || user?.role === "super_admin";
   
   const [fullName, setFullName] = useState("");
@@ -27,6 +25,24 @@ export default function AddTeacher() {
   const [successData, setSuccessData] = useState(null);
   const [role, setRole] = useState("teacher"); 
   const [copiedField, setCopiedField] = useState(null);
+  
+  // ✅ NEW: State for slots
+  const [slots, setSlots] = useState(null);
+
+  // ✅ NEW: Fetch slot capacity when the page loads
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        const response = await api.get("/admin/teachers");
+        if (response.data.success && response.data.data.slots) {
+          setSlots(response.data.data.slots);
+        }
+      } catch (err) {
+        console.error("Failed to fetch teacher slots:", err);
+      }
+    };
+    fetchSlots();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,7 +59,6 @@ export default function AddTeacher() {
       const response = await api.post("/admin/add-teacher", {
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
-        // ✅ If an HOD is adding someone, force it to be "teacher". Only owners can send "hod".
         role: isOwner ? role : "teacher", 
       });
 
@@ -73,7 +88,6 @@ export default function AddTeacher() {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 md:p-8">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Link to="/admin/dashboard" className={`p-2 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors ${focusRing}`}>
           <ArrowLeft className="h-5 w-5" />
@@ -84,10 +98,7 @@ export default function AddTeacher() {
         </div>
       </div>
 
-      {/* Main Card */}
       <div className="rounded-2xl border border-border bg-card p-6 shadow-sm md:p-8">
-        
-        {/* SUCCESS STATE */}
         {successData ? (
           <div className="space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
@@ -105,7 +116,6 @@ export default function AddTeacher() {
             </div>
 
             <div className="mx-auto max-w-md space-y-4 text-left">
-              {/* Invite Code Box ONLY (Temp Password Box Removed) */}
               <div className="rounded-xl border border-brand/20 bg-brand/5 p-4">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-brand">Invite Code</label>
                 <div className="flex items-center gap-3">
@@ -132,12 +142,37 @@ export default function AddTeacher() {
             </div>
           </div>
         ) : (
-          /* FORM STATE */
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div role="alert" className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {/* ✅ NEW: Slot Capacity Display */}
+            {slots && (
+              <div className={`rounded-xl border p-4 ${slots.used >= slots.max ? 'border-destructive/30 bg-destructive/10' : 'border-brand/20 bg-brand/5'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-foreground">
+                    Teacher Capacity: {slots.used} / {slots.max} used
+                  </span>
+                  <span className={`text-xs font-bold ${slots.used >= slots.max ? 'text-destructive' : 'text-brand'}`}>
+                    {slots.max - slots.used} slots remaining
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full transition-all duration-500 ${slots.used >= slots.max ? 'bg-destructive' : 'bg-brand'}`} 
+                    style={{ width: `${slots.max > 0 ? Math.min((slots.used / slots.max) * 100, 100) : 0}%` }}
+                  ></div>
+                </div>
+                {slots.used >= slots.max && (
+                  <p className="mt-2 text-xs text-destructive font-medium flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" /> 
+                    You have reached your teacher limit. Please contact support to purchase an extra slot before adding more teachers.
+                  </p>
+                )}
               </div>
             )}
 
@@ -153,11 +188,10 @@ export default function AddTeacher() {
                 placeholder="e.g., Mr. John Smith"
                 className={inputCls}
                 required
-                disabled={isLoading}
+                disabled={isLoading || (slots && slots.used >= slots.max)} // ✅ Disable if no slots left
               />
             </div>
 
-            {/* ✅ ONLY SHOW ROLE DROPDOWN TO SCHOOL OWNERS / SUPER ADMINS */}
             {isOwner && (
               <div className="space-y-2">
                 <label htmlFor="role" className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -169,7 +203,7 @@ export default function AddTeacher() {
                   onChange={(e) => setRole(e.target.value)}
                   className={inputCls}
                   required
-                  disabled={isLoading}
+                  disabled={isLoading || (slots && slots.used >= slots.max)}
                 >
                   <option value="teacher">Teacher</option>
                   <option value="hod">Head of Department (Mini-Admin)</option>
@@ -192,7 +226,7 @@ export default function AddTeacher() {
                 placeholder="teacher@school.edu"
                 className={inputCls}
                 required
-                disabled={isLoading}
+                disabled={isLoading || (slots && slots.used >= slots.max)}
               />
               <p className="text-xs text-muted-foreground">
                 We will pre-create their account. They will use this email along with the invite code to set their own password.
@@ -200,15 +234,15 @@ export default function AddTeacher() {
             </div>
 
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-              <button type="submit" disabled={isLoading} className={primaryBtn}>
+              <button 
+                type="submit" 
+                disabled={isLoading || (slots && slots.used >= slots.max)} 
+                className={primaryBtn}
+              >
                 {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Generating Code...
-                  </>
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Generating Code...</>
                 ) : (
-                  <>
-                    <UserPlus className="h-4 w-4" /> Generate Invite Code
-                  </>
+                  <><UserPlus className="h-4 w-4" /> Generate Invite Code</>
                 )}
               </button>
               <button type="button" onClick={() => navigate("/admin/dashboard")} className={secondaryBtn}>
