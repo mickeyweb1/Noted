@@ -481,12 +481,15 @@ export const addTeacher = async (req, res, next) => {
     
     const teacherCode = await generateTeacherCode();
     
-    // ✅ NO tempPassword. The teacher will set their own password when they claim the account.
+    // ✅ Generate a random password to satisfy Mongoose schema requirement.
+    // We do NOT send this to the frontend. The teacher will set their own password when they claim the account.
+    const randomPassword = crypto.randomBytes(8).toString('hex') + '!A1';
+    
     const user = await User.create({
       fullName, 
       email, 
       role: role, 
-      password: randomPassword,
+      password: randomPassword, // ✅ Now this works perfectly!
       schoolId: org._id, 
       schoolName: org.name,
       schoolOwnerId: schoolOwnerId, 
