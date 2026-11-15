@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Users, Copy, Check, UserPlus, Zap, X } from "lucide-react"; 
+import { ArrowLeft, Users, Copy, Check, UserPlus, Zap, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../../utils/api";
 
@@ -8,7 +8,7 @@ const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible
 export default function MyTeachers() {
   const [teachers, setTeachers] = useState([]);
   const [schoolName, setSchoolName] = useState("");
-  const [slots, setSlots] = useState(null); // ✅ NEW
+  const [slots, setSlots] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
 
@@ -19,7 +19,7 @@ export default function MyTeachers() {
         if (response.data.success) {
           setTeachers(response.data.data.teachers);
           setSchoolName(response.data.data.schoolName);
-          setSlots(response.data.data.slots); // ✅ NEW
+          setSlots(response.data.data.slots);
         }
       } catch (error) {
         console.error("Failed to fetch teachers:", error);
@@ -46,7 +46,6 @@ export default function MyTeachers() {
     }
   };
 
-  // ✅ NEW: Handle removing a teacher to free up a slot
   const handleRemoveTeacher = async (teacherId, teacherName) => {
     if (!window.confirm(`Are you sure you want to remove ${teacherName}? This will free up 1 teacher slot and they will lose access.`)) return;
     try {
@@ -85,7 +84,7 @@ export default function MyTeachers() {
           </div>
         ) : (
           <div className="p-4 sm:p-6">
-            {/* ✅ MOVED: Slot Counter is now ALWAYS visible if slots data exists, even if 0 teachers */}
+            {/* ✅ Slot Counter is now ALWAYS visible if slots data exists */}
             {slots && (
               <div className="mb-6 rounded-xl border border-border bg-muted/30 p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -117,56 +116,76 @@ export default function MyTeachers() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[38rem] text-sm">
-                <thead className="bg-muted/30 text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium sm:px-5">Teacher Name</th>
-                    <th className="px-4 py-3 text-left font-medium sm:px-5">Role</th>
-                    <th className="px-4 py-3 text-left font-medium sm:px-5">Email</th>
-                    <th className="px-4 py-3 text-left font-medium sm:px-5">Invite Code</th>
-                    <th className="px-4 py-3 text-left font-medium sm:px-5">Status</th>
-                    <th className="px-4 py-3 text-left font-medium sm:px-5">Actions</th>
-                    <th className="px-4 py-3 text-left font-medium sm:px-5">Date Added</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {teachers.map((teacher) => (
-                    <tr key={teacher.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="whitespace-nowrap px-4 py-4 font-medium text-foreground sm:px-5">{teacher.fullName}</td>
-                      <td className="px-4 py-4 sm:px-5">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${teacher.role === 'hod' ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-blue-500/10 text-blue-600 dark:text-blue-400"}`}>
-                          {teacher.role === 'hod' ? 'Head of Dept' : 'Teacher'}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-muted-foreground sm:px-5">{teacher.email}</td>
-                      <td className="px-4 py-4 sm:px-5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold tracking-wider text-foreground">{teacher.uniqueInviteCode}</span>
-                          <button onClick={() => handleCopy(teacher.uniqueInviteCode, teacher.id)} className="rounded p-1 text-muted-foreground hover:bg-brand-soft hover:text-brand transition-colors">
-                            {copiedId === teacher.id ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 sm:px-5">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${teacher.status === 'active' ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"}`}>
-                          {teacher.status === 'active' ? 'Active' : 'Pending'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 sm:px-5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => handleTopUpCredits(teacher.id, teacher.fullName)} className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10 transition-colors" title="Reset monthly AI credits">
-                            <Zap className="h-3.5 w-3.5" /> Top Up
-                          </button>
-                          <button onClick={() => handleRemoveTeacher(teacher.id, teacher.fullName)} className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors" title="Remove teacher and free up slot">
-                            <X className="h-3.5 w-3.5" /> Remove
-                          </button>
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground sm:px-5">{teacher.dateAdded}</td>
+                  <thead className="bg-muted/30 text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium sm:px-5">Teacher Name</th>
+                      <th className="px-4 py-3 text-left font-medium sm:px-5">Role</th>
+                      <th className="px-4 py-3 text-left font-medium sm:px-5">Email</th>
+                      <th className="px-4 py-3 text-left font-medium sm:px-5">Invite Code</th>
+                      <th className="px-4 py-3 text-left font-medium sm:px-5">Status</th>
+                      <th className="px-4 py-3 text-left font-medium sm:px-5">Actions</th>
+                      <th className="px-4 py-3 text-left font-medium sm:px-5">Date Added</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {teachers.map((teacher) => (
+                      <tr key={teacher.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="whitespace-nowrap px-4 py-4 font-medium text-foreground sm:px-5">{teacher.fullName}</td>
+                        <td className="px-4 py-4 sm:px-5">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            teacher.role === 'hod' 
+                              ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" 
+                              : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          }`}>
+                            {teacher.role === 'hod' ? 'Head of Dept' : 'Teacher'}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-muted-foreground sm:px-5">{teacher.email}</td>
+                        <td className="px-4 py-4 sm:px-5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold tracking-wider text-foreground">{teacher.uniqueInviteCode}</span>
+                            <button 
+                              onClick={() => handleCopy(teacher.uniqueInviteCode, teacher.id)}
+                              className="rounded p-1 text-muted-foreground hover:bg-brand-soft hover:text-brand transition-colors"
+                            >
+                              {copiedId === teacher.id ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 sm:px-5">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            teacher.status === 'active' 
+                              ? "bg-green-500/10 text-green-600 dark:text-green-400" 
+                              : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                          }`}>
+                            {teacher.status === 'active' ? 'Active' : 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 sm:px-5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => handleTopUpCredits(teacher.id, teacher.fullName)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10 transition-colors"
+                              title="Reset monthly AI credits"
+                            >
+                              <Zap className="h-3.5 w-3.5" /> Top Up
+                            </button>
+                            <button 
+                              onClick={() => handleRemoveTeacher(teacher.id, teacher.fullName)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors"
+                              title="Remove teacher and free up slot"
+                            >
+                              <X className="h-3.5 w-3.5" /> Remove
+                            </button>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground sm:px-5">{teacher.dateAdded}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
