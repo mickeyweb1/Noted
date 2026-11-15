@@ -230,7 +230,9 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     if (notes.length > NOTES_MAX) {
       return res.status(400).json({ success: false, message: `Your notes are too long. Keep them under ${NOTES_MAX.toLocaleString()} characters.` });
     }
-    const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 50);
+    
+    // ✅ CHANGED: Cap at 150 instead of 50 to support higher plan limits
+    const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 150);
 
     const plan = await resolvePlan(req.user);
     if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
@@ -260,42 +262,69 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     const topicInstruction = topics ? `\n\nCRITICAL INSTRUCTION: ONLY generate questions about these specific topics: "${topics}". Ignore all other parts of the notes.` : '';
     const level = typeof difficulty === 'string' ? difficulty.slice(0, 30) : 'Intermediate';
 
-    const systemPrompt = `You are an expert examiner and mathematics teacher. Generate EXACTLY ${count} multiple-choice questions based on the provided notes. Difficulty: ${level}.${topicInstruction}
+    // ✅ CHANGED: Batching logic to support up to 150 questions without hitting token limits
+    const BATCH = 25;
+    let questions = [];
+    
+    try {
+      for (let done = 0; done < count; done += BATCH) {
+        const n = Math.min(BATCH, count - done);
+        
+        // Get the last 60 questions to avoid repetition across batches
+        const avoidText = questions.length > 0 
+          ? questions.map((q) => q.question).slice(-60).join('\n') 
+          : '';
+
+        let systemPrompt = `You are an expert examiner and mathematics teacher. Generate EXACTLY ${n} multiple-choice questions based on the provided notes. Difficulty: ${level}.${topicInstruction}
 
 IMPORTANT FORMATTING RULES FOR MATH AND SHAPES:
 1. You MUST use LaTeX for ALL mathematical expressions, formulas, and geometry symbols.
 2. Use single dollar signs for inline math: $\\sin(\\theta)$, $\\triangle ABC$, $\\angle 90^\\circ$, $\\frac{a}{b}$.
-3. Use double dollar signs for block equations if needed: $$ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} $$
+3. Use double dollar signs for block equations if needed: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$
 4. For geometry, use standard LaTeX symbols: \\triangle for triangle, \\angle for angle, \\circ for degrees, \\perp for perpendicular.
 5. If a question involves a geometric construction or complex diagram, describe the steps clearly in text and use LaTeX for all labels (e.g., "Draw line segment $AB$ and construct a perpendicular bisector at point $M$").
 6. Output VALID JSON ONLY. Do not include markdown like \`\`\`json.
-7. Each question has exactly 4 options and "correctAnswer" must be the EXACT text of one option (never just a letter).
+7. Each question has exactly 4 options and "correctAnswer" must be the EXACT text of one option (never just a letter).`;
 
-Required JSON format:
-{ "questions": [ { "question": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "exact option text", "explanation": "..." } ] }`;
+        if (avoidText) {
+          systemPrompt += `\n\nCRITICAL: Do NOT repeat or generate questions similar to these already generated questions:\n${avoidText}`;
+        }
 
-    let questions;
-    try {
-      const response = await generateWithGroq(
-        [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes}` }],
-        { max_tokens: Math.min(250 * count + 500, 8000), json: true }
-      );
-      const parsed = JSON.parse(response.slice(response.indexOf('{'), response.lastIndexOf('}') + 1));
-      questions = (parsed.questions || []).map(normalizeQuestion).filter(Boolean);
+        systemPrompt += `\n\nRequired JSON format:\n{ "questions": [ { "question": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "exact option text", "explanation": "..." } ] }`;
+
+        const response = await generateWithGroq(
+          [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Notes:\n${notes}` }],
+          { max_tokens: Math.min(250 * n + 500, 8000), json: true }
+        );
+        
+        const parsed = JSON.parse(response.slice(response.indexOf('{'), response.lastIndexOf('}') + 1));
+        const batchQuestions = (parsed.questions || []).map(normalizeQuestion).filter(Boolean);
+        questions.push(...batchQuestions);
+      }
+      
       if (questions.length === 0) throw new Error('No usable questions');
     } catch (aiError) {
-      await refundCredits(req.user._id, count);
       console.error('❌ AI generation failed:', aiError.message);
-      return res.status(502).json({ success: false, message: 'The AI could not generate usable questions. No credits were used. Try again with fewer notes or fewer questions.' });
+      
+      // ✅ Refund only the missing part if we got some questions, or all if none
+      const missing = count - questions.length;
+      if (missing > 0) {
+        await refundCredits(req.user._id, missing);
+      }
+      
+      if (questions.length === 0) {
+        return res.status(502).json({ success: false, message: 'The AI could not generate usable questions. No credits were used. Try again with fewer notes or fewer questions.' });
+      }
     }
 
-    // Only charge for questions actually returned.
-    if (questions.length < count) await refundCredits(req.user._id, count - questions.length);
+    // ✅ Final safety check: refund any shortfall if AI returned fewer questions than requested but didn't throw an error
+    if (questions.length < count) {
+      await refundCredits(req.user._id, count - questions.length);
+    }
 
     res.json({ success: true, data: { questions } });
   } catch (error) { next(error); }
 });
-
 
 /* ------------------------------------------------------------------ */
 /* 2. Finalize quiz                                                    */
