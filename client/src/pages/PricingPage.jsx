@@ -132,8 +132,8 @@ const schoolTiers = [
   },
   {
     name: "School Pro",
-    monthlyPrice: "₦25,000",
-    termlyPrice: "₦65,000",
+    monthlyPrice: "₦20,000",
+    termlyPrice: "₦50,000",
     icon: Crown,
     tierKey: "school_pro",
     checkoutPlan: "school_pro",
