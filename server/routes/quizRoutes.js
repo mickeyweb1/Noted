@@ -86,7 +86,7 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 const CODE_LIFETIME_DAYS = 30;
-const NOTES_MAX = 20000; // keep in sync with the frontend
+const NOTES_MAX = 20000;
 
 const generateAccessCode = (mode = 'test') => {
   const prefix = mode === 'gameShow' ? 'G-' : 'T-';
@@ -98,7 +98,6 @@ const generateAccessCode = (mode = 'test') => {
 
 const normalizeCode = (code) => (typeof code === 'string' ? code.trim().toUpperCase() : '');
 
-// Access codes are stored as { code, createdAt }. The frontend wants plain strings.
 const codesOf = (quiz) => (quiz?.accessCodes || []).map((ac) => (typeof ac === 'string' ? ac : ac?.code)).filter(Boolean);
 
 const getAccessCodeHistory = (quiz) => {
@@ -112,6 +111,7 @@ const getAccessCodeHistory = (quiz) => {
     .filter((ac) => ac.code);
 };
 
+// ✅ FIX: Removed legacy string fallback to prevent Mongoose casting errors
 const findQuizByCode = (code) => Quiz.findOne({ 'accessCodes.code': code });
 
 const isCodeExpired = (quiz, code) => {
@@ -127,33 +127,26 @@ const uniqueCode = (mode, existing) => {
   return code;
 };
 
-// True if the quiz creator's plan removes the "Noted AI" branding. Missing creator = keep branding.
 const hasBranding = async (creatorId) => {
   const creator = await User.findById(creatorId).select(PLAN_FIELDS);
   if (!creator) return true;
   return (await resolvePlan(creator)).branding;
 };
 
-// Is `user` the school owner OR HOD of the teacher who created a quiz?
 const isSchoolOwnerOf = async (user, creatorId) => {
   if (user.role === 'super_admin') return true;
   if (user.role !== 'school_admin' && user.role !== 'hod') return false;
   
-  const creator = await User.findById(creatorId).select('role schoolOwnerId hodId');
+  const creator = await User.findById(creatorId).select('role schoolOwnerId hodId schoolId');
   if (!creator || creator.role !== 'teacher') return false;
   
-  // If user is HOD, check if they are the creator's HOD
   if (user.role === 'hod' && String(creator.hodId) === String(user._id)) return true;
-  
-  // If user is school_admin, check if they are the school owner
   if (user.role === 'school_admin' && creator.schoolOwnerId && String(creator.schoolOwnerId) === String(user._id)) return true;
   
-  // Fallback to org check
   const org = await Organization.findOne({ adminId: user._id }).select('_id');
   return Boolean(org && creator.schoolId && String(creator.schoolId) === String(org._id));
 };
 
-// Loads a quiz the user may access. Sends the error response itself and returns null on failure.
 const loadQuiz = async (req, res, { allowSchoolOwner = false } = {}) => {
   if (!mongoose.isValidObjectId(req.params.id)) { res.status(404).json({ success: false, message: 'Quiz not found' }); return null; }
   const quiz = await Quiz.findById(req.params.id);
@@ -166,7 +159,6 @@ const loadQuiz = async (req, res, { allowSchoolOwner = false } = {}) => {
   return quiz;
 };
 
-// Makes AI output safe for scoring: correctAnswer must exactly match one option (models sometimes return "B" or odd casing)
 const normalizeQuestion = (q) => {
   if (!q || typeof q.question !== 'string' || !Array.isArray(q.options)) return null;
   const options = q.options.map((o) => String(o ?? '').trim()).filter(Boolean);
@@ -188,12 +180,12 @@ const normalizeQuestion = (q) => {
 };
 
 /* ------------------------------------------------------------------ */
-/* 0. My limits (the frontend uses this to show/prefill real limits)   */
+/* 0. My limits                                                        */
 /* ------------------------------------------------------------------ */
 router.get('/my-limits', protect, async (req, res, next) => {
   try {
     const plan = await resolvePlan(req.user);
-    const finite = (v) => (Number.isFinite(v) ? v : null); // null = unlimited
+    const finite = (v) => (Number.isFinite(v) ? v : null);
     const gameShowsUsed = await countGameShowsThisMonth(req.user._id);
     res.json({
       success: true,
@@ -220,7 +212,6 @@ router.get('/my-limits', protect, async (req, res, next) => {
 /* ------------------------------------------------------------------ */
 /* 1. AI preview                                                       */
 /* ------------------------------------------------------------------ */
-
 router.post('/generate-ai-preview', protect, async (req, res, next) => {
   try {
     const { notes, focusTopics, difficulty, numQuestions, gameMode } = req.body || {};
@@ -231,7 +222,6 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
       return res.status(400).json({ success: false, message: `Your notes are too long. Keep them under ${NOTES_MAX.toLocaleString()} characters.` });
     }
     
-    // ✅ CHANGED: Cap at 150 instead of 50 to support higher plan limits
     const count = Math.min(Math.max(parseInt(numQuestions, 10) || 5, 1), 150);
 
     const plan = await resolvePlan(req.user);
@@ -241,13 +231,11 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
       return res.status(403).json({ success: false, message: `Your plan allows up to ${plan.maxQ} AI questions per quiz. Upgrade to generate more!` });
     }
 
-    // Game Show previews are blocked up front, so free users don't burn credits on something they can't create.
     if (gameMode === 'gameShow') {
       const quotaError = await gameShowQuotaError(req.user, plan);
       if (quotaError) return res.status(403).json({ success: false, message: quotaError });
     }
 
-    // Charge credits BEFORE calling the AI (atomic). Refunded below if the AI fails.
     const charged = await spendCredits(req.user, plan, count);
     if (!charged) {
       const fresh = await User.findById(req.user._id).select('aiCreditsUsed creditsPeriodStart');
@@ -262,15 +250,12 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     const topicInstruction = topics ? `\n\nCRITICAL INSTRUCTION: ONLY generate questions about these specific topics: "${topics}". Ignore all other parts of the notes.` : '';
     const level = typeof difficulty === 'string' ? difficulty.slice(0, 30) : 'Intermediate';
 
-    // ✅ CHANGED: Batching logic to support up to 150 questions without hitting token limits
     const BATCH = 25;
     let questions = [];
     
     try {
       for (let done = 0; done < count; done += BATCH) {
         const n = Math.min(BATCH, count - done);
-        
-        // Get the last 60 questions to avoid repetition across batches
         const avoidText = questions.length > 0 
           ? questions.map((q) => q.question).slice(-60).join('\n') 
           : '';
@@ -282,9 +267,9 @@ IMPORTANT FORMATTING RULES FOR MATH AND SHAPES:
 2. Use single dollar signs for inline math: $\\sin(\\theta)$, $\\triangle ABC$, $\\angle 90^\\circ$, $\\frac{a}{b}$.
 3. Use double dollar signs for block equations if needed: $$ x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a} $$
 4. For geometry, use standard LaTeX symbols: \\triangle for triangle, \\angle for angle, \\circ for degrees, \\perp for perpendicular.
-5. If a question involves a geometric construction or complex diagram, describe the steps clearly in text and use LaTeX for all labels (e.g., "Draw line segment $AB$ and construct a perpendicular bisector at point $M$").
+5. If a question involves a geometric construction or complex diagram, describe the steps clearly in text and use LaTeX for all labels.
 6. Output VALID JSON ONLY. Do not include markdown like \`\`\`json.
-7. Each question has exactly 4 options and "correctAnswer" must be the EXACT text of one option (never just a letter).`;
+7. Each question has exactly 4 options and "correctAnswer" must be the EXACT text of one option.`;
 
         if (avoidText) {
           systemPrompt += `\n\nCRITICAL: Do NOT repeat or generate questions similar to these already generated questions:\n${avoidText}`;
@@ -298,7 +283,12 @@ IMPORTANT FORMATTING RULES FOR MATH AND SHAPES:
         );
         
         const parsed = JSON.parse(response.slice(response.indexOf('{'), response.lastIndexOf('}') + 1));
-        const batchQuestions = (parsed.questions || []).map(normalizeQuestion).filter(Boolean);
+        
+        const batchQuestions = (parsed.questions || [])
+          .map(normalizeQuestion)
+          .filter(Boolean)
+          .slice(0, n);
+          
         questions.push(...batchQuestions);
       }
       
@@ -306,18 +296,15 @@ IMPORTANT FORMATTING RULES FOR MATH AND SHAPES:
     } catch (aiError) {
       console.error('❌ AI generation failed:', aiError.message);
       
-      // ✅ Refund only the missing part if we got some questions, or all if none
-      const missing = count - questions.length;
-      if (missing > 0) {
-        await refundCredits(req.user._id, missing);
-      }
-      
+      // ✅ FIX: Only refund ALL credits if ZERO questions were generated.
+      // If we have partial results, we keep them and let the final safety check refund the missing amount ONCE.
       if (questions.length === 0) {
+        await refundCredits(req.user._id, count);
         return res.status(502).json({ success: false, message: 'The AI could not generate usable questions. No credits were used. Try again with fewer notes or fewer questions.' });
       }
     }
 
-    // ✅ Final safety check: refund any shortfall if AI returned fewer questions than requested but didn't throw an error
+    // ✅ Final safety check: refund any shortfall exactly ONCE.
     if (questions.length < count) {
       await refundCredits(req.user._id, count - questions.length);
     }
@@ -346,11 +333,14 @@ router.post('/create-manual', protect, async (req, res, next) => {
     }
 
     const mode = gameMode === 'gameShow' ? 'gameShow' : 'test';
-    // Game Show is always a 1v1 (2 team codes); a client can't ask for more.
     const studentCount = mode === 'gameShow' ? 2 : Math.min(Math.max(parseInt(numStudents, 10) || 1, 1), 500);
 
     const plan = await resolvePlan(req.user);
     if (plan.locked) return res.status(403).json({ success: false, message: plan.locked });
+
+    if (cleanQuestions.length > plan.maxQ) {
+      return res.status(403).json({ success: false, message: `Your plan allows a maximum of ${plan.maxQ} questions per quiz.` });
+    }
 
     if (studentCount > plan.codes) {
       return res.status(403).json({ success: false, message: `Your plan allows up to ${plan.codes} student codes per test. Upgrade to add more!` });
@@ -395,9 +385,7 @@ router.post('/session/start', async (req, res, next) => {
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
 
-    // Branding follows the creator's REAL plan (school teachers inherit their school's plan)
     const isFreeTier = await hasBranding(quiz.createdBy);
-
     let session = await QuizSession.findOne({ code });
     const resumed = Boolean(session);
 
@@ -416,7 +404,9 @@ router.post('/session/start', async (req, res, next) => {
         else throw err;
       }
     } else {
+      // ✅ FIX: Update createdAt to keep the 30-day MongoDB TTL alive, plus progressSavedAt
       session.createdAt = new Date();
+      session.progressSavedAt = new Date();
       await session.save();
     }
 
@@ -440,7 +430,7 @@ router.post('/session/start', async (req, res, next) => {
         currentQuestionIndex: session.currentQuestionIndex || 0,
         savedStudentInfo: session.studentName ? { name: session.studentName, surname: session.studentSurname, className: session.studentClass } : null,
         resumed,
-        isFreeTier, // true = show the Noted AI watermark
+        isFreeTier,
       },
     });
   } catch (error) { next(error); }
@@ -450,13 +440,15 @@ router.post('/session/save-progress', async (req, res, next) => {
   try {
     const { code, studentName, studentSurname, studentClass, answers, currentQuestionIndex } = req.body || {};
     if (!Array.isArray(answers)) return res.status(400).json({ success: false, message: 'Answers must be a list.' });
-    await QuizSession.findOneAndUpdate(
+    
+    // ✅ FIX: Properly wrap all updates in $set, and update createdAt to keep TTL alive
+    const session = await QuizSession.findOneAndUpdate(
       { code: normalizeCode(code) },
       {
-        studentName: typeof studentName === 'string' ? studentName.slice(0, 100) : undefined,
-        studentSurname: typeof studentSurname === 'string' ? studentSurname.slice(0, 100) : undefined,
-        studentClass: typeof studentClass === 'string' ? studentClass.slice(0, 100) : undefined,
         $set: {
+          studentName: typeof studentName === 'string' ? studentName.slice(0, 100) : undefined,
+          studentSurname: typeof studentSurname === 'string' ? studentSurname.slice(0, 100) : undefined,
+          studentClass: typeof studentClass === 'string' ? studentClass.slice(0, 100) : undefined,
           answers: answers.slice(0, 500).map((a) => ({
             questionId: a?.questionId,
             selectedAnswer: typeof a?.selectedAnswer === 'string' ? a.selectedAnswer : null,
@@ -465,8 +457,14 @@ router.post('/session/save-progress', async (req, res, next) => {
           ...(Number.isInteger(currentQuestionIndex) ? { currentQuestionIndex: Math.max(0, Math.min(currentQuestionIndex, 500)) } : {}),
         },
         $currentDate: { createdAt: true, progressSavedAt: true },
-      }
+      },
+      { returnDocument: 'after' }
     );
+
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found.' });
+    }
+
     res.json({ success: true });
   } catch (error) { next(error); }
 });
@@ -476,7 +474,7 @@ router.post('/session/update-tab', async (req, res, next) => {
     const code = normalizeCode(req.body?.code);
     const session = await QuizSession.findOneAndUpdate(
       { code },
-      { $inc: { tabSwitchCount: 1 }, $currentDate: { createdAt: true } },
+      { $inc: { tabSwitchCount: 1 }, $currentDate: { createdAt: true } }, // ✅ FIX: Update createdAt to keep TTL alive
       { returnDocument: 'after' },
     );
     if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
@@ -498,7 +496,6 @@ router.post('/submit', async (req, res, next) => {
 
     const session = await QuizSession.findOne({ code });
     if (!session) {
-      // No session usually means "already submitted" (e.g. the background send landed first)
       if (await QuizSubmission.exists({ accessCode: code })) return res.status(409).json({ success: false, message: 'This code has already been used.' });
       return res.status(404).json({ success: false, message: 'Invalid or expired session.' });
     }
@@ -506,12 +503,10 @@ router.post('/submit', async (req, res, next) => {
     const quiz = await Quiz.findById(session.quizId);
     if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found.' });
 
-    // Server-side time cap (a client can't fake a faster time)
     const maxTimeSeconds = (quiz.timeType === 'perQuestion' ? quiz.timeLimit * quiz.questions.length : quiz.timeLimit) * (quiz.timeUnit === 'minutes' ? 60 : 1);
     const rawTaken = Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000);
     const timeTakenSeconds = Math.min(maxTimeSeconds, Math.max(0, rawTaken));
 
-    // The client's own tab count counts too (it keeps counting offline); never lower than the server's
     const clientTabs = Math.min(Math.max(parseInt(req.body?.tabSwitchCount, 10) || 0, 0), 1000);
     const finalTabs = Math.max(session.tabSwitchCount || 0, clientTabs);
 
@@ -585,7 +580,6 @@ router.post('/submit', async (req, res, next) => {
 /* 4. Teacher / admin endpoints                                        */
 /* ------------------------------------------------------------------ */
 
-// Loads the plan of whoever CREATED the quiz (a school owner adding a code uses the teacher's limits, not unlimited).
 const planOfQuizCreator = async (req, quiz) => {
   const creator = String(quiz.createdBy) === String(req.user._id)
     ? req.user
@@ -596,7 +590,7 @@ const planOfQuizCreator = async (req, quiz) => {
 
 router.post('/:id/regenerate-code', protect, async (req, res, next) => {
   try {
-    const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // creator OR school owner
+    const quiz = await loadQuiz(req, res, { allowSchoolOwner: true });
     if (!quiz) return;
 
     const plan = await planOfQuizCreator(req, quiz);
@@ -615,7 +609,7 @@ router.post('/:id/regenerate-code', protect, async (req, res, next) => {
 
 router.get('/:id/results', protect, async (req, res, next) => {
   try {
-    const quiz = await loadQuiz(req, res, { allowSchoolOwner: true }); // creator OR the teacher's school owner
+    const quiz = await loadQuiz(req, res, { allowSchoolOwner: true });
     if (!quiz) return;
     const submissions = await QuizSubmission.find({ quiz: quiz._id }).sort({ submittedAt: -1 });
 
@@ -657,7 +651,6 @@ router.get('/admin/quizzes', protect, async (req, res, next) => {
         teachers.length ? Quiz.find({ createdBy: { $in: teachers.map((t) => t._id) } }).select(select).lean() : [],
       ]);
 
-      // .lean() objects keep these flags (flags set on Mongoose documents are dropped when serialized)
       const data = [
         ...own.map((q) => shape(q, { isOwnerQuiz: true })),
         ...theirs.map((q) => shape(q, { isOwnerQuiz: false, teacherName: names.get(String(q.createdBy)) || 'Teacher' })),
@@ -705,7 +698,7 @@ router.post('/validate-code', async (req, res, next) => {
         showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
         passMark: quiz.passMark ?? 50,
         hasActiveSession,
-        isFreeTier, // true = show the Noted AI watermark
+        isFreeTier,
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
       },
     });
@@ -730,7 +723,7 @@ router.get('/game-show/:code', protect, async (req, res, next) => {
         maxTabSwitches: quiz.maxTabSwitches,
         bonusMarks: quiz.bonusMarks,
         baseMarks: quiz.baseMarks,
-        accessCodes: codesOf(quiz), // the board shows these as Team 1 / Team 2 codes
+        accessCodes: codesOf(quiz),
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl, correctAnswer: q.correctAnswer, explanation: q.explanation })),
       },
     });
@@ -739,7 +732,7 @@ router.get('/game-show/:code', protect, async (req, res, next) => {
 
 router.delete('/:id', protect, async (req, res, next) => {
   try {
-    const quiz = await loadQuiz(req, res); // only the creator can delete
+    const quiz = await loadQuiz(req, res);
     if (!quiz) return;
     await Promise.all([
       Quiz.deleteOne({ _id: quiz._id }),
@@ -754,7 +747,6 @@ router.delete('/:id', protect, async (req, res, next) => {
 /* 5. Quiz Sharing Management                                         */
 /* ------------------------------------------------------------------ */
 
-// Teacher A: Generate a share code for selected quizzes (paid plans only)
 router.post('/share', protect, async (req, res, next) => {
   try {
     const plan = await resolvePlan(req.user);
@@ -773,13 +765,11 @@ router.post('/share', protect, async (req, res, next) => {
     }
     const days = Math.min(Math.max(parseInt(daysValid, 10) || 7, 1), 30);
 
-    // Verify the user owns these quizzes
     const ownedCount = await Quiz.countDocuments({ _id: { $in: ids }, createdBy: req.user._id });
     if (ownedCount !== ids.length) {
       return res.status(403).json({ success: false, message: 'You can only share quizzes you created.' });
     }
 
-    // Generate a unique share code (cryptographically random)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let shareCode = 'SHARE-';
     for (let i = 0; i < 8; i++) shareCode += chars.charAt(crypto.randomInt(chars.length));
@@ -800,7 +790,7 @@ router.post('/share', protect, async (req, res, next) => {
 
 router.get('/:id/shares', protect, async (req, res, next) => {
   try {
-    const quiz = await loadQuiz(req, res); // Must be owner
+    const quiz = await loadQuiz(req, res);
     if (!quiz) return;
 
     const shares = await QuizShare.find({ quizIds: { $in: [quiz._id] }, isActive: true })
@@ -811,7 +801,6 @@ router.get('/:id/shares', protect, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Teacher A: Revoke a share code
 router.delete('/share/:code', protect, async (req, res, next) => {
   try {
     const share = await QuizShare.findOne({ shareCode: req.params.code.toUpperCase(), ownerId: req.user._id });
@@ -824,9 +813,6 @@ router.delete('/share/:code', protect, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Teacher B: Get shared quiz results using the share code
-// NOTE: still public (anyone with the code can read student results). Add `protect` here if your
-// shared-results page is only used by logged-in teachers.
 router.get('/shared-results', async (req, res, next) => {
   try {
     const { shareCode } = req.query;
@@ -857,8 +843,6 @@ router.get('/shared-results', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Teacher B: Generate a new student access code for a specific shared quiz.
-// Now requires login, and is capped by the quiz CREATOR's plan (it was unlimited before).
 router.post('/shared-regenerate', protect, async (req, res, next) => {
   try {
     const { shareCode, quizId } = req.body || {};
@@ -896,11 +880,11 @@ router.post('/shared-regenerate', protect, async (req, res, next) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* 6. Duplicate / Edit & Duplicate Quiz (Premium plans only)          */
+/* 6. Duplicate / Edit & Duplicate Quiz                               */
 /* ------------------------------------------------------------------ */
 router.post('/:id/duplicate', protect, async (req, res, next) => {
   try {
-    const originalQuiz = await loadQuiz(req, res); // Must be owner
+    const originalQuiz = await loadQuiz(req, res);
     if (!originalQuiz) return;
 
     const plan = await resolvePlan(req.user);
@@ -917,7 +901,6 @@ router.post('/:id/duplicate', protect, async (req, res, next) => {
 
     const { title, questions } = req.body || {};
 
-    // Edited questions go through the same validation as a new quiz; otherwise copy the originals.
     let newQuestions;
     if (Array.isArray(questions) && questions.length > 0) {
       newQuestions = questions.slice(0, 200).map((q) => {
@@ -932,7 +915,10 @@ router.post('/:id/duplicate', protect, async (req, res, next) => {
       newQuestions = originalQuiz.questions.map((q) => normalizeQuestion(q.toObject())).filter(Boolean);
     }
 
-    // Fresh access codes, never more than the plan allows
+    if (newQuestions.length > plan.maxQ) {
+      return res.status(403).json({ success: false, message: `Your plan allows a maximum of ${plan.maxQ} questions per quiz.` });
+    }
+
     const codeCount = isGameShow ? 2 : Math.min(originalQuiz.numberOfStudents || 1, plan.codes);
     const used = new Set();
     const newCodes = Array.from({ length: codeCount }, () => ({
@@ -943,7 +929,7 @@ router.post('/:id/duplicate', protect, async (req, res, next) => {
     const base = originalQuiz.toObject();
     delete base._id;
     delete base.__v;
-    delete base.createdAt; // so the copy counts toward monthly Game Show limits
+    delete base.createdAt;
     delete base.updatedAt;
 
     const newQuiz = await Quiz.create({
@@ -966,6 +952,5 @@ router.post('/:id/duplicate', protect, async (req, res, next) => {
     });
   } catch (error) { next(error); }
 });
-
 
 export default router;
