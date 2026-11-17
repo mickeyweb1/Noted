@@ -21,7 +21,8 @@ export default function ManagePlans() {
 
   const fetchUsers = async () => {
     try {
-      const res = await api.get("/admin/super/users");
+      // ✅ Explicitly ask for up to 100 users so no one is hidden
+      const res = await api.get("/admin/super/users?limit=100");
       if (res.data.success) setUsers(res.data.data);
     } catch (err) {
       console.error("Failed to fetch users:", err);
