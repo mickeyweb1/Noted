@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs';
 export const getAllManageableUsers = async (req, res, next) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 100);
+const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
     const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 80) : '';
 
     const filter = { role: { $in: ['teacher', 'hod', 'school_admin'] } };
