@@ -250,7 +250,9 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
     const topicInstruction = topics ? `\n\nCRITICAL INSTRUCTION: ONLY generate questions about these specific topics: "${topics}". Ignore all other parts of the notes.` : '';
     const level = typeof difficulty === 'string' ? difficulty.slice(0, 30) : 'Intermediate';
 
-    const BATCH = 25;
+        // ✅ Increased BATCH to 30. This perfectly fits the 8000 max_tokens limit 
+    // (30 questions * 250 tokens + 500 prompt tokens = 8000) and reduces failed second batches.
+    const BATCH = 30;
     let questions = [];
     
     try {
