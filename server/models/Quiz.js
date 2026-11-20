@@ -8,7 +8,7 @@ const quizSchema = new mongoose.Schema({
   timeType: { type: String, enum: ['perQuestion', 'total'], default: 'total' },
   maxTabSwitches: { type: Number, default: null },
   numberOfStudents: { type: Number, required: true },
-  gameMode: { type: String, enum: ['test', 'gameShow'], default: 'test' },
+gameMode: { type: String, enum: ['test', 'gameShow', 'kahoot'], default: 'test' },
   baseMarks: { type: Number, default: 10 },
   bonusMarks: { type: Number, default: 5 },
   

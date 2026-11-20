@@ -4,6 +4,11 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { ToastViewport } from "./components/ui/toast";
 import PlanLimitDialog from "./components/PlanLimitDialog";
 const ManagePlans = lazy(() => import("./pages/schoolAdmin/ManagePlans")); 
+import StudentGameJoin from "./pages/StudentGameJoin";
+import TeacherGameHost from "./pages/TeacherGameHost";
+import GameShowCreator from "./pages/GameShowCreator";
+import KahootCreator from "./pages/KahootCreator";
+
 
 // Marketing Pages
 const LandingPage = lazy(() => import("./pages/marketing/LandingPage"));
@@ -11,7 +16,8 @@ const AboutPage = lazy(() => import("./pages/marketing/AboutPage"));
 const SchoolPage = lazy(() => import("./pages/marketing/SchoolPage"));
 const StudentPage = lazy(() => import("./pages/marketing/StudentPage"));
 const PersonalPage = lazy(() => import("./pages/marketing/PersonalPage"));
-const ContactPage = lazy(() => import("./pages/marketing/ContactPage"));
+const ContactPage = lazy(() => import("./pages/marketing/ContactPage"))
+import StudentGamePlay from "./pages/StudentGamePlay";;
 const GameShowLobby = lazy(() => import("./pages/GameShowLobby"));
 const StudioHub = lazy(() => import("./pages/StudioHub"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
@@ -87,6 +93,9 @@ function App() {
       <Route path="/personal" element={<PersonalPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/take-quiz" element={<TakeQuiz />} />
+      <Route path="/game-join" element={<StudentGameJoin />} />
+      <Route path="/game-play" element={<StudentGamePlay />} />
+<Route path="/game-host/:quizId" element={<TeacherGameHost />} />
 
       {/* ================= AUTH ROUTES ================= */}
       <Route path="/login" element={<LoginPage />} />
@@ -164,8 +173,10 @@ function App() {
         <Route path="/admin/add-student" element={<ProtectedRoute allowedRoles={["school_admin", "super_admin"]}><AddStudent /></ProtectedRoute>} />
         <Route path="/admin/billing" element={<AdminBillingPage />} />
         <Route path="/admin/quizzes" element={<AdminQuizGenerator />} />
+       <Route path="/admin/game-show-lobby" element={<GameShowCreator />} />
         <Route path="/admin/quiz-results" element={<QuizResultsDashboard />} />
           <Route path="/game-show" element={<GameShowBoard />} /> 
+          <Route path="/admin/kahoot" element={<KahootCreator />} />
         <Route path="/admin/game-show-creator" element={<AdminGameShowCreator />} /> {/* ✅ ADD THIS LINE */}
 <Route path="/admin/quiz/:quizId/results" element={<QuizResultsPage />} />
  <Route path="/help/admin" element={<AdminHelp />} />

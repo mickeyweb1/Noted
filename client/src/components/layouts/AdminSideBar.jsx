@@ -11,6 +11,7 @@ import {
   Share2,
   GraduationCap,
   Crown,
+  Zap
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useUserContext } from "../../context/userContext";
@@ -64,6 +65,7 @@ export default function AdminSideBar() {
         ]
       : []),
     { to: "/admin/quizzes", icon: Brain, label: "Formal Test" },
+    { to: "/admin/kahoot", icon: Zap, label: "Kahoot" },
     {
       to: "/admin/game-show-creator",
       icon: Trophy,
