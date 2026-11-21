@@ -99,9 +99,9 @@ const io = new Server(server, {
   cors: { origin: allowedOrigins, methods: ["GET", "POST"], credentials: true }
 });
 
-console.log("⚙️ Calling registerKahootGame(io)...");
+console.log("🔥🔥🔥 ABOUT TO REGISTER KAHOOT NAMESPACE 🔥🔥🔥");
 registerKahootGame(io);
-console.log("✅ registerKahootGame(io) finished executing.")
+console.log("✅✅✅ KAHOOT NAMESPACE SUCCESSFULLY REGISTERED ✅✅✅");
 
 const activeGames = new Map();
 const cardTimers = new Map();
