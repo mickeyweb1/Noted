@@ -18,6 +18,7 @@ const submissionSchema = new mongoose.Schema({
   totalQuestions: { type: Number, required: true },
   timeTaken: { type: Number, required: true },
   tabSwitchCount: { type: Number, default: 0 },
+   isLate: { type: Boolean, default: false }, 
   submittedAt: { type: Date, default: Date.now }
 });
 

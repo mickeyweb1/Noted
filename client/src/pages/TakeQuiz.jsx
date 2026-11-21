@@ -533,8 +533,15 @@ export default function TakeQuiz() {
       const res = await api.post("/quiz/validate-code", { code: trimmed });
       const data = res.data.data;
 
-      if (data.gameMode === "gameShow") {
-        navigate(`/game-show-lobby?code=${trimmed}`);
+      // ✅ FIX: Intercept BOTH gameShow and kahoot modes
+      if (data.gameMode === "gameShow" || data.gameMode === "kahoot") {
+        // Save the quiz details to sessionStorage so the Kahoot player can access them
+        sessionStorage.setItem("kahoot_code", trimmed);
+        sessionStorage.setItem("kahoot_quizId", data.quizId);
+        sessionStorage.setItem("kahoot_title", data.title);
+        
+        // Send them to the real Kahoot student experience
+        navigate("/game-play");
         return;
       }
 
