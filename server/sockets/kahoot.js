@@ -116,7 +116,9 @@ const loadGame = async (quizId) => {
 
 /* ---------------- engine ---------------- */
 export function registerKahootGame(io) {
+    console.log("🚀 Attempting to register /kahoot namespace...");
   const nsp = io.of('/kahoot');
+    console.log("✅ /kahoot namespace registered successfully!")
 
   const hostView = (game) => ({
     quizId: game.quizId,
@@ -307,14 +309,27 @@ export function registerKahootGame(io) {
 
     /* ---- host ---- */
     socket.on('host_join', async ({ quizId, token } = {}) => {
+      console.log("📥 Backend received host_join for quizId:", quizId); // <-- ADD THIS LINE
       try {
-        if (!mongoose.isValidObjectId(quizId)) return socket.emit('game_error', { code: 'BAD_QUIZ', message: 'This game link is not valid.' });
+        if (!mongoose.isValidObjectId(quizId)) {
+          console.log("⚠️ Invalid quizId format"); // <-- ADD THIS LINE
+          return socket.emit('game_error', { code: 'BAD_QUIZ', message: 'This game link is not valid.' });
+        }
         const game = await loadGame(String(quizId));
-        if (!game) return socket.emit('game_error', { code: 'NO_QUIZ', message: 'This Kahoot game was not found.' });
-        if (!game.code) return socket.emit('game_error', { code: 'NO_CODE', message: 'This game has no join code. Create it again.' });
+        if (!game) {
+          console.log("⚠️ Game not found in DB for quizId:", quizId); // <-- ADD THIS LINE
+          return socket.emit('game_error', { code: 'NO_QUIZ', message: 'This Kahoot game was not found.' });
+        }
+        if (!game.code) {
+          console.log("⚠️ Game has no access code"); // <-- ADD THIS LINE
+          return socket.emit('game_error', { code: 'NO_CODE', message: 'This game has no join code. Create it again.' });
+        }
         if (!(await verifyHost(token, game))) {
+          console.log("⚠️ Host verification failed"); // <-- ADD THIS LINE
           return socket.emit('game_error', { code: 'UNAUTHORIZED', message: 'Please log in again to host this game.' });
         }
+        
+        console.log("✅ Host verified successfully. Sending host_state..."); // <-- ADD THIS LINE
         game.hostSocketId = socket.id;
         socket.data.role = 'host';
         socket.data.quizId = game.quizId;
@@ -322,7 +337,7 @@ export function registerKahootGame(io) {
         socket.join(hostRoom(game));
         socket.emit('host_state', hostView(game));
       } catch (err) {
-        console.error('Kahoot host_join failed:', err.message);
+        console.error('❌ Kahoot host_join failed:', err.message); // <-- ADD THIS LINE
         socket.emit('game_error', { code: 'SERVER', message: 'Could not open the game. Please try again.' });
       }
     });

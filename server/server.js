@@ -29,6 +29,8 @@ import academicRoutes from './routes/academicRoutes.js';
 import seoRoutes from './routes/seoRoutes.js';
 import studySetRoutes from './routes/studySetRoutes.js';
 
+import { registerKahootGame } from './sockets/kahoot.js';
+
 dotenv.config();
 
 const app = express();
@@ -97,8 +99,9 @@ const io = new Server(server, {
   cors: { origin: allowedOrigins, methods: ["GET", "POST"], credentials: true }
 });
 
-import { registerKahootGame } from './sockets/kahoot.js';
+console.log("⚙️ Calling registerKahootGame(io)...");
 registerKahootGame(io);
+console.log("✅ registerKahootGame(io) finished executing.")
 
 const activeGames = new Map();
 const cardTimers = new Map();

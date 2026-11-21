@@ -9,57 +9,84 @@ export default function TeacherGameHost() {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const [socket, setSocket] = useState(null);
-  const [gameState, setGameState] = useState(null); // Holds the host_state payload
+  const [gameState, setGameState] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // ✅ Connect to the dedicated /kahoot namespace
+    console.log("🔌 Attempting to connect to /kahoot namespace. quizId:", quizId);
+    
     const newSocket = io(`${SOCKET_URL}/kahoot`, { transports: ["websocket"] });
     setSocket(newSocket);
 
     const token = localStorage.getItem("token");
+    console.log("🔑 Token found:", token ? "Yes" : "No");
 
     newSocket.on("connect", () => {
+      console.log("✅ Successfully connected to /kahoot namespace! Emitting host_join...");
       newSocket.emit("host_join", { quizId, token });
     });
 
+    newSocket.on("connect_error", (err) => {
+      console.error("❌ Socket connection error:", err.message);
+      setError("Failed to connect to game server. Is the backend running?");
+      setIsLoading(false);
+    });
+
     newSocket.on("host_state", (state) => {
+      console.log("🎮 Received host_state from backend:", state);
       setGameState(state);
       setIsLoading(false);
     });
 
     newSocket.on("game_error", (err) => {
+      console.error("🚨 Received game_error from backend:", err);
       setError(err.message);
       setIsLoading(false);
     });
 
-    return () => { newSocket.disconnect(); };
+    return () => { 
+      console.log("🔌 Component unmounting, disconnecting socket...");
+      newSocket.disconnect(); 
+    };
   }, [quizId]);
 
   const handleStart = () => {
     if (socket && gameState?.quizId) {
+      console.log("▶️ Emitting host_start...");
       socket.emit("host_start", { quizId: gameState.quizId });
     }
   };
 
   const handleNext = () => {
     if (socket && gameState?.quizId) {
+      console.log("⏭️ Emitting host_next...");
       socket.emit("host_next", { quizId: gameState.quizId });
     }
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white"><Loader2 className="h-10 w-10 animate-spin text-brand" /></div>;
-  if (error) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white p-4">
-      <div className="max-w-md rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center">
-        <AlertCircle className="mx-auto mb-3 h-10 w-10 text-red-500" />
-        <h2 className="text-xl font-bold">Error</h2>
-        <p className="mt-2 text-slate-400">{error}</p>
-        <button onClick={() => navigate("/admin/kahoot")} className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-white">Go Back</button>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <Loader2 className="h-10 w-10 animate-spin text-brand mb-4" />
+        <p className="text-slate-400">Connecting to game server...</p>
+        <p className="text-xs text-slate-600 mt-2">Check browser console (F12) for details</p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white p-4">
+        <div className="max-w-md rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center">
+          <AlertCircle className="mx-auto mb-3 h-10 w-10 text-red-500" />
+          <h2 className="text-xl font-bold">Connection Error</h2>
+          <p className="mt-2 text-slate-400">{error}</p>
+          <button onClick={() => navigate("/admin/kahoot")} className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-white">Go Back</button>
+        </div>
+      </div>
+    );
+  }
 
   if (!gameState) return null;
 
@@ -116,7 +143,7 @@ export default function TeacherGameHost() {
                 <div key={player.id} className="rounded-xl bg-slate-800 p-3 text-center font-semibold text-white shadow-sm animate-in fade-in zoom-in duration-300">
                   {player.name} {player.connected ? "" : "(Disconnected)"}
                 </div>
-                ))}
+              ))}
             </div>
           )}
         </div>

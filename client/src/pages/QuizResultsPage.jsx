@@ -257,7 +257,7 @@ export function QuizResultsDashboard() {
 
   const chips = [{ id: "all", label: "All" }, { id: "quiz", label: "Quizzes" }, { id: "gameShow", label: "Game shows" }];
   const renderCard = (quiz, isOwn) => (
-    <div className="relative">
+    <div key={quiz._id} className="relative"> {/* ✅ MOVE KEY HERE */}
       {isShareMode && isOwn && (
         <button
           onClick={() => toggleQuizSelection(quiz._id)}
@@ -271,7 +271,6 @@ export function QuizResultsDashboard() {
         </button>
       )}
       <QuizCard
-        key={quiz._id}
         quiz={quiz}
         canDelete={isOwn && !isShareMode}
         teacherName={quiz.teacherName}
@@ -625,7 +624,7 @@ const handleRevokeShare = async (shareCode) => {
   }
 };
 
-  const isGameShow = quizData?.gameMode === "gameShow";
+ const isGameShow = quizData?.gameMode === 'gameShow' || quizData?.gameMode === 'kahoot';
   const questionById = useMemo(() => new Map((quizData?.questions ?? []).map((q) => [String(q._id), q])), [quizData]);
 
   const visibleSubs = useMemo(() => {
