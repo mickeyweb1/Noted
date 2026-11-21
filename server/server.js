@@ -97,6 +97,9 @@ const io = new Server(server, {
   cors: { origin: allowedOrigins, methods: ["GET", "POST"], credentials: true }
 });
 
+import { registerKahootGame } from './sockets/kahoot.js';
+registerKahootGame(io);
+
 const activeGames = new Map();
 const cardTimers = new Map();
 const gameShowOutboxDir = process.env.GAME_SHOW_OUTBOX_DIR || path.join(__dirname, 'data', 'game-show-outbox');
