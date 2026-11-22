@@ -248,10 +248,10 @@ router.post('/generate-ai-preview', protect, async (req, res, next) => {
       return res.status(403).json({ success: false, message: `Your plan allows up to ${plan.maxQ} AI questions per quiz. Upgrade to generate more!` });
     }
 
-    if (gameMode === 'gameShow') {
-      const quotaError = await gameShowQuotaError(req.user, plan);
-      if (quotaError) return res.status(403).json({ success: false, message: quotaError });
-    }
+if (gameMode === 'gameShow' || gameMode === 'kahoot') {
+  const quotaError = await gameShowQuotaError(req.user, plan);
+  if (quotaError) return res.status(403).json({ success: false, message: quotaError });
+}
 
     // One AI run per user at a time
     lockKey = String(req.user._id);
@@ -401,17 +401,20 @@ const mode = gameMode === 'gameShow' ? 'gameShow' : (gameMode === 'kahoot' ? 'ka
       return res.status(403).json({ success: false, message: `Your plan allows up to ${plan.codes} student codes per test. Upgrade to add more!` });
     }
 
-    if (mode === 'gameShow') {
-      const quotaError = await gameShowQuotaError(req.user, plan);
-      if (quotaError) return res.status(403).json({ success: false, message: quotaError });
-    }
+if (mode === 'gameShow' || mode === 'kahoot') {
+  const quotaError = await gameShowQuotaError(req.user, plan);
+  if (quotaError) return res.status(403).json({ success: false, message: quotaError });
+}
 
     const tabs = parseInt(maxTabSwitches, 10);
     const tabLimit = Number.isInteger(tabs) && tabs > 0 ? Math.min(tabs, 100) : null;
 
-    const used = new Set();
-    const accessCodes = Array.from({ length: studentCount }, () => ({ code: uniqueCode(mode, used), createdAt: new Date() }));
-
+const used = new Set();
+const accessCodeCount = mode === 'kahoot' ? 1 : studentCount;
+const accessCodes = Array.from({ length: accessCodeCount }, () => ({
+  code: uniqueCode(mode, used),
+  createdAt: new Date(),
+}));
     const quiz = await Quiz.create({
       title: title.trim().slice(0, 160),
       difficulty: DIFFICULTIES.includes(difficulty) ? difficulty : 'Intermediate',

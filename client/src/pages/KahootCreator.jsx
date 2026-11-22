@@ -199,6 +199,10 @@ export default function KahootCreator() {
   const handleAIGenerate = async () => {
     setError("");
     setNotice("");
+
+    if (liveGamesLocked) {
+  return setError("Live Quiz Shows are not included in your current plan. Please upgrade.");
+}
     const count = readInt(numQuestions, "Number of questions", 1, maxAi);
     if (count.error) return setError(count.error);
     if (!notes.trim()) return setError("Paste some notes for the AI first.");
@@ -213,7 +217,7 @@ export default function KahootCreator() {
     try {
       const res = await api.post(
         "/quiz/generate-ai-preview",
-        { notes, difficulty: "Intermediate", numQuestions: count.value },
+       { notes, difficulty: "Intermediate", numQuestions: count.value, gameMode: "kahoot" },
         { timeout: 180000 }
       );
       const mapped = (res.data?.data?.questions || []).map(mapAiQuestion).filter(Boolean);
@@ -235,6 +239,11 @@ export default function KahootCreator() {
   const handleCreate = async () => {
     setError("");
     setNotice("");
+
+    if (liveGamesLocked) {
+  return setError("Live Quiz Shows are not included in your current plan. Please upgrade.");
+}
+
     const cleanTitle = title.trim();
     if (!cleanTitle) return setError("Give your Kahoot a title.");
     const time = readInt(timeLimit, "Time per question", 5, 120);
@@ -524,7 +533,7 @@ export default function KahootCreator() {
           <p className="hidden min-w-0 flex-1 text-sm text-muted-foreground sm:block">
             <span className="font-semibold text-foreground">{readyCount}</span> of {usedCount} question{usedCount === 1 ? "" : "s"} ready · saved on this device
           </p>
-          <button onClick={handleCreate} disabled={creating || aiBusy} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3.5 text-base font-black text-white shadow-lg transition hover:bg-green-500 active:scale-[0.99] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-none sm:text-lg">
+          <button onClick={handleCreate} disabled={creating || aiBusy || liveGamesLocked} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3.5 text-base font-black text-white shadow-lg transition hover:bg-green-500 active:scale-[0.99] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-none sm:text-lg">
             {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5 fill-current" />}
             {creating ? "Creating…" : "Create Kahoot & start game"}
           </button>

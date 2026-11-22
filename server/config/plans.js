@@ -94,8 +94,12 @@ export const refundCredits = async (userId, n) => {
 };
 
 export const countGameShowsThisMonth = (userId) =>
-  Quiz.countDocuments({ createdBy: userId, gameMode: 'gameShow', createdAt: { $gte: new Date(Date.now() - 30 * DAY) } });
-
+  Quiz.countDocuments({
+    createdBy: userId,
+    gameMode: { $in: ['gameShow', 'kahoot'] },
+    createdAt: { $gte: new Date(Date.now() - 30 * DAY) },
+  });
+  
 export const gameShowQuotaError = async (user, plan) => {
   if (plan.gameShows === Infinity) return null;
   if (plan.gameShows === 0) return 'Game Show mode is available on Teacher Pro and School plans. Upgrade to unlock it!';
