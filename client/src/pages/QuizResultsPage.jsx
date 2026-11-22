@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "rea
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Calendar, FileText, ArrowRight, BarChart3, Clock, User, Users, Trophy, ArrowLeft, Download, ChevronDown, ChevronUp,
-  CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Award, Eye, Search, Trash2, RefreshCw, Target, Flag, Share2, Check, X
+  CheckCircle2, XCircle, AlertTriangle, Plus, Lightbulb, Loader2, Copy, Award, Eye, Search, Trash2, RefreshCw, Target, Flag, Share2, Check, X, Zap
 } from "lucide-react";
 import api from "../utils/api";
 import Modal from "../components/Modal";
@@ -123,7 +123,8 @@ function TabSwitchBadge({ count }) {
   );
 }
 
-function QuizCard({ quiz, onResults, onResume, onDelete, canDelete = true, teacherName }) {
+function QuizCard({ quiz, onResults, onResume, onOpenKahoot, onDelete, canDelete = true, teacherName }) {
+  const isKahoot = quiz.gameMode === "kahoot";
   const isGameShow = quiz.gameMode === "gameShow";
   const resumeCode = quiz.accessCodes?.[0];
 
@@ -131,10 +132,10 @@ function QuizCard({ quiz, onResults, onResume, onDelete, canDelete = true, teach
     <article className="flex min-w-0 flex-col rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:border-brand/40 hover:shadow-md">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${isGameShow ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-brand-soft text-brand"}`}>
-          {isGameShow ? <Trophy className="h-6 w-6" /> : <BarChart3 className="h-6 w-6" />}
+          {isGameShow ? <Trophy className="h-6 w-6" /> : isKahoot ? <Zap className="h-6 w-6" /> : <BarChart3 className="h-6 w-6" />}
         </div>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isGameShow ? "bg-purple-500/10 text-purple-700 dark:text-purple-400" : "bg-muted text-muted-foreground"}`}>
-          {isGameShow ? "Game show" : "Quiz"}
+          {isGameShow ? "Game show" : isKahoot ? "Kahoot" : "Quiz"}
         </span>
       </div>
       <h3 className="mb-1 line-clamp-2 break-words text-lg font-bold text-foreground" title={quiz.title}>{quiz.title}</h3>
@@ -147,6 +148,11 @@ function QuizCard({ quiz, onResults, onResume, onDelete, canDelete = true, teach
 
       <div className="mt-auto flex flex-col gap-2">
         <button onClick={onResults} className={`${primaryBtn} w-full`}>View results <ArrowRight className="h-4 w-4" /></button>
+        {isKahoot && (
+          <button onClick={onOpenKahoot} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand/40 bg-brand/5 px-4 py-2.5 text-sm font-semibold text-brand transition hover:bg-brand/10">
+            <Zap className="h-4 w-4" /> Open Kahoot dashboard
+          </button>
+        )}
         {isGameShow && resumeCode && (
           <button onClick={() => onResume(resumeCode)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border border-purple-500/40 bg-background px-4 py-2.5 text-sm font-semibold text-purple-700 transition hover:bg-purple-500/10 dark:text-purple-400 ${focusRing}`}>
             <Trophy className="h-4 w-4" /> Resume live match
@@ -238,13 +244,14 @@ export function QuizResultsDashboard() {
 
   const counts = useMemo(() => {
     const gameShows = quizzes.filter((q) => q.gameMode === "gameShow").length;
-    return { all: quizzes.length, gameShow: gameShows, quiz: quizzes.length - gameShows };
+    const kahoot = quizzes.filter((q) => q.gameMode === "kahoot").length;
+    return { all: quizzes.length, gameShow: gameShows, kahoot, quiz: quizzes.length - gameShows - kahoot };
   }, [quizzes]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return quizzes
-      .filter((z) => filter === "all" || (filter === "gameShow") === (z.gameMode === "gameShow"))
+      .filter((z) => filter === "all" || (filter === "gameShow" && z.gameMode === "gameShow") || (filter === "kahoot" && z.gameMode === "kahoot") || (filter === "quiz" && z.gameMode !== "gameShow" && z.gameMode !== "kahoot"))
       .filter((z) => !q || (z.title ?? "").toLowerCase().includes(q))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [quizzes, query, filter]);
@@ -255,7 +262,7 @@ export function QuizResultsDashboard() {
   if (loading) return <PageSpinner />;
   if (error) return <ErrorState message={error} onRetry={fetchQuizzes} />;
 
-  const chips = [{ id: "all", label: "All" }, { id: "quiz", label: "Quizzes" }, { id: "gameShow", label: "Game shows" }];
+  const chips = [{ id: "all", label: "All" }, { id: "quiz", label: "Quizzes" }, { id: "gameShow", label: "Game shows" }, { id: "kahoot", label: "Kahoot" }];
   const renderCard = (quiz, isOwn) => (
     <div key={quiz._id} className="relative"> {/* ✅ MOVE KEY HERE */}
       {isShareMode && isOwn && (
@@ -276,6 +283,7 @@ export function QuizResultsDashboard() {
         teacherName={quiz.teacherName}
         onResults={() => navigate(`/admin/quiz/${quiz._id}/results`)}
         onResume={(code) => navigate(`/game-show?code=${code}`)}
+        onOpenKahoot={() => navigate(`/game-host/${quiz._id}`)}
         onDelete={(q) => { setDeleteError(""); setToDelete(q); }}
       />
     </div>
@@ -513,6 +521,11 @@ const [isRevoking, setIsRevoking] = useState(false);
     }
   }, [quizId]);
   useEffect(() => { fetchResults(); }, [fetchResults]);
+  useEffect(() => {
+    if (quizData?.gameMode !== "kahoot") return undefined;
+    const timer = window.setInterval(() => fetchResults({ silent: true }), 6000);
+    return () => window.clearInterval(timer);
+  }, [quizData?.gameMode, fetchResults]);
 
     const handleStartEditing = () => {
     // Format questions for the editor (add correctOptionIndex for radio buttons)
@@ -797,6 +810,7 @@ const handleRevokeShare = async (shareCode) => {
               <button onClick={() => { setShowShareManager(true); fetchActiveShares(); }} className={secondaryBtn}>
     <Share2 className="h-4 w-4" /> Manage Shares
   </button>
+            {quizData?.gameMode === "kahoot" && <button onClick={() => navigate(`/game-host/${quizId}`)} className={primaryBtn}><Zap className="h-4 w-4" /> Open Kahoot</button>}
             <button onClick={() => setShowQuestions(true)} className={secondaryBtn}><Eye className="h-4 w-4" /> Questions</button>
              <button onClick={() => setShowCodesModal(true)} className={secondaryBtn}>
               <Clock className="h-4 w-4" /> View Codes

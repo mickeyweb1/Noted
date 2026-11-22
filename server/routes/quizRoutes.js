@@ -1,6 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import { Quiz } from '../models/Quiz.js';
+import { KahootAttempt } from '../models/KahootAttempt.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { QuizSession } from '../models/QuizSession.js';
 import { User } from '../models/User.js';
@@ -410,7 +411,7 @@ if (mode === 'gameShow' || mode === 'kahoot') {
     const tabLimit = Number.isInteger(tabs) && tabs > 0 ? Math.min(tabs, 100) : null;
 
 const used = new Set();
-const accessCodeCount = mode === 'kahoot' ? 1 : studentCount;
+const accessCodeCount = studentCount;
 const accessCodes = Array.from({ length: accessCodeCount }, () => ({
   code: uniqueCode(mode, used),
   createdAt: new Date(),
@@ -427,7 +428,10 @@ const accessCodes = Array.from({ length: accessCodeCount }, () => ({
       gameMode: mode,
       baseMarks: Number(baseMarks) || 10,
       bonusMarks: Number(bonusMarks) || 5,
-        autoStart: Boolean(autoStart),
+      autoStart: Boolean(autoStart),
+      kahootIsOpen: mode === 'kahoot' && Boolean(autoStart),
+      kahootOpenedAt: mode === 'kahoot' && Boolean(autoStart) ? new Date() : null,
+      kahootClosedAt: null,
       questions: cleanQuestions,
       accessCodes,
       createdBy: req.user._id,
@@ -754,7 +758,19 @@ router.post('/validate-code', async (req, res, next) => {
     if (isCodeExpired(quiz, code)) {
       return res.status(400).json({ success: false, message: `This access code has expired (older than ${CODE_LIFETIME_DAYS} days).` });
     }
-    if (await QuizSubmission.exists({ quiz: quiz._id, accessCode: code })) {
+    if (quiz.gameMode === 'kahoot') {
+      const playerKey = String(req.body?.playerId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+      if (!playerKey) {
+        return res.status(400).json({ success: false, message: 'Refresh the page and enter your student code again.' });
+      }
+      const existingAttempt = await KahootAttempt.findOne({ quiz: quiz._id, code });
+      if (existingAttempt && existingAttempt.playerKey !== playerKey) {
+        return res.status(409).json({ success: false, message: 'This student code has already been assigned to another attempt. Ask your teacher for your own code.' });
+      }
+      if (quiz.kahootClosedAt && !existingAttempt) {
+        return res.status(400).json({ success: false, message: 'This Kahoot has been closed by the teacher.' });
+      }
+    } else if (await QuizSubmission.exists({ quiz: quiz._id, accessCode: code })) {
       return res.status(400).json({ success: false, message: 'This access code has already been used' });
     }
 
@@ -776,6 +792,7 @@ router.post('/validate-code', async (req, res, next) => {
         showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
         passMark: quiz.passMark ?? 50,
         hasActiveSession,
+        isOpen: quiz.gameMode === 'kahoot' ? (!quiz.kahootClosedAt && Boolean(quiz.autoStart || quiz.kahootIsOpen)) : undefined,
         isFreeTier,
         questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
       },
@@ -991,7 +1008,8 @@ router.post('/:id/duplicate', protect, async (req, res, next) => {
     }
 
     const isGameShow = originalQuiz.gameMode === 'gameShow';
-    if (isGameShow) {
+    const isKahoot = originalQuiz.gameMode === 'kahoot';
+    if (isGameShow || isKahoot) {
       const quotaError = await gameShowQuotaError(req.user, plan);
       if (quotaError) return res.status(403).json({ success: false, message: quotaError });
     }
@@ -1035,6 +1053,9 @@ router.post('/:id/duplicate', protect, async (req, res, next) => {
       questions: newQuestions,
       accessCodes: newCodes,
       numberOfStudents: codeCount,
+      kahootIsOpen: isKahoot && Boolean(originalQuiz.autoStart),
+      kahootOpenedAt: isKahoot && Boolean(originalQuiz.autoStart) ? new Date() : null,
+      kahootClosedAt: null,
       createdBy: req.user._id,
       createdAt: new Date(),
     });

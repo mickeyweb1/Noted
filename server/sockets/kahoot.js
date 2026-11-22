@@ -1,22 +1,27 @@
-// Live Noted Quiz Show engine. Uses a dedicated Socket.IO namespace: /kahoot.
+// Independent, resumable Kahoot attempts.
+// A quiz is shared by the class, but every access code owns its own question timer and progress.
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { Quiz } from '../models/Quiz.js';
+import { KahootAttempt } from '../models/KahootAttempt.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { User } from '../models/User.js';
 
 const MAX_PLAYERS = 500;
-const NAME_MAX = 20;
-const AUTO_START_DELAY_MS = 3000;
-const AUTO_ADVANCE_MS = 4000;
-const ANSWER_GRACE_MS = 400;
-const FINISHED_TTL_MS = 30 * 60 * 1000;
-const STALE_GAME_MS = 6 * 60 * 60 * 1000;
-const DISCONNECT_GRACE_MS = 45 * 1000;
+const NAME_MAX = 40;
+const PLAYER_KEY_MAX = 80;
+const FEEDBACK_DELAY_MS = 2600;
+const QUESTION_MIN_SECONDS = 5;
+const QUESTION_MAX_SECONDS = 120;
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-const games = new Map();
-const pendingGameLoads = new Map();
+// Timers are an optimization only. The actual deadline/status is persisted in MongoDB,
+// so a disconnected student or a server restart cannot reset a submitted answer.
+const attemptTimers = new Map();
+const activeAttemptSockets = new Map();
+const activeHostSockets = new Map();
+const pendingTimerLoads = new Set();
 
 const cleanName = (value) => String(value ?? '')
   .replace(/[\u0000-\u001f<>]/g, '')
@@ -24,52 +29,64 @@ const cleanName = (value) => String(value ?? '')
   .trim()
   .slice(0, NAME_MAX);
 
-const pointsFor = (elapsedMs, durationMs, streak) => {
-  const base = Math.round(1000 * (1 - Math.min(elapsedMs, durationMs) / durationMs / 2));
-  const bonus = streak >= 2 ? Math.min(streak - 1, 5) * 100 : 0;
-  return base + bonus;
+const cleanPlayerKey = (value) => String(value ?? '')
+  .replace(/[^a-zA-Z0-9_-]/g, '')
+  .slice(0, PLAYER_KEY_MAX);
+
+const normalizeCode = (value) => String(value ?? '').trim().toUpperCase();
+const attemptRoom = (attemptId) => `kahoot:attempt:${attemptId}`;
+const hostRoom = (quizId) => `kahoot:${quizId}:host`;
+const hostSocketKey = (quizId) => String(quizId);
+
+const durationMsFor = (quiz) => {
+  const raw = Number(quiz.timeLimit) || 20;
+  const seconds = quiz.timeUnit === 'minutes' ? raw * 60 : raw;
+  return Math.max(QUESTION_MIN_SECONDS, Math.min(seconds, QUESTION_MAX_SECONDS)) * 1000;
 };
 
-const publicPlayer = (player) => ({
-  id: player.id,
-  name: player.name,
-  score: player.score,
-  connected: player.connected,
-});
+const makeAccessCode = (existing = new Set()) => {
+  let code;
+  do {
+    let suffix = '';
+    for (let i = 0; i < 8; i += 1) suffix += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
+    code = `K-${suffix}`;
+  } while (existing.has(code));
+  existing.add(code);
+  return code;
+};
 
-const ranked = (game) => [...game.players.values()].sort((a, b) =>
-  b.score - a.score || a.totalMs - b.totalMs || a.name.localeCompare(b.name)
-);
-
-const leaderboard = (game, limit = 5) => ranked(game).slice(0, limit).map((player, index) => ({
-  rank: index + 1,
-  id: player.id,
-  name: player.name,
-  score: player.score,
-}));
-
-const connectedCount = (game) => [...game.players.values()].filter((player) => player.connected).length;
-const room = (game) => `kahoot:${game.quizId}`;
-const hostRoom = (game) => `kahoot:${game.quizId}:host`;
-
-const questionPayload = (game) => {
-  const question = game.questions[game.index];
+const questionForStudent = (quiz, index, attempt) => {
+  const question = quiz.questions?.[index];
   if (!question) return null;
   return {
-    index: game.index,
-    total: game.questions.length,
+    index,
+    total: quiz.questions.length,
     question: question.question,
     options: question.options,
-    imageUrl: question.imageUrl,
-    endsAt: game.endsAt,
-    durationMs: game.durationMs,
+    imageUrl: question.imageUrl || '',
+    endsAt: attempt.questionEndsAt ? new Date(attempt.questionEndsAt).getTime() : null,
+    durationMs: durationMsFor(quiz),
     serverNow: Date.now(),
   };
 };
 
-const verifyHost = async (token, game) => {
-  if (!token || typeof token !== 'string') return false;
+const publicAttemptForTeacher = (attempt, connected) => ({
+  id: String(attempt._id),
+  code: attempt.code,
+  studentName: attempt.studentName,
+  status: attempt.status,
+  currentQuestionIndex: attempt.currentQuestionIndex,
+  totalQuestions: attempt.totalQuestions,
+  score: attempt.score,
+  correctCount: attempt.correctCount,
+  connected,
+  startedAt: attempt.startedAt,
+  completedAt: attempt.completedAt,
+  lastSeenAt: attempt.lastSeenAt,
+});
 
+const verifyHost = async (token, quiz) => {
+  if (!token || typeof token !== 'string') return false;
   let payload;
   try {
     payload = jwt.verify(token, process.env.JWT_SECRET);
@@ -77,556 +94,578 @@ const verifyHost = async (token, game) => {
     return false;
   }
 
-  // Noted's authController signs tokens with { id }.
   const userId = payload.id || payload._id || payload.userId || payload.sub;
   if (!mongoose.isValidObjectId(userId)) return false;
-
   const user = await User.findById(userId).select('role isActive');
   if (!user || user.isActive === false) return false;
-  return user.role === 'super_admin' || String(user._id) === game.createdBy;
+  return user.role === 'super_admin' || String(user._id) === String(quiz.createdBy);
 };
 
-const buildGame = (quiz) => {
-  const code = (quiz.accessCodes || []).map((entry) => entry?.code).find(Boolean) || '';
-  const seconds = quiz.timeUnit === 'minutes' ? Number(quiz.timeLimit) * 60 : Number(quiz.timeLimit);
-  const maxPlayers = Math.max(1, Math.min(Number(quiz.numberOfStudents) || MAX_PLAYERS, MAX_PLAYERS));
-
-  return {
-    quizId: String(quiz._id),
-    createdBy: String(quiz.createdBy),
-    createdAt: Date.now(),
-    code,
-    title: quiz.title,
-    autoStart: Boolean(quiz.autoStart),
-    maxPlayers,
-    durationMs: Math.max(5, Math.min(seconds || 20, 120)) * 1000,
-    questions: (quiz.questions || []).map((question) => ({
-      id: String(question._id),
-      question: question.question,
-      options: question.options,
-      correctIndex: question.options.indexOf(question.correctAnswer),
-      correctAnswer: question.correctAnswer,
-      explanation: question.explanation || '',
-      imageUrl: question.imageUrl || '',
-    })),
-    status: 'lobby',
-    index: -1,
-    players: new Map(),
-    answers: new Map(),
-    startedAt: 0,
-    endsAt: 0,
-    lastReveal: null,
-    hostSocketId: null,
-    timer: null,
-    autoTimer: null,
-    advanceTimer: null,
-    savedResults: false,
-    savingResults: false,
-    saveRetryTimer: null,
-  };
-};
-
-const loadGame = async (quizId) => {
-  const key = String(quizId);
-  const existing = games.get(key);
-  if (existing) return existing;
-
-  // Prevent two students joining at the same time from creating two in-memory game objects.
-  const pending = pendingGameLoads.get(key);
-  if (pending) return pending;
-
-  const loading = (async () => {
-    const quiz = await Quiz.findOne({ _id: key, gameMode: 'kahoot' });
-    if (!quiz) return null;
-
-    const alreadyLoaded = games.get(key);
-    if (alreadyLoaded) return alreadyLoaded;
-
-    const game = buildGame(quiz);
-    games.set(key, game);
-    return game;
-  })();
-
-  pendingGameLoads.set(key, loading);
-  try {
-    return await loading;
-  } finally {
-    pendingGameLoads.delete(key);
-  }
+const clearAttemptTimer = (attemptId) => {
+  const key = String(attemptId);
+  const timer = attemptTimers.get(key);
+  if (timer) clearTimeout(timer);
+  attemptTimers.delete(key);
 };
 
 export function registerKahootGame(io) {
   const nsp = io.of('/kahoot');
 
-  const hostView = (game) => ({
-    quizId: game.quizId,
-    code: game.code,
-    title: game.title,
-    status: game.status,
-    autoStart: game.autoStart,
-    maxPlayers: game.maxPlayers,
-    total: game.questions.length,
-    index: game.index,
-    players: [...game.players.values()].map(publicPlayer),
-    question: game.index >= 0 && game.status !== 'lobby' ? questionPayload(game) : null,
-    answered: game.answers.size,
-    connectedPlayers: connectedCount(game),
-    reveal: game.lastReveal,
-    leaderboard: leaderboard(game, 10),
-    serverNow: Date.now(),
-  });
+  const emitHostState = async (quizId) => {
+    const key = String(quizId);
+    const quiz = await Quiz.findOne({ _id: key, gameMode: 'kahoot' }).lean();
+    if (!quiz) return;
 
-  const playerSnapshot = (game, player) => {
-    const board = ranked(game);
+    const attempts = await KahootAttempt.find({ quiz: key })
+      .select('code studentName status currentQuestionIndex score correctCount startedAt completedAt lastSeenAt')
+      .sort({ createdAt: 1 })
+      .lean();
+    const attemptsByCode = new Map(attempts.map((attempt) => [attempt.code, attempt]));
+    const connectedByAttempt = (code) => {
+      const attempt = attemptsByCode.get(code);
+      return attempt ? activeAttemptSockets.has(String(attempt._id)) : false;
+    };
+
+    const codes = (quiz.accessCodes || []).map((entry) => {
+      const code = typeof entry === 'string' ? entry : entry?.code;
+      const attempt = attemptsByCode.get(code);
+      return {
+        code,
+        studentName: attempt?.studentName || null,
+        status: attempt?.status || 'not_used',
+        connected: attempt ? connectedByAttempt(code) : false,
+        score: attempt?.score ?? 0,
+        currentQuestionIndex: attempt?.currentQuestionIndex ?? 0,
+      };
+    }).filter((entry) => entry.code);
+
+    const connected = attempts.filter((attempt) => activeAttemptSockets.has(String(attempt._id))).length;
+    const summary = {
+      total: codes.length,
+      notStarted: attempts.filter((attempt) => attempt.status === 'waiting').length + codes.filter((code) => code.status === 'not_used').length,
+      inProgress: attempts.filter((attempt) => attempt.status === 'in_progress' || attempt.status === 'feedback').length,
+      completed: attempts.filter((attempt) => attempt.status === 'completed').length,
+      connected,
+    };
+
+    const state = {
+      quizId: String(quiz._id),
+      title: quiz.title,
+      status: quiz.kahootClosedAt ? 'closed' : (quiz.autoStart || quiz.kahootIsOpen ? 'open' : 'waiting_for_teacher'),
+      autoStart: Boolean(quiz.autoStart),
+      isOpen: !quiz.kahootClosedAt && Boolean(quiz.autoStart || quiz.kahootIsOpen),
+      openedAt: quiz.kahootOpenedAt || null,
+      closedAt: quiz.kahootClosedAt || null,
+      totalQuestions: quiz.questions?.length || 0,
+      timeLimit: quiz.timeLimit,
+      timeUnit: quiz.timeUnit,
+      codes,
+      attempts: attempts.map((attempt) => publicAttemptForTeacher(
+        attempt,
+        activeAttemptSockets.has(String(attempt._id)),
+      )),
+      summary,
+      serverNow: Date.now(),
+    };
+    nsp.to(hostRoom(key)).emit('host_state', state);
+  };
+
+  const sendQuestion = (attempt, quiz) => {
+    const payload = questionForStudent(quiz, attempt.currentQuestionIndex, attempt);
+    if (payload) nsp.to(attemptRoom(attempt._id)).emit('attempt_question', payload);
+  };
+
+  const studentSnapshot = (attempt, quiz) => {
+    const status = attempt.status;
+    const question = ['in_progress', 'feedback'].includes(status)
+      ? questionForStudent(quiz, attempt.currentQuestionIndex, attempt)
+      : null;
     return {
-      status: game.status,
-      title: game.title,
-      total: game.questions.length,
-      index: game.index,
-      playerCount: game.players.size,
-      question: game.status === 'question' ? questionPayload(game) : null,
-      answeredChoice: game.status === 'question' && game.answers.has(player.id)
-        ? game.answers.get(player.id).choice
-        : null,
-      reveal: ['reveal', 'finished'].includes(game.status) ? game.lastReveal : null,
-      lastResult: ['reveal', 'finished'].includes(game.status) ? player.lastResult : null,
-      leaderboard: leaderboard(game, game.status === 'finished' ? 50 : 5),
+      status,
+      title: quiz.title,
+      total: quiz.questions.length,
+      question,
+      lastResult: status === 'feedback' ? attempt.lastResult : null,
+      feedbackEndsAt: attempt.feedbackEndsAt ? new Date(attempt.feedbackEndsAt).getTime() : null,
       me: {
-        id: player.id,
-        name: player.name,
-        score: player.score,
-        rank: board.findIndex((entry) => entry.id === player.id) + 1,
+        name: attempt.studentName,
+        score: attempt.score,
+        correctCount: attempt.correctCount,
+        currentQuestionIndex: attempt.currentQuestionIndex,
       },
+      serverNow: Date.now(),
     };
   };
 
-  const broadcastPlayers = (game) => {
-    nsp.to(room(game)).emit('players_update', {
-      players: [...game.players.values()].map(publicPlayer),
-      count: game.players.size,
-      connectedCount: connectedCount(game),
-    });
+  const saveSubmission = async (attempt, quiz) => {
+    const answersByIndex = new Map((attempt.answers || []).map((answer) => [answer.questionIndex, answer]));
+    const submission = {
+      quiz: quiz._id,
+      studentName: attempt.studentName,
+      studentSurname: '-',
+      studentClass: 'Kahoot',
+      accessCode: attempt.code,
+      gameMode: 'kahoot',
+      score: attempt.correctCount,
+      maxScore: quiz.questions.length,
+      gamePoints: attempt.score,
+      totalQuestions: quiz.questions.length,
+      timeTaken: Math.round((attempt.answers || []).reduce((sum, answer) => sum + (answer.timeTakenMs || 0), 0) / 1000),
+      tabSwitchCount: 0,
+      answers: quiz.questions.map((question, index) => {
+        const answer = answersByIndex.get(index);
+        return {
+          questionId: question._id,
+          selectedAnswer: answer?.selectedAnswer || '',
+          isCorrect: Boolean(answer?.isCorrect),
+          confidence: null,
+        };
+      }),
+    };
+
+    await QuizSubmission.updateOne(
+      { quiz: quiz._id, accessCode: attempt.code },
+      { $set: submission },
+      { upsert: true, runValidators: true },
+    );
   };
 
-  // Upserts make result saving safe to retry if MongoDB temporarily rejects a write.
-  const saveResults = async (game) => {
-    if (game.savedResults || game.savingResults) return;
-    game.savingResults = true;
+  const finishAttempt = async (attempt, quiz) => {
+    if (attempt.status === 'completed') return;
+    clearAttemptTimer(attempt._id);
+    attempt.status = 'completed';
+    attempt.completedAt = new Date();
+    attempt.questionEndsAt = null;
+    attempt.feedbackEndsAt = null;
+    attempt.lastSeenAt = new Date();
+    await attempt.save();
 
     try {
-      const board = ranked(game);
-      const operations = board.map((player) => {
-        const accessCode = `KAHOOT-${game.code}-${player.id}`;
-        const submission = {
-          quiz: game.quizId,
-          studentName: player.name,
-          studentSurname: '-',
-          studentClass: 'Live game',
-          accessCode,
-          gameMode: 'kahoot',
-          score: player.correctCount,
-          maxScore: game.questions.length,
-          gamePoints: player.score,
-          totalQuestions: game.questions.length,
-          timeTaken: Math.round(player.totalMs / 1000),
-          tabSwitchCount: 0,
-          answers: game.questions.map((question, questionIndex) => {
-            const answer = player.history[questionIndex];
-            return {
-              questionId: question.id,
-              selectedAnswer: answer && answer.choice !== null
-                ? question.options[answer.choice] || ''
-                : '',
-              isCorrect: Boolean(answer?.correct),
-              confidence: null,
-            };
-          }),
-        };
-
-        return {
-          updateOne: {
-            filter: { quiz: game.quizId, accessCode },
-            update: { $setOnInsert: submission },
-            upsert: true,
-          },
-        };
-      });
-
-      if (operations.length) {
-        await QuizSubmission.bulkWrite(operations, { ordered: false });
-      }
-      game.savedResults = true;
-      if (game.saveRetryTimer) clearTimeout(game.saveRetryTimer);
-      game.saveRetryTimer = null;
+      await saveSubmission(attempt, quiz);
     } catch (error) {
-      console.error('[Kahoot] Could not save results; a retry will be attempted:', error.message);
-      if (!game.saveRetryTimer) {
-        game.saveRetryTimer = setTimeout(() => {
-          game.saveRetryTimer = null;
-          saveResults(game);
-        }, 5000);
-        game.saveRetryTimer.unref?.();
-      }
-    } finally {
-      game.savingResults = false;
+      // The attempt itself is already durable. A reconnect or teacher refresh can safely retry.
+      console.error('[Kahoot] Result save failed; it will be retried on the next sync:', error.message);
     }
+
+    nsp.to(attemptRoom(attempt._id)).emit('attempt_finished', {
+      score: attempt.score,
+      correctCount: attempt.correctCount,
+      totalQuestions: quiz.questions.length,
+      completedAt: attempt.completedAt,
+    });
+    await emitHostState(quiz._id);
   };
 
-  const endQuestion = (game) => {
-    if (game.status !== 'question') return;
-    clearTimeout(game.timer);
-    game.timer = null;
-    game.status = 'reveal';
-
-    const question = game.questions[game.index];
-    const counts = question.options.map(() => 0);
-    for (const answer of game.answers.values()) {
-      if (Number.isInteger(answer.choice) && counts[answer.choice] !== undefined) counts[answer.choice] += 1;
+  const scheduleAttemptTimer = (attempt) => {
+    clearAttemptTimer(attempt._id);
+    let target = null;
+    let callback = null;
+    if (attempt.status === 'in_progress' && attempt.questionEndsAt) {
+      target = new Date(attempt.questionEndsAt).getTime();
+      callback = () => processTimeout(attempt._id);
+    } else if (attempt.status === 'feedback' && attempt.feedbackEndsAt) {
+      target = new Date(attempt.feedbackEndsAt).getTime();
+      callback = () => advanceAttempt(attempt._id);
     }
+    if (!target || !callback) return;
+    const timer = setTimeout(() => {
+      attemptTimers.delete(String(attempt._id));
+      void callback();
+    }, Math.max(0, target - Date.now()));
+    timer.unref?.();
+    attemptTimers.set(String(attempt._id), timer);
+  };
 
-    for (const player of game.players.values()) {
-      const answer = game.answers.get(player.id);
-      const correct = Boolean(answer && answer.choice === question.correctIndex);
-      let points = 0;
+  const beginAttempt = async (attempt, quiz) => {
+    if (!attempt || attempt.status !== 'waiting') return attempt;
+    if (!quiz.questions?.length) return attempt;
+    const now = new Date();
+    attempt.status = 'in_progress';
+    attempt.currentQuestionIndex = 0;
+    attempt.currentQuestionAnswered = false;
+    attempt.startedAt = attempt.startedAt || now;
+    attempt.questionStartedAt = now;
+    attempt.questionEndsAt = new Date(now.getTime() + durationMsFor(quiz));
+    attempt.feedbackEndsAt = null;
+    attempt.lastResult = null;
+    await attempt.save();
+    sendQuestion(attempt, quiz);
+    scheduleAttemptTimer(attempt);
+    await emitHostState(quiz._id);
+    return attempt;
+  };
 
-      if (correct) {
-        player.streak += 1;
-        points = pointsFor(answer.ms, game.durationMs, player.streak);
-        player.score += points;
-        player.correctCount += 1;
-      } else {
-        player.streak = 0;
-      }
+  const recordAnswer = async (attemptId, selectedIndex, timedOut = false) => {
+    const attempt = await KahootAttempt.findById(attemptId);
+    if (!attempt || attempt.status !== 'in_progress') return null;
+    const quiz = await Quiz.findById(attempt.quiz);
+    if (!quiz) return null;
 
-      player.totalMs += answer ? answer.ms : game.durationMs;
-      player.history[game.index] = { choice: answer ? answer.choice : null, correct };
-      player.lastResult = {
-        correct,
-        points,
-        choice: answer ? answer.choice : null,
-        timedOut: !answer,
-        streak: player.streak,
-      };
-    }
+    const questionIndex = attempt.currentQuestionIndex;
+    const question = quiz.questions[questionIndex];
+    if (!question) return null;
 
-    const board = ranked(game);
-    const rankOf = new Map(board.map((player, index) => [player.id, index + 1]));
-    game.lastReveal = {
-      index: game.index,
-      total: game.questions.length,
-      correctIndex: question.correctIndex,
+    const now = new Date();
+    const deadline = attempt.questionEndsAt ? new Date(attempt.questionEndsAt).getTime() : 0;
+    if (!timedOut && deadline && now.getTime() > deadline + 500) return null;
+
+    // The atomic flag prevents two tabs/connections from submitting twice for one question.
+    const locked = await KahootAttempt.findOneAndUpdate(
+      {
+        _id: attempt._id,
+        status: 'in_progress',
+        currentQuestionIndex: questionIndex,
+        currentQuestionAnswered: false,
+      },
+      { $set: { currentQuestionAnswered: true } },
+      { new: true },
+    );
+    if (!locked) return null;
+
+    const duration = durationMsFor(quiz);
+    const started = locked.questionStartedAt ? new Date(locked.questionStartedAt).getTime() : now.getTime();
+    const timeTakenMs = timedOut ? duration : Math.max(0, Math.min(duration, now.getTime() - started));
+    const validSelection = Number.isInteger(selectedIndex)
+      && selectedIndex >= 0
+      && selectedIndex < question.options.length;
+    const chosenIndex = validSelection && !timedOut ? selectedIndex : null;
+    const correctIndex = question.options.findIndex((option) => option === question.correctAnswer);
+    const isCorrect = chosenIndex !== null && chosenIndex === correctIndex;
+    const points = isCorrect
+      ? Math.max(100, Math.round(1000 * (1 - (timeTakenMs / duration) * 0.5)))
+      : 0;
+
+    locked.answers.push({
+      questionId: question._id,
+      questionIndex,
+      selectedIndex: chosenIndex,
+      selectedAnswer: chosenIndex === null ? '' : question.options[chosenIndex],
+      isCorrect,
+      timedOut: Boolean(timedOut),
+      points,
+      timeTakenMs,
+      answeredAt: now,
+    });
+    locked.score += points;
+    if (isCorrect) locked.correctCount += 1;
+    locked.status = 'feedback';
+    locked.feedbackEndsAt = new Date(now.getTime() + FEEDBACK_DELAY_MS);
+    locked.questionEndsAt = null;
+    locked.lastSeenAt = now;
+    locked.lastResult = {
+      correct: isCorrect,
+      isCorrect,
+      timedOut: Boolean(timedOut),
+      selectedIndex: chosenIndex,
+      correctIndex,
+      selectedAnswer: chosenIndex === null ? '' : question.options[chosenIndex],
       correctAnswer: question.correctAnswer,
-      explanation: question.explanation,
-      counts,
-      leaderboard: leaderboard(game, 5),
-      isLast: game.index === game.questions.length - 1,
+      explanation: question.explanation || '',
+      points,
+      score: locked.score,
+      correctCount: locked.correctCount,
+      questionIndex,
+      totalQuestions: quiz.questions.length,
+      feedbackEndsAt: locked.feedbackEndsAt.getTime(),
     };
+    await locked.save();
 
-    nsp.to(room(game)).emit('question_end', game.lastReveal);
-    for (const player of game.players.values()) {
-      if (!player.connected || !player.socketId) continue;
-      nsp.to(player.socketId).emit('answer_result', {
-        ...player.lastResult,
-        score: player.score,
-        rank: rankOf.get(player.id),
-        players: board.length,
-        correctCount: player.correctCount,
-        leaderboard: leaderboard(game, 5),
-        correctIndex: question.correctIndex,
-        correctAnswer: question.correctAnswer,
-        explanation: question.explanation,
+    clearAttemptTimer(locked._id);
+    nsp.to(attemptRoom(locked._id)).emit('answer_result', locked.lastResult);
+    scheduleAttemptTimer(locked);
+    await emitHostState(quiz._id);
+    return locked;
+  };
+
+  async function processTimeout(attemptId) {
+    try {
+      const attempt = await KahootAttempt.findById(attemptId);
+      if (!attempt || attempt.status !== 'in_progress') return;
+      const deadline = attempt.questionEndsAt ? new Date(attempt.questionEndsAt).getTime() : 0;
+      if (deadline > Date.now()) return scheduleAttemptTimer(attempt);
+      await recordAnswer(attempt._id, null, true);
+    } catch (error) {
+      console.error('[Kahoot] Question timeout failed:', error.message);
+    }
+  }
+
+  async function advanceAttempt(attemptId) {
+    try {
+      const attempt = await KahootAttempt.findById(attemptId);
+      if (!attempt || attempt.status !== 'feedback') return;
+      const feedbackEnd = attempt.feedbackEndsAt ? new Date(attempt.feedbackEndsAt).getTime() : 0;
+      if (feedbackEnd > Date.now()) return scheduleAttemptTimer(attempt);
+      const quiz = await Quiz.findById(attempt.quiz);
+      if (!quiz) return;
+
+      const nextIndex = attempt.currentQuestionIndex + 1;
+      if (nextIndex >= quiz.questions.length) return finishAttempt(attempt, quiz);
+
+      const now = new Date();
+      attempt.status = 'in_progress';
+      attempt.currentQuestionIndex = nextIndex;
+      attempt.currentQuestionAnswered = false;
+      attempt.questionStartedAt = now;
+      attempt.questionEndsAt = new Date(now.getTime() + durationMsFor(quiz));
+      attempt.feedbackEndsAt = null;
+      attempt.lastResult = null;
+      attempt.lastSeenAt = now;
+      await attempt.save();
+      sendQuestion(attempt, quiz);
+      scheduleAttemptTimer(attempt);
+      await emitHostState(quiz._id);
+    } catch (error) {
+      console.error('[Kahoot] Could not advance student attempt:', error.message);
+    }
+  }
+
+  const loadOrCreateAttempt = async ({ quiz, code, playerKey, studentName }) => {
+    let attempt = await KahootAttempt.findOne({ quiz: quiz._id, code });
+    if (attempt) {
+      if (attempt.playerKey !== playerKey) {
+        const error = new Error('This student code has already been assigned to another attempt. Ask your teacher for your own code.');
+        error.code = 'CODE_USED';
+        throw error;
+      }
+      return attempt;
+    }
+
+    if (quiz.kahootClosedAt) {
+      const error = new Error('This quiz has been closed by the teacher.');
+      error.code = 'CLOSED';
+      throw error;
+    }
+
+    const isOpen = !quiz.kahootClosedAt && Boolean(quiz.autoStart || quiz.kahootIsOpen);
+    try {
+      attempt = await KahootAttempt.create({
+        quiz: quiz._id,
+        code,
+        playerKey,
+        studentName,
+        status: isOpen ? 'in_progress' : 'waiting',
+        currentQuestionIndex: 0,
+        currentQuestionAnswered: false,
+        startedAt: isOpen ? new Date() : null,
+        questionStartedAt: isOpen ? new Date() : null,
+        questionEndsAt: isOpen ? new Date(Date.now() + durationMsFor(quiz)) : null,
       });
-    }
-
-    if (game.autoStart) {
-      clearTimeout(game.advanceTimer);
-      game.advanceTimer = setTimeout(() => advance(game), AUTO_ADVANCE_MS);
-      game.advanceTimer.unref?.();
+      return attempt;
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      attempt = await KahootAttempt.findOne({ quiz: quiz._id, code });
+      if (!attempt || attempt.playerKey !== playerKey) {
+        const conflict = new Error('This student code has already been used. Ask your teacher for another code.');
+        conflict.code = 'CODE_USED';
+        throw conflict;
+      }
+      return attempt;
     }
   };
 
-  const startQuestion = (game, index) => {
-    clearTimeout(game.timer);
-    clearTimeout(game.advanceTimer);
-    game.advanceTimer = null;
-    game.index = index;
-    game.status = 'question';
-    game.answers = new Map();
-    game.startedAt = Date.now();
-    game.endsAt = game.startedAt + game.durationMs;
-    game.lastReveal = null;
-
-    for (const player of game.players.values()) player.lastResult = null;
-
-    nsp.to(room(game)).emit('question_start', questionPayload(game));
-    nsp.to(hostRoom(game)).emit('answer_count', { answered: 0, total: connectedCount(game) });
-    game.timer = setTimeout(() => endQuestion(game), game.durationMs + ANSWER_GRACE_MS);
-    game.timer.unref?.();
+  const ensureKahootCodes = async (quiz) => {
+    const entries = Array.isArray(quiz.accessCodes) ? quiz.accessCodes : [];
+    const existing = new Set(entries.map((entry) => typeof entry === 'string' ? entry : entry?.code).filter(Boolean));
+    const desired = Math.max(1, Math.min(Number(quiz.numberOfStudents) || 1, MAX_PLAYERS));
+    let changed = false;
+    while (existing.size < desired) {
+      quiz.accessCodes.push({ code: makeAccessCode(existing), createdAt: new Date() });
+      changed = true;
+    }
+    if (changed) await quiz.save();
   };
 
-  const finishGame = (game) => {
-    if (game.status === 'finished') return;
-    clearTimeout(game.autoTimer);
-    clearTimeout(game.advanceTimer);
-    game.autoTimer = null;
-    game.advanceTimer = null;
+  const joinAttempt = async (socket, { code, name, playerId } = {}) => {
+    const normalizedCode = normalizeCode(code);
+    const playerKey = cleanPlayerKey(playerId);
+    const studentName = cleanName(name);
+    if (!normalizedCode || !playerKey || !studentName) {
+      socket.emit('game_error', { code: 'BAD_JOIN', message: 'Enter your student code and name again.' });
+      return;
+    }
 
-    if (game.status === 'question') endQuestion(game);
-    clearTimeout(game.advanceTimer);
-    game.advanceTimer = null;
-    game.status = 'finished';
+    const quiz = await Quiz.findOne({
+      gameMode: 'kahoot',
+      'accessCodes.code': normalizedCode,
+    });
+    if (!quiz) {
+      socket.emit('game_error', { code: 'BAD_CODE', message: 'That student code is not valid.' });
+      return;
+    }
 
-    const board = ranked(game);
-    const rankOf = new Map(board.map((player, index) => [player.id, index + 1]));
-    const finalBoard = leaderboard(game, 50);
+    let attempt;
+    try {
+      attempt = await loadOrCreateAttempt({
+        quiz,
+        code: normalizedCode,
+        playerKey,
+        studentName,
+      });
+    } catch (error) {
+      socket.emit('game_error', { code: error.code || 'JOIN_FAILED', message: error.message || 'Could not join this quiz.' });
+      return;
+    }
 
-    nsp.to(room(game)).emit('game_finished', { leaderboard: finalBoard, players: board.length });
-    for (const player of game.players.values()) {
-      if (player.connected && player.socketId) {
-        nsp.to(player.socketId).emit('final_result', {
-          rank: rankOf.get(player.id),
-          score: player.score,
-          correctCount: player.correctCount,
-          totalQuestions: game.questions.length,
-          players: board.length,
-        });
+    // Re-read the quiz after reserving the code. This closes the small race where
+    // the teacher opens the quiz while this student is joining.
+    const latestQuiz = await Quiz.findById(quiz._id);
+    if (!latestQuiz) {
+      socket.emit('game_error', { code: 'NO_QUIZ', message: 'This Kahoot is no longer available.' });
+      return;
+    }
+
+    if (attempt.status !== 'completed' && attempt.studentName !== studentName) {
+      attempt.studentName = studentName;
+    }
+    attempt.lastSeenAt = new Date();
+    await attempt.save();
+
+    socket.data.role = 'player';
+    socket.data.quizId = String(latestQuiz._id);
+    socket.data.attemptId = String(attempt._id);
+    socket.data.playerKey = playerKey;
+    socket.join(attemptRoom(attempt._id));
+    activeAttemptSockets.set(String(attempt._id), socket.id);
+
+    const isOpen = !latestQuiz.kahootClosedAt && Boolean(latestQuiz.autoStart || latestQuiz.kahootIsOpen);
+    if (attempt.status === 'waiting' && isOpen) {
+      attempt = await beginAttempt(attempt, latestQuiz);
+    } else if (attempt.status === 'in_progress' && !attempt.questionEndsAt) {
+      attempt.questionStartedAt = new Date();
+      attempt.questionEndsAt = new Date(Date.now() + durationMsFor(latestQuiz));
+      await attempt.save();
+    }
+
+    if (attempt.status === 'completed') {
+      try { await saveSubmission(attempt, latestQuiz); } catch (error) {
+        console.error('[Kahoot] Could not retry completed result save:', error.message);
       }
     }
-
-    void saveResults(game);
-    const cleanupTimer = setTimeout(() => {
-      clearTimeout(game.saveRetryTimer);
-      games.delete(game.quizId);
-    }, FINISHED_TTL_MS);
-    cleanupTimer.unref?.();
-  };
-
-  const advance = (game) => {
-    if (game.status !== 'reveal') return;
-    clearTimeout(game.advanceTimer);
-    game.advanceTimer = null;
-    if (game.index + 1 >= game.questions.length) return finishGame(game);
-    startQuestion(game, game.index + 1);
-  };
-
-  const startGame = (game) => {
-    if (game.status !== 'lobby' || connectedCount(game) === 0) return false;
-    clearTimeout(game.autoTimer);
-    game.autoTimer = null;
-    nsp.to(room(game)).emit('game_started');
-    startQuestion(game, 0);
-    return true;
+    socket.emit('joined', studentSnapshot(attempt, latestQuiz));
+    if (attempt.status === 'in_progress') scheduleAttemptTimer(attempt);
+    if (attempt.status === 'feedback') scheduleAttemptTimer(attempt);
+    await emitHostState(latestQuiz._id);
   };
 
   nsp.on('connection', (socket) => {
-    const hostGame = (quizId) => {
-      const game = games.get(String(quizId));
-      return game && game.hostSocketId === socket.id ? game : null;
-    };
-
-    // Teacher host
     socket.on('host_join', async ({ quizId, token } = {}) => {
       try {
         if (!mongoose.isValidObjectId(quizId)) {
-          return socket.emit('game_error', { code: 'BAD_QUIZ', message: 'This game link is not valid.' });
+          socket.emit('game_error', { code: 'BAD_QUIZ', message: 'This Kahoot link is not valid.' });
+          return;
+        }
+        const quiz = await Quiz.findOne({ _id: quizId, gameMode: 'kahoot' });
+        if (!quiz) {
+          socket.emit('game_error', { code: 'NO_QUIZ', message: 'This Kahoot was not found.' });
+          return;
+        }
+        if (!(await verifyHost(token, quiz))) {
+          socket.emit('game_error', { code: 'UNAUTHORIZED', message: 'Please sign in again or open a quiz you created.' });
+          return;
         }
 
-        const game = await loadGame(String(quizId));
-        if (!game) {
-          return socket.emit('game_error', { code: 'NO_QUIZ', message: 'This Kahoot game was not found.' });
-        }
-        if (!game.code) {
-          return socket.emit('game_error', { code: 'NO_CODE', message: 'This game has no join PIN. Create it again.' });
-        }
-        if (!(await verifyHost(token, game))) {
-          return socket.emit('game_error', { code: 'UNAUTHORIZED', message: 'Please sign in again to host this game.' });
-        }
-
-        game.hostSocketId = socket.id;
+        await ensureKahootCodes(quiz);
+        activeHostSockets.set(hostSocketKey(quiz._id), socket.id);
         socket.data.role = 'host';
-        socket.data.quizId = game.quizId;
-        socket.join(room(game));
-        socket.join(hostRoom(game));
-        socket.emit('host_state', hostView(game));
+        socket.data.quizId = String(quiz._id);
+        socket.join(hostRoom(quiz._id));
+        await emitHostState(quiz._id);
       } catch (error) {
         console.error('[Kahoot] host_join failed:', error.message);
-        socket.emit('game_error', { code: 'SERVER', message: 'Could not open the game. Please try again.' });
+        socket.emit('game_error', { code: 'SERVER', message: 'Could not open the teacher dashboard. Please try again.' });
       }
     });
 
-    socket.on('host_start', ({ quizId } = {}) => {
-      const game = hostGame(quizId);
-      if (!game || game.status !== 'lobby') return;
-      if (!startGame(game)) {
-        socket.emit('game_error', { code: 'NO_PLAYERS', message: 'Wait for at least one connected student to join.' });
-      }
-    });
-
-    socket.on('host_skip', ({ quizId } = {}) => {
-      const game = hostGame(quizId);
-      if (game) endQuestion(game);
-    });
-
-    socket.on('host_next', ({ quizId } = {}) => {
-      const game = hostGame(quizId);
-      if (game) advance(game);
-    });
-
-    socket.on('host_end', ({ quizId } = {}) => {
-      const game = hostGame(quizId);
-      if (game) finishGame(game);
-    });
-
-    // Student join. loadGame() here removes the race where a student joins before the host socket loads it.
-    socket.on('player_join', async ({ code, name, playerId } = {}) => {
+    socket.on('host_start', async ({ quizId } = {}) => {
+      const id = String(quizId || socket.data.quizId || '');
+      if (socket.data.role !== 'host' || activeHostSockets.get(hostSocketKey(id)) !== socket.id) return;
       try {
-        const cleanCode = String(code || '').trim().toUpperCase();
-        if (!cleanCode) {
-          return socket.emit('game_error', { code: 'BAD_CODE', message: 'Enter a valid game PIN.' });
-        }
+        const quiz = await Quiz.findOne({ _id: id, gameMode: 'kahoot' });
+        if (!quiz) return socket.emit('game_error', { code: 'NO_QUIZ', message: 'Kahoot not found.' });
+        quiz.kahootIsOpen = true;
+        quiz.kahootOpenedAt = quiz.kahootOpenedAt || new Date();
+        quiz.kahootClosedAt = null;
+        await quiz.save();
 
-        const quiz = await Quiz.findOne({ 'accessCodes.code': cleanCode, gameMode: 'kahoot' }).select('_id');
-        if (!quiz) {
-          return socket.emit('game_error', { code: 'BAD_CODE', message: 'That game PIN is not valid.' });
-        }
+        const waitingAttempts = await KahootAttempt.find({ quiz: quiz._id, status: 'waiting' });
+        for (const attempt of waitingAttempts) await beginAttempt(attempt, quiz);
+        await emitHostState(quiz._id);
+        socket.emit('host_notice', { message: 'Quiz opened. Students can now start using their individual codes.' });
+      } catch (error) {
+        console.error('[Kahoot] host_start failed:', error.message);
+        socket.emit('game_error', { code: 'SERVER', message: 'Could not open the quiz. Please try again.' });
+      }
+    });
 
-        const game = await loadGame(String(quiz._id));
-        if (!game) {
-          return socket.emit('game_error', { code: 'NO_GAME', message: 'This game is not available.' });
-        }
+    socket.on('host_end', async ({ quizId } = {}) => {
+      const id = String(quizId || socket.data.quizId || '');
+      if (socket.data.role !== 'host' || activeHostSockets.get(hostSocketKey(id)) !== socket.id) return;
+      try {
+        await Quiz.updateOne(
+          { _id: id, gameMode: 'kahoot' },
+          { $set: { kahootIsOpen: false, kahootClosedAt: new Date() } },
+        );
+        await emitHostState(id);
+        socket.emit('host_notice', { message: 'New attempts are closed. Students who already started can finish.' });
+      } catch (error) {
+        console.error('[Kahoot] host_end failed:', error.message);
+        socket.emit('game_error', { code: 'SERVER', message: 'Could not close new attempts.' });
+      }
+    });
 
-        const pid = String(playerId || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 40) || crypto.randomUUID();
-        let player = game.players.get(pid);
-
-        if (!player) {
-          const nick = cleanName(name);
-          if (!nick) {
-            return socket.emit('game_error', { code: 'BAD_NAME', message: 'Please enter a valid name.' });
-          }
-          if (game.status !== 'lobby') {
-            return socket.emit('game_error', { code: 'STARTED', message: 'This game has already started.' });
-          }
-          if (game.players.size >= game.maxPlayers) {
-            return socket.emit('game_error', { code: 'FULL', message: 'This game has reached its student limit.' });
-          }
-          if ([...game.players.values()].some((entry) => entry.name.toLowerCase() === nick.toLowerCase())) {
-            return socket.emit('game_error', { code: 'NAME_TAKEN', message: 'That name is already in use. Choose another one.' });
-          }
-
-          player = {
-            id: pid,
-            name: nick,
-            score: 0,
-            streak: 0,
-            correctCount: 0,
-            totalMs: 0,
-            history: [],
-            lastResult: null,
-            socketId: socket.id,
-            connected: true,
-            disconnectTimer: null,
-          };
-          game.players.set(pid, player);
-        } else {
-          clearTimeout(player.disconnectTimer);
-          player.disconnectTimer = null;
-          player.socketId = socket.id;
-          player.connected = true;
-        }
-
-        socket.data.role = 'player';
-        socket.data.quizId = game.quizId;
-        socket.data.playerId = pid;
-        socket.join(room(game));
-        socket.emit('joined', playerSnapshot(game, player));
-        broadcastPlayers(game);
-
-        if (game.autoStart && game.status === 'lobby' && !game.autoTimer) {
-          game.autoTimer = setTimeout(() => {
-            game.autoTimer = null;
-            startGame(game);
-          }, AUTO_START_DELAY_MS);
-          game.autoTimer.unref?.();
-        }
+    socket.on('player_join', async (payload = {}) => {
+      try {
+        await joinAttempt(socket, payload);
       } catch (error) {
         console.error('[Kahoot] player_join failed:', error.message);
-        socket.emit('game_error', { code: 'SERVER', message: 'Could not join the game. Please try again.' });
+        socket.emit('game_error', { code: 'SERVER', message: 'Could not join the quiz. Please try again.' });
       }
     });
 
-    socket.on('player_answer', ({ choice } = {}) => {
+    socket.on('player_answer', async ({ choice } = {}) => {
       if (socket.data.role !== 'player') return;
-      const game = games.get(socket.data.quizId);
-      const player = game?.players.get(socket.data.playerId);
-      if (!game || !player || !player.connected) return;
-      if (game.status !== 'question' || Date.now() > game.endsAt + ANSWER_GRACE_MS) return;
-      if (game.answers.has(player.id)) return;
-
-      const question = game.questions[game.index];
-      if (!Number.isInteger(choice) || choice < 0 || choice >= question.options.length) return;
-
-      game.answers.set(player.id, {
-        choice,
-        ms: Math.max(0, Date.now() - game.startedAt),
-      });
-      socket.emit('answer_locked', { choice });
-      nsp.to(hostRoom(game)).emit('answer_count', {
-        answered: game.answers.size,
-        total: connectedCount(game),
-      });
-
-      const online = connectedCount(game);
-      if (online > 0 && game.answers.size >= online) endQuestion(game);
+      const attemptId = String(socket.data.attemptId || '');
+      if (!attemptId || activeAttemptSockets.get(attemptId) !== socket.id) return;
+      if (!Number.isInteger(choice)) return;
+      try {
+        await recordAnswer(attemptId, choice, false);
+      } catch (error) {
+        console.error('[Kahoot] player_answer failed:', error.message);
+        socket.emit('game_error', { code: 'ANSWER_FAILED', message: 'Your answer could not be saved. Please reconnect and try again.' });
+      }
     });
 
     socket.on('disconnect', () => {
-      const game = games.get(socket.data?.quizId);
-      if (!game) return;
-
-      if (socket.data.role === 'host' && game.hostSocketId === socket.id) {
-        game.hostSocketId = null;
-        return;
+      if (socket.data.role === 'player' && socket.data.attemptId) {
+        const attemptId = String(socket.data.attemptId);
+        if (activeAttemptSockets.get(attemptId) === socket.id) {
+          activeAttemptSockets.delete(attemptId);
+          void emitHostState(socket.data.quizId);
+        }
       }
-
-      if (socket.data.role !== 'player') return;
-      const player = game.players.get(socket.data.playerId);
-      if (!player || player.socketId !== socket.id) return;
-
-      player.connected = false;
-      // Keep a lobby player briefly so a normal page refresh can reconnect with the same ID.
-      if (game.status === 'lobby') {
-        clearTimeout(player.disconnectTimer);
-        player.disconnectTimer = setTimeout(() => {
-          player.disconnectTimer = null;
-          if (game.status === 'lobby' && !player.connected) {
-            game.players.delete(player.id);
-            broadcastPlayers(game);
-          }
-        }, DISCONNECT_GRACE_MS);
-        player.disconnectTimer.unref?.();
-      }
-
-      broadcastPlayers(game);
-      if (game.status === 'question') {
-        const online = connectedCount(game);
-        nsp.to(hostRoom(game)).emit('answer_count', { answered: game.answers.size, total: online });
-        if (online > 0 && game.answers.size >= online) endQuestion(game);
+      if (socket.data.role === 'host' && socket.data.quizId) {
+        const key = hostSocketKey(socket.data.quizId);
+        if (activeHostSockets.get(key) === socket.id) activeHostSockets.delete(key);
       }
     });
   });
 
-  // Remove abandoned in-memory games. Completed results are persisted separately.
-  const staleTimer = setInterval(() => {
-    const now = Date.now();
-    for (const [id, game] of games) {
-      if (game.status !== 'finished' && now - game.createdAt > STALE_GAME_MS) {
-        clearTimeout(game.timer);
-        clearTimeout(game.autoTimer);
-        clearTimeout(game.advanceTimer);
-        for (const player of game.players.values()) clearTimeout(player.disconnectTimer);
-        games.delete(id);
-      }
+  const hydrateTimers = async () => {
+    if (pendingTimerLoads.has('loaded')) return;
+    pendingTimerLoads.add('loaded');
+    try {
+      const active = await KahootAttempt.find({ status: { $in: ['in_progress', 'feedback'] } })
+        .select('_id status questionEndsAt feedbackEndsAt');
+      for (const attempt of active) scheduleAttemptTimer(attempt);
+    } catch (error) {
+      console.error('[Kahoot] Could not restore attempt timers:', error.message);
+      pendingTimerLoads.delete('loaded');
     }
-  }, 10 * 60 * 1000);
-  staleTimer.unref?.();
+  };
+
+  if (mongoose.connection.readyState === 1) {
+    void hydrateTimers();
+  } else {
+    mongoose.connection.once('connected', () => { void hydrateTimers(); });
+  }
 }

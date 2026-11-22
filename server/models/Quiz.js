@@ -12,12 +12,18 @@ const quizSchema = new mongoose.Schema({
   baseMarks: { type: Number, default: 10 },
   bonusMarks: { type: Number, default: 5 },
   autoStart: { type: Boolean, default: false },
-  
-  // ✅ ADD THIS NEW FIELD HERE:
-  layoutMode: { 
-    type: String, 
-    enum: ['scroll', 'paginated'], 
-    default: 'scroll' 
+
+  // Kahoot availability is separate from a student's individual attempt.
+  // autoStart=true makes the quiz available immediately after creation.
+  // Otherwise the teacher opens it from the host dashboard.
+  kahootIsOpen: { type: Boolean, default: false },
+  kahootOpenedAt: { type: Date, default: null },
+  kahootClosedAt: { type: Date, default: null },
+
+  layoutMode: {
+    type: String,
+    enum: ['scroll', 'paginated'],
+    default: 'scroll',
   },
   showAnswersAfterSubmission: { type: Boolean, default: true },
   passMark: { type: Number, min: 0, max: 100, default: 50 },
@@ -39,9 +45,9 @@ const quizSchema = new mongoose.Schema({
   }],
   accessCodes: [{
     code: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
   }],
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
 });
 
 quizSchema.index({ 'accessCodes.code': 1 });

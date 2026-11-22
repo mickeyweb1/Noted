@@ -318,7 +318,7 @@ export default function KahootCreator() {
             <h1 className="flex items-center gap-2 text-2xl font-black text-foreground sm:text-3xl">
               <Zap className="h-7 w-7 shrink-0 fill-yellow-500 text-yellow-500" /> Kahoot creator
             </h1>
-            <p className="text-sm text-muted-foreground">Build a fast-paced, live classroom game.</p>
+            <p className="text-sm text-muted-foreground">Build a self-paced classroom quiz with one personal code per student.</p>
           </div>
         </div>
 
@@ -384,9 +384,9 @@ export default function KahootCreator() {
                   className="mt-1 h-4 w-4 shrink-0 accent-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
                 />
                 <span>
-                  <span className="block text-sm font-semibold text-foreground">Start game automatically</span>
+                  <span className="block text-sm font-semibold text-foreground">Make the quiz available immediately</span>
                   <span className="mt-1 block text-sm leading-5 text-muted-foreground">
-                    When enabled, the game will start automatically 3 seconds after the first student joins. Otherwise, you will control when to start.
+                    Enabled: each student can start immediately with their personal code. Disabled: students wait until you open the quiz from the teacher dashboard.
                   </span>
                 </span>
               </label>
@@ -535,7 +535,7 @@ export default function KahootCreator() {
           </p>
           <button onClick={handleCreate} disabled={creating || aiBusy || liveGamesLocked} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3.5 text-base font-black text-white shadow-lg transition hover:bg-green-500 active:scale-[0.99] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-none sm:text-lg">
             {creating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5 fill-current" />}
-            {creating ? "Creating…" : "Create Kahoot & start game"}
+            {creating ? "Creating…" : "Create Kahoot"}
           </button>
         </div>
       </div>
