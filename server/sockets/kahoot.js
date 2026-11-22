@@ -1,14 +1,4 @@
-// server/sockets/kahoot.js
-//
-// Live "Kahoot" game engine. It runs on its OWN socket.io namespace (/kahoot), so it can't clash with your
-// existing game-show handlers on the default namespace.
-//
-// Register it once in server.js, after `io` is created:
-//   import { registerKahootGame } from './sockets/kahoot.js';
-//   registerKahootGame(io);
-//
-// Requirements: socket.io v4+, JWT_SECRET in the environment (same secret your `protect` middleware uses).
-
+// Live Noted Quiz Show engine. Uses a dedicated Socket.IO namespace: /kahoot.
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
@@ -16,42 +6,61 @@ import { Quiz } from '../models/Quiz.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { User } from '../models/User.js';
 
-const MAX_PLAYERS = 300;
+const MAX_PLAYERS = 500;
 const NAME_MAX = 20;
-const AUTO_START_DELAY_MS = 3000;   // quiz.autoStart: start 3s after the first student joins
-const AUTO_ADVANCE_MS = 4000;       // quiz.autoStart: move to the next question by itself after the reveal
-const ANSWER_GRACE_MS = 400;        // network grace when an answer arrives right at the buzzer
+const AUTO_START_DELAY_MS = 3000;
+const AUTO_ADVANCE_MS = 4000;
+const ANSWER_GRACE_MS = 400;
 const FINISHED_TTL_MS = 30 * 60 * 1000;
 const STALE_GAME_MS = 6 * 60 * 60 * 1000;
+const DISCONNECT_GRACE_MS = 45 * 1000;
 
-const games = new Map(); // quizId -> game
+const games = new Map();
+const pendingGameLoads = new Map();
 
-/* ---------------- helpers ---------------- */
-const cleanName = (s) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
+const cleanName = (value) => String(value ?? '')
+  .replace(/[\u0000-\u001f<>]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, NAME_MAX);
 
-const pointsFor = (ms, durationMs, streak) => {
-  const base = Math.round(1000 * (1 - Math.min(ms, durationMs) / durationMs / 2)); // 500..1000
-  const bonus = streak >= 2 ? Math.min(streak - 1, 5) * 100 : 0;                    // streak bonus
+const pointsFor = (elapsedMs, durationMs, streak) => {
+  const base = Math.round(1000 * (1 - Math.min(elapsedMs, durationMs) / durationMs / 2));
+  const bonus = streak >= 2 ? Math.min(streak - 1, 5) * 100 : 0;
   return base + bonus;
 };
 
-const publicPlayer = (p) => ({ id: p.id, name: p.name, score: p.score, connected: p.connected });
-const ranked = (game) =>
-  [...game.players.values()].sort((a, b) => b.score - a.score || a.totalMs - b.totalMs || a.name.localeCompare(b.name));
-const leaderboard = (game, n = 5) => ranked(game).slice(0, n).map((p, i) => ({ rank: i + 1, id: p.id, name: p.name, score: p.score }));
-const connectedCount = (game) => [...game.players.values()].filter((p) => p.connected).length;
+const publicPlayer = (player) => ({
+  id: player.id,
+  name: player.name,
+  score: player.score,
+  connected: player.connected,
+});
 
+const ranked = (game) => [...game.players.values()].sort((a, b) =>
+  b.score - a.score || a.totalMs - b.totalMs || a.name.localeCompare(b.name)
+);
+
+const leaderboard = (game, limit = 5) => ranked(game).slice(0, limit).map((player, index) => ({
+  rank: index + 1,
+  id: player.id,
+  name: player.name,
+  score: player.score,
+}));
+
+const connectedCount = (game) => [...game.players.values()].filter((player) => player.connected).length;
 const room = (game) => `kahoot:${game.quizId}`;
 const hostRoom = (game) => `kahoot:${game.quizId}:host`;
 
 const questionPayload = (game) => {
-  const q = game.questions[game.index];
+  const question = game.questions[game.index];
+  if (!question) return null;
   return {
     index: game.index,
     total: game.questions.length,
-    question: q.question,
-    options: q.options,
-    imageUrl: q.imageUrl,
+    question: question.question,
+    options: question.options,
+    imageUrl: question.imageUrl,
     endsAt: game.endsAt,
     durationMs: game.durationMs,
     serverNow: Date.now(),
@@ -60,44 +69,47 @@ const questionPayload = (game) => {
 
 const verifyHost = async (token, game) => {
   if (!token || typeof token !== 'string') return false;
+
   let payload;
-  try { payload = jwt.verify(token, process.env.JWT_SECRET); } catch { return false; }
-  // If your token stores the user id under another key (see middleware/protect.js), add it here.
+  try {
+    payload = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return false;
+  }
+
+  // Noted's authController signs tokens with { id }.
   const userId = payload.id || payload._id || payload.userId || payload.sub;
   if (!mongoose.isValidObjectId(userId)) return false;
+
   const user = await User.findById(userId).select('role isActive');
   if (!user || user.isActive === false) return false;
   return user.role === 'super_admin' || String(user._id) === game.createdBy;
 };
 
-const loadGame = async (quizId) => {
-  const existing = games.get(quizId);
-  if (existing) return existing;
+const buildGame = (quiz) => {
+  const code = (quiz.accessCodes || []).map((entry) => entry?.code).find(Boolean) || '';
+  const seconds = quiz.timeUnit === 'minutes' ? Number(quiz.timeLimit) * 60 : Number(quiz.timeLimit);
+  const maxPlayers = Math.max(1, Math.min(Number(quiz.numberOfStudents) || MAX_PLAYERS, MAX_PLAYERS));
 
-  const quiz = await Quiz.findOne({ _id: quizId, gameMode: 'kahoot' });
-  if (!quiz) return null;
-
-  const code = (quiz.accessCodes || []).map((ac) => ac?.code).filter(Boolean)[0] || '';
-  const seconds = quiz.timeUnit === 'minutes' ? quiz.timeLimit * 60 : quiz.timeLimit;
-
-  const game = {
+  return {
     quizId: String(quiz._id),
     createdBy: String(quiz.createdBy),
     createdAt: Date.now(),
     code,
     title: quiz.title,
     autoStart: Boolean(quiz.autoStart),
+    maxPlayers,
     durationMs: Math.max(5, Math.min(seconds || 20, 120)) * 1000,
-    questions: quiz.questions.map((q) => ({
-      id: String(q._id),
-      question: q.question,
-      options: q.options,
-      correctIndex: q.options.indexOf(q.correctAnswer),
-      correctAnswer: q.correctAnswer,
-      explanation: q.explanation || '',
-      imageUrl: q.imageUrl || '',
+    questions: (quiz.questions || []).map((question) => ({
+      id: String(question._id),
+      question: question.question,
+      options: question.options,
+      correctIndex: question.options.indexOf(question.correctAnswer),
+      correctAnswer: question.correctAnswer,
+      explanation: question.explanation || '',
+      imageUrl: question.imageUrl || '',
     })),
-    status: 'lobby', // lobby | question | reveal | finished
+    status: 'lobby',
     index: -1,
     players: new Map(),
     answers: new Map(),
@@ -109,16 +121,42 @@ const loadGame = async (quizId) => {
     autoTimer: null,
     advanceTimer: null,
     savedResults: false,
+    savingResults: false,
+    saveRetryTimer: null,
   };
-  games.set(game.quizId, game);
-  return game;
 };
 
-/* ---------------- engine ---------------- */
+const loadGame = async (quizId) => {
+  const key = String(quizId);
+  const existing = games.get(key);
+  if (existing) return existing;
+
+  // Prevent two students joining at the same time from creating two in-memory game objects.
+  const pending = pendingGameLoads.get(key);
+  if (pending) return pending;
+
+  const loading = (async () => {
+    const quiz = await Quiz.findOne({ _id: key, gameMode: 'kahoot' });
+    if (!quiz) return null;
+
+    const alreadyLoaded = games.get(key);
+    if (alreadyLoaded) return alreadyLoaded;
+
+    const game = buildGame(quiz);
+    games.set(key, game);
+    return game;
+  })();
+
+  pendingGameLoads.set(key, loading);
+  try {
+    return await loading;
+  } finally {
+    pendingGameLoads.delete(key);
+  }
+};
+
 export function registerKahootGame(io) {
-    console.log("🚀 Attempting to register /kahoot namespace...");
   const nsp = io.of('/kahoot');
-    console.log("✅ /kahoot namespace registered successfully!")
 
   const hostView = (game) => ({
     quizId: game.quizId,
@@ -126,11 +164,13 @@ export function registerKahootGame(io) {
     title: game.title,
     status: game.status,
     autoStart: game.autoStart,
+    maxPlayers: game.maxPlayers,
     total: game.questions.length,
     index: game.index,
     players: [...game.players.values()].map(publicPlayer),
     question: game.index >= 0 && game.status !== 'lobby' ? questionPayload(game) : null,
     answered: game.answers.size,
+    connectedPlayers: connectedCount(game),
     reveal: game.lastReveal,
     leaderboard: leaderboard(game, 10),
     serverNow: Date.now(),
@@ -145,163 +185,237 @@ export function registerKahootGame(io) {
       index: game.index,
       playerCount: game.players.size,
       question: game.status === 'question' ? questionPayload(game) : null,
-      answeredChoice: game.status === 'question' && game.answers.has(player.id) ? game.answers.get(player.id).choice : null,
-      reveal: game.status === 'reveal' || game.status === 'finished' ? game.lastReveal : null,
-      lastResult: game.status === 'reveal' ? player.lastResult : null,
+      answeredChoice: game.status === 'question' && game.answers.has(player.id)
+        ? game.answers.get(player.id).choice
+        : null,
+      reveal: ['reveal', 'finished'].includes(game.status) ? game.lastReveal : null,
+      lastResult: ['reveal', 'finished'].includes(game.status) ? player.lastResult : null,
       leaderboard: leaderboard(game, game.status === 'finished' ? 50 : 5),
-      me: { id: player.id, name: player.name, score: player.score, rank: board.findIndex((p) => p.id === player.id) + 1 },
+      me: {
+        id: player.id,
+        name: player.name,
+        score: player.score,
+        rank: board.findIndex((entry) => entry.id === player.id) + 1,
+      },
     };
   };
 
-  const broadcastPlayers = (game) =>
-    nsp.to(room(game)).emit('players_update', { players: [...game.players.values()].map(publicPlayer), count: game.players.size });
-
-  const saveResults = async (game) => {
-    if (game.savedResults) return;
-    game.savedResults = true;
-    try {
-      const board = ranked(game);
-      if (board.length === 0) return;
-      const docs = board.map((p, i) => ({
-        quiz: game.quizId,
-        studentName: p.name,
-        studentSurname: '-',
-        studentClass: 'Live game',
-        accessCode: `${game.code}#${String(i + 1).padStart(3, '0')}-${p.id.slice(0, 6)}`,
-        answers: game.questions.map((q, qi) => {
-          const h = p.history[qi];
-          return {
-            questionId: q.id,
-            selectedAnswer: h && h.choice !== null ? q.options[h.choice] || '' : '',
-            isCorrect: Boolean(h?.correct),
-            confidence: null,
-          };
-        }),
-        score: p.correctCount,
-        totalQuestions: game.questions.length,
-        timeTaken: Math.round(p.totalMs / 1000),
-        tabSwitchCount: 0,
-      }));
-      await QuizSubmission.insertMany(docs, { ordered: false });
-    } catch (err) {
-      console.error('Kahoot: could not save results:', err.message);
-    }
+  const broadcastPlayers = (game) => {
+    nsp.to(room(game)).emit('players_update', {
+      players: [...game.players.values()].map(publicPlayer),
+      count: game.players.size,
+      connectedCount: connectedCount(game),
+    });
   };
 
-  const finishGame = (game) => {
-    if (game.status === 'finished') return;
-    clearTimeout(game.autoTimer);
-    clearTimeout(game.advanceTimer);
-    if (game.status === 'question') endQuestion(game); // settle the running question first
-    clearTimeout(game.advanceTimer);
-    game.status = 'finished';
+  // Upserts make result saving safe to retry if MongoDB temporarily rejects a write.
+  const saveResults = async (game) => {
+    if (game.savedResults || game.savingResults) return;
+    game.savingResults = true;
 
-    const board = ranked(game);
-    const rankOf = new Map(board.map((p, i) => [p.id, i + 1]));
-    nsp.to(room(game)).emit('game_finished', { leaderboard: leaderboard(game, 50), players: board.length });
-    for (const p of game.players.values()) {
-      if (p.connected && p.socketId) {
-        nsp.to(p.socketId).emit('final_result', {
-          rank: rankOf.get(p.id),
-          score: p.score,
-          correctCount: p.correctCount,
+    try {
+      const board = ranked(game);
+      const operations = board.map((player) => {
+        const accessCode = `KAHOOT-${game.code}-${player.id}`;
+        const submission = {
+          quiz: game.quizId,
+          studentName: player.name,
+          studentSurname: '-',
+          studentClass: 'Live game',
+          accessCode,
+          gameMode: 'kahoot',
+          score: player.correctCount,
+          maxScore: game.questions.length,
+          gamePoints: player.score,
           totalQuestions: game.questions.length,
-          players: board.length,
-        });
+          timeTaken: Math.round(player.totalMs / 1000),
+          tabSwitchCount: 0,
+          answers: game.questions.map((question, questionIndex) => {
+            const answer = player.history[questionIndex];
+            return {
+              questionId: question.id,
+              selectedAnswer: answer && answer.choice !== null
+                ? question.options[answer.choice] || ''
+                : '',
+              isCorrect: Boolean(answer?.correct),
+              confidence: null,
+            };
+          }),
+        };
+
+        return {
+          updateOne: {
+            filter: { quiz: game.quizId, accessCode },
+            update: { $setOnInsert: submission },
+            upsert: true,
+          },
+        };
+      });
+
+      if (operations.length) {
+        await QuizSubmission.bulkWrite(operations, { ordered: false });
       }
+      game.savedResults = true;
+      if (game.saveRetryTimer) clearTimeout(game.saveRetryTimer);
+      game.saveRetryTimer = null;
+    } catch (error) {
+      console.error('[Kahoot] Could not save results; a retry will be attempted:', error.message);
+      if (!game.saveRetryTimer) {
+        game.saveRetryTimer = setTimeout(() => {
+          game.saveRetryTimer = null;
+          saveResults(game);
+        }, 5000);
+        game.saveRetryTimer.unref?.();
+      }
+    } finally {
+      game.savingResults = false;
     }
-    saveResults(game);
-    setTimeout(() => games.delete(game.quizId), FINISHED_TTL_MS).unref?.();
   };
 
   const endQuestion = (game) => {
     if (game.status !== 'question') return;
     clearTimeout(game.timer);
+    game.timer = null;
     game.status = 'reveal';
 
-    const q = game.questions[game.index];
-    const counts = q.options.map(() => 0);
-    for (const a of game.answers.values()) counts[a.choice] += 1;
+    const question = game.questions[game.index];
+    const counts = question.options.map(() => 0);
+    for (const answer of game.answers.values()) {
+      if (Number.isInteger(answer.choice) && counts[answer.choice] !== undefined) counts[answer.choice] += 1;
+    }
 
-    for (const p of game.players.values()) {
-      const a = game.answers.get(p.id);
-      let correct = false;
+    for (const player of game.players.values()) {
+      const answer = game.answers.get(player.id);
+      const correct = Boolean(answer && answer.choice === question.correctIndex);
       let points = 0;
-      if (a && a.choice === q.correctIndex) {
-        correct = true;
-        p.streak += 1;
-        points = pointsFor(a.ms, game.durationMs, p.streak);
-        p.score += points;
-        p.correctCount += 1;
+
+      if (correct) {
+        player.streak += 1;
+        points = pointsFor(answer.ms, game.durationMs, player.streak);
+        player.score += points;
+        player.correctCount += 1;
       } else {
-        p.streak = 0;
+        player.streak = 0;
       }
-      p.totalMs += a ? a.ms : game.durationMs;
-      p.history.push({ choice: a ? a.choice : null, correct });
-      p.lastResult = { correct, points, choice: a ? a.choice : null, timedOut: !a, streak: p.streak };
+
+      player.totalMs += answer ? answer.ms : game.durationMs;
+      player.history[game.index] = { choice: answer ? answer.choice : null, correct };
+      player.lastResult = {
+        correct,
+        points,
+        choice: answer ? answer.choice : null,
+        timedOut: !answer,
+        streak: player.streak,
+      };
     }
 
     const board = ranked(game);
-    const rankOf = new Map(board.map((p, i) => [p.id, i + 1]));
+    const rankOf = new Map(board.map((player, index) => [player.id, index + 1]));
     game.lastReveal = {
       index: game.index,
       total: game.questions.length,
-      correctIndex: q.correctIndex,
-      correctAnswer: q.correctAnswer,
-      explanation: q.explanation,
+      correctIndex: question.correctIndex,
+      correctAnswer: question.correctAnswer,
+      explanation: question.explanation,
       counts,
       leaderboard: leaderboard(game, 5),
       isLast: game.index === game.questions.length - 1,
     };
 
     nsp.to(room(game)).emit('question_end', game.lastReveal);
-    for (const p of game.players.values()) {
-      if (p.connected && p.socketId) {
-        nsp.to(p.socketId).emit('answer_result', {
-          ...p.lastResult,
-          score: p.score,
-          rank: rankOf.get(p.id),
-          players: board.length,
-          correctCount: p.correctCount,
-          leaderboard: leaderboard(game, 5), // ✅ FIX: Send the actual leaderboard array
-          correctIndex: q.correctIndex,       // ✅ FIX: So frontend knows which was right
-          correctAnswer: q.correctAnswer,     // ✅ FIX: So frontend can display the right answer
-        });
-      }
+    for (const player of game.players.values()) {
+      if (!player.connected || !player.socketId) continue;
+      nsp.to(player.socketId).emit('answer_result', {
+        ...player.lastResult,
+        score: player.score,
+        rank: rankOf.get(player.id),
+        players: board.length,
+        correctCount: player.correctCount,
+        leaderboard: leaderboard(game, 5),
+        correctIndex: question.correctIndex,
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+      });
     }
 
-    if (game.autoStart) game.advanceTimer = setTimeout(() => advance(game), AUTO_ADVANCE_MS);
+    if (game.autoStart) {
+      clearTimeout(game.advanceTimer);
+      game.advanceTimer = setTimeout(() => advance(game), AUTO_ADVANCE_MS);
+      game.advanceTimer.unref?.();
+    }
   };
 
   const startQuestion = (game, index) => {
     clearTimeout(game.timer);
     clearTimeout(game.advanceTimer);
+    game.advanceTimer = null;
     game.index = index;
     game.status = 'question';
     game.answers = new Map();
     game.startedAt = Date.now();
     game.endsAt = game.startedAt + game.durationMs;
     game.lastReveal = null;
-    for (const p of game.players.values()) p.lastResult = null;
+
+    for (const player of game.players.values()) player.lastResult = null;
 
     nsp.to(room(game)).emit('question_start', questionPayload(game));
     nsp.to(hostRoom(game)).emit('answer_count', { answered: 0, total: connectedCount(game) });
     game.timer = setTimeout(() => endQuestion(game), game.durationMs + ANSWER_GRACE_MS);
+    game.timer.unref?.();
+  };
+
+  const finishGame = (game) => {
+    if (game.status === 'finished') return;
+    clearTimeout(game.autoTimer);
+    clearTimeout(game.advanceTimer);
+    game.autoTimer = null;
+    game.advanceTimer = null;
+
+    if (game.status === 'question') endQuestion(game);
+    clearTimeout(game.advanceTimer);
+    game.advanceTimer = null;
+    game.status = 'finished';
+
+    const board = ranked(game);
+    const rankOf = new Map(board.map((player, index) => [player.id, index + 1]));
+    const finalBoard = leaderboard(game, 50);
+
+    nsp.to(room(game)).emit('game_finished', { leaderboard: finalBoard, players: board.length });
+    for (const player of game.players.values()) {
+      if (player.connected && player.socketId) {
+        nsp.to(player.socketId).emit('final_result', {
+          rank: rankOf.get(player.id),
+          score: player.score,
+          correctCount: player.correctCount,
+          totalQuestions: game.questions.length,
+          players: board.length,
+        });
+      }
+    }
+
+    void saveResults(game);
+    const cleanupTimer = setTimeout(() => {
+      clearTimeout(game.saveRetryTimer);
+      games.delete(game.quizId);
+    }, FINISHED_TTL_MS);
+    cleanupTimer.unref?.();
   };
 
   const advance = (game) => {
     if (game.status !== 'reveal') return;
     clearTimeout(game.advanceTimer);
+    game.advanceTimer = null;
     if (game.index + 1 >= game.questions.length) return finishGame(game);
-    return startQuestion(game, game.index + 1);
+    startQuestion(game, game.index + 1);
   };
 
   const startGame = (game) => {
-    if (game.status !== 'lobby' || game.players.size === 0) return;
+    if (game.status !== 'lobby' || connectedCount(game) === 0) return false;
     clearTimeout(game.autoTimer);
     game.autoTimer = null;
     nsp.to(room(game)).emit('game_started');
     startQuestion(game, 0);
+    return true;
   };
 
   nsp.on('connection', (socket) => {
@@ -310,37 +424,32 @@ export function registerKahootGame(io) {
       return game && game.hostSocketId === socket.id ? game : null;
     };
 
-    /* ---- host ---- */
+    // Teacher host
     socket.on('host_join', async ({ quizId, token } = {}) => {
-      console.log("📥 Backend received host_join for quizId:", quizId); // <-- ADD THIS LINE
       try {
         if (!mongoose.isValidObjectId(quizId)) {
-          console.log("⚠️ Invalid quizId format"); // <-- ADD THIS LINE
           return socket.emit('game_error', { code: 'BAD_QUIZ', message: 'This game link is not valid.' });
         }
+
         const game = await loadGame(String(quizId));
         if (!game) {
-          console.log("⚠️ Game not found in DB for quizId:", quizId); // <-- ADD THIS LINE
           return socket.emit('game_error', { code: 'NO_QUIZ', message: 'This Kahoot game was not found.' });
         }
         if (!game.code) {
-          console.log("⚠️ Game has no access code"); // <-- ADD THIS LINE
-          return socket.emit('game_error', { code: 'NO_CODE', message: 'This game has no join code. Create it again.' });
+          return socket.emit('game_error', { code: 'NO_CODE', message: 'This game has no join PIN. Create it again.' });
         }
         if (!(await verifyHost(token, game))) {
-          console.log("⚠️ Host verification failed"); // <-- ADD THIS LINE
-          return socket.emit('game_error', { code: 'UNAUTHORIZED', message: 'Please log in again to host this game.' });
+          return socket.emit('game_error', { code: 'UNAUTHORIZED', message: 'Please sign in again to host this game.' });
         }
-        
-        console.log("✅ Host verified successfully. Sending host_state..."); // <-- ADD THIS LINE
+
         game.hostSocketId = socket.id;
         socket.data.role = 'host';
         socket.data.quizId = game.quizId;
         socket.join(room(game));
         socket.join(hostRoom(game));
         socket.emit('host_state', hostView(game));
-      } catch (err) {
-        console.error('❌ Kahoot host_join failed:', err.message); // <-- ADD THIS LINE
+      } catch (error) {
+        console.error('[Kahoot] host_join failed:', error.message);
         socket.emit('game_error', { code: 'SERVER', message: 'Could not open the game. Please try again.' });
       }
     });
@@ -348,38 +457,79 @@ export function registerKahootGame(io) {
     socket.on('host_start', ({ quizId } = {}) => {
       const game = hostGame(quizId);
       if (!game || game.status !== 'lobby') return;
-      if (game.players.size === 0) return socket.emit('game_error', { code: 'NO_PLAYERS', message: 'Wait for at least one student to join.' });
-      startGame(game);
+      if (!startGame(game)) {
+        socket.emit('game_error', { code: 'NO_PLAYERS', message: 'Wait for at least one connected student to join.' });
+      }
     });
 
-    socket.on('host_skip', ({ quizId } = {}) => { const g = hostGame(quizId); if (g) endQuestion(g); });   // close the question now
-    socket.on('host_next', ({ quizId } = {}) => { const g = hostGame(quizId); if (g) advance(g); });      // next question / final results
-    socket.on('host_end', ({ quizId } = {}) => { const g = hostGame(quizId); if (g) finishGame(g); });
+    socket.on('host_skip', ({ quizId } = {}) => {
+      const game = hostGame(quizId);
+      if (game) endQuestion(game);
+    });
 
-    /* ---- students ---- */
+    socket.on('host_next', ({ quizId } = {}) => {
+      const game = hostGame(quizId);
+      if (game) advance(game);
+    });
+
+    socket.on('host_end', ({ quizId } = {}) => {
+      const game = hostGame(quizId);
+      if (game) finishGame(game);
+    });
+
+    // Student join. loadGame() here removes the race where a student joins before the host socket loads it.
     socket.on('player_join', async ({ code, name, playerId } = {}) => {
       try {
         const cleanCode = String(code || '').trim().toUpperCase();
-        const quiz = await Quiz.findOne({ 'accessCodes.code': cleanCode, gameMode: 'kahoot' }).select('_id');
-        if (!quiz) return socket.emit('game_error', { code: 'BAD_CODE', message: 'That game code is not valid.' });
+        if (!cleanCode) {
+          return socket.emit('game_error', { code: 'BAD_CODE', message: 'Enter a valid game PIN.' });
+        }
 
-        const game = games.get(String(quiz._id));
-        if (!game) return socket.emit('game_error', { code: 'NO_GAME', message: "Your teacher hasn't opened this game yet. Hang tight, we'll keep trying." });
+        const quiz = await Quiz.findOne({ 'accessCodes.code': cleanCode, gameMode: 'kahoot' }).select('_id');
+        if (!quiz) {
+          return socket.emit('game_error', { code: 'BAD_CODE', message: 'That game PIN is not valid.' });
+        }
+
+        const game = await loadGame(String(quiz._id));
+        if (!game) {
+          return socket.emit('game_error', { code: 'NO_GAME', message: 'This game is not available.' });
+        }
 
         const pid = String(playerId || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 40) || crypto.randomUUID();
         let player = game.players.get(pid);
 
         if (!player) {
           const nick = cleanName(name);
-          if (!nick) return socket.emit('game_error', { code: 'BAD_NAME', message: 'Please enter a nickname.' });
-          if (game.status !== 'lobby') return socket.emit('game_error', { code: 'STARTED', message: 'This game has already started.' });
-          if (game.players.size >= MAX_PLAYERS) return socket.emit('game_error', { code: 'FULL', message: 'This game is full.' });
-          if ([...game.players.values()].some((p) => p.name.toLowerCase() === nick.toLowerCase())) {
-            return socket.emit('game_error', { code: 'NAME_TAKEN', message: 'That nickname is taken. Pick another one.' });
+          if (!nick) {
+            return socket.emit('game_error', { code: 'BAD_NAME', message: 'Please enter a valid name.' });
           }
-          player = { id: pid, name: nick, score: 0, streak: 0, correctCount: 0, totalMs: 0, history: [], lastResult: null, socketId: socket.id, connected: true };
+          if (game.status !== 'lobby') {
+            return socket.emit('game_error', { code: 'STARTED', message: 'This game has already started.' });
+          }
+          if (game.players.size >= game.maxPlayers) {
+            return socket.emit('game_error', { code: 'FULL', message: 'This game has reached its student limit.' });
+          }
+          if ([...game.players.values()].some((entry) => entry.name.toLowerCase() === nick.toLowerCase())) {
+            return socket.emit('game_error', { code: 'NAME_TAKEN', message: 'That name is already in use. Choose another one.' });
+          }
+
+          player = {
+            id: pid,
+            name: nick,
+            score: 0,
+            streak: 0,
+            correctCount: 0,
+            totalMs: 0,
+            history: [],
+            lastResult: null,
+            socketId: socket.id,
+            connected: true,
+            disconnectTimer: null,
+          };
           game.players.set(pid, player);
         } else {
+          clearTimeout(player.disconnectTimer);
+          player.disconnectTimer = null;
           player.socketId = socket.id;
           player.connected = true;
         }
@@ -392,10 +542,14 @@ export function registerKahootGame(io) {
         broadcastPlayers(game);
 
         if (game.autoStart && game.status === 'lobby' && !game.autoTimer) {
-          game.autoTimer = setTimeout(() => startGame(game), AUTO_START_DELAY_MS);
+          game.autoTimer = setTimeout(() => {
+            game.autoTimer = null;
+            startGame(game);
+          }, AUTO_START_DELAY_MS);
+          game.autoTimer.unref?.();
         }
-      } catch (err) {
-        console.error('Kahoot player_join failed:', err.message);
+      } catch (error) {
+        console.error('[Kahoot] player_join failed:', error.message);
         socket.emit('game_error', { code: 'SERVER', message: 'Could not join the game. Please try again.' });
       }
     });
@@ -404,18 +558,25 @@ export function registerKahootGame(io) {
       if (socket.data.role !== 'player') return;
       const game = games.get(socket.data.quizId);
       const player = game?.players.get(socket.data.playerId);
-      if (!game || !player) return;
+      if (!game || !player || !player.connected) return;
       if (game.status !== 'question' || Date.now() > game.endsAt + ANSWER_GRACE_MS) return;
-      if (game.answers.has(player.id)) return; // one answer per question
+      if (game.answers.has(player.id)) return;
 
-      const q = game.questions[game.index];
-      if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length) return;
+      const question = game.questions[game.index];
+      if (!Number.isInteger(choice) || choice < 0 || choice >= question.options.length) return;
 
-      game.answers.set(player.id, { choice, ms: Math.max(0, Date.now() - game.startedAt) });
+      game.answers.set(player.id, {
+        choice,
+        ms: Math.max(0, Date.now() - game.startedAt),
+      });
       socket.emit('answer_locked', { choice });
-      nsp.to(hostRoom(game)).emit('answer_count', { answered: game.answers.size, total: connectedCount(game) });
+      nsp.to(hostRoom(game)).emit('answer_count', {
+        answered: game.answers.size,
+        total: connectedCount(game),
+      });
 
-      if (game.answers.size >= connectedCount(game)) endQuestion(game); // everyone answered: no need to wait
+      const online = connectedCount(game);
+      if (online > 0 && game.answers.size >= online) endQuestion(game);
     });
 
     socket.on('disconnect', () => {
@@ -427,25 +588,45 @@ export function registerKahootGame(io) {
         return;
       }
 
-      if (socket.data.role === 'player') {
-        const p = game.players.get(socket.data.playerId);
-        if (!p || p.socketId !== socket.id) return;
-        p.connected = false;
-        if (game.status === 'lobby') game.players.delete(p.id); // left before the start: remove from the lobby
-        broadcastPlayers(game);
-        if (game.status === 'question') {
-          const online = connectedCount(game);
-          nsp.to(hostRoom(game)).emit('answer_count', { answered: game.answers.size, total: online });
-          if (online > 0 && game.answers.size >= online) endQuestion(game);
-        }
+      if (socket.data.role !== 'player') return;
+      const player = game.players.get(socket.data.playerId);
+      if (!player || player.socketId !== socket.id) return;
+
+      player.connected = false;
+      // Keep a lobby player briefly so a normal page refresh can reconnect with the same ID.
+      if (game.status === 'lobby') {
+        clearTimeout(player.disconnectTimer);
+        player.disconnectTimer = setTimeout(() => {
+          player.disconnectTimer = null;
+          if (game.status === 'lobby' && !player.connected) {
+            game.players.delete(player.id);
+            broadcastPlayers(game);
+          }
+        }, DISCONNECT_GRACE_MS);
+        player.disconnectTimer.unref?.();
+      }
+
+      broadcastPlayers(game);
+      if (game.status === 'question') {
+        const online = connectedCount(game);
+        nsp.to(hostRoom(game)).emit('answer_count', { answered: game.answers.size, total: online });
+        if (online > 0 && game.answers.size >= online) endQuestion(game);
       }
     });
   });
 
-  // Drop abandoned games (host closed the tab and never came back)
-  setInterval(() => {
+  // Remove abandoned in-memory games. Completed results are persisted separately.
+  const staleTimer = setInterval(() => {
     const now = Date.now();
-    for (const [id, g] of games) if (now - g.createdAt > STALE_GAME_MS) games.delete(id);
-  }, 10 * 60 * 1000).unref?.();
+    for (const [id, game] of games) {
+      if (game.status !== 'finished' && now - game.createdAt > STALE_GAME_MS) {
+        clearTimeout(game.timer);
+        clearTimeout(game.autoTimer);
+        clearTimeout(game.advanceTimer);
+        for (const player of game.players.values()) clearTimeout(player.disconnectTimer);
+        games.delete(id);
+      }
+    }
+  }, 10 * 60 * 1000);
+  staleTimer.unref?.();
 }
-
