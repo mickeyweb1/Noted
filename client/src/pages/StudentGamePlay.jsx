@@ -19,10 +19,9 @@ export default function StudentGamePlay() {
   const navigate = useNavigate();
   const code = sessionStorage.getItem("kahoot_code");
   const [playerName, setPlayerName] = useState(sessionStorage.getItem("playerName") || "");
-// ✅ Safer UUID generation for the browser
-const generatePlayerId = () => window.crypto?.randomUUID?.() || Math.random().toString(36).substring(2, 15);
-
-const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId") || generatePlayerId());
+  const generatePlayerId = () => window.crypto?.randomUUID?.() || Math.random().toString(36).substring(2, 15);
+  const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId") || generatePlayerId());
+  
   const [socket, setSocket] = useState(null);
   const [gameState, setGameState] = useState("lobby"); 
   const [question, setQuestion] = useState(null);
@@ -37,8 +36,6 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
     if (!playerName) return; 
 
     sessionStorage.setItem("kahoot_playerId", playerId);
-
-    // ✅ USE THE NEW HELPER HERE
     const newSocket = createKahootSocket();
     setSocket(newSocket);
 
@@ -50,7 +47,7 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
     newSocket.on("joined", (snapshot) => {
       setGameState(snapshot.status);
       setMyStats({ score: snapshot.me.score, rank: snapshot.me.rank, correctCount: 0 });
-      setLeaderboard(snapshot.leaderboard);
+      setLeaderboard(snapshot.leaderboard || []);
       if (snapshot.question) {
         setQuestion(snapshot.question);
         setTimeLeft(Math.ceil((snapshot.question.endsAt - Date.now()) / 1000));
@@ -72,7 +69,7 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
       setGameState("leaderboard");
       setLastResult(result);
       setMyStats({ score: result.score, rank: result.rank, correctCount: result.correctCount });
-      setLeaderboard(result.leaderboard); // The engine sends the updated leaderboard here
+      setLeaderboard(result.leaderboard || []); // ✅ SAFE FALLBACK TO EMPTY ARRAY
       
       if (result.correct) SOUNDS.correct.play().catch(() => {});
       else SOUNDS.incorrect.play().catch(() => {});
@@ -80,7 +77,7 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
 
     newSocket.on("game_finished", (data) => {
       setGameState("finished");
-      setLeaderboard(data.leaderboard);
+      setLeaderboard(data.leaderboard || []);
     });
 
     newSocket.on("game_error", (err) => {
@@ -91,7 +88,6 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
     return () => { newSocket.disconnect(); };
   }, [code, playerName, playerId, navigate]);
 
-  // Timer countdown
   useEffect(() => {
     if (gameState === "playing" && timeLeft > 0) {
       const timer = setInterval(() => {
@@ -153,6 +149,7 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+      {/* Header: Score & Rank */}
       <div className="bg-slate-900 p-4 flex justify-between items-center border-b border-slate-800">
         <div className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-yellow-500" />
@@ -168,6 +165,8 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6">
+        
+        {/* 1. LOBBY STATE */}
         {gameState === "lobby" && (
           <div className="text-center space-y-4 animate-pulse">
             <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-brand-soft text-brand">
@@ -178,28 +177,38 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
           </div>
         )}
 
+        {/* 2. PLAYING STATE (Shows Question + Shapes) */}
         {gameState === "playing" && question && (
-          <div className="w-full max-w-md space-y-6">
+          <div className="w-full max-w-2xl space-y-6">
             <div className="text-center">
-              <div className="inline-flex items-center gap-2 rounded-full bg-red-500/20 px-4 py-1.5 text-red-400 font-bold text-xl">
+              <div className="inline-flex items-center gap-2 rounded-full bg-red-500/20 px-4 py-1.5 text-red-400 font-bold text-xl mb-4">
                 {timeLeft}s
               </div>
+              <h2 className="text-2xl md:text-3xl font-black text-white mb-6 px-4 leading-tight">
+                {question.question}
+              </h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              {SHAPES.map((shape) => (
-                <button
-                  key={shape.id}
-                  onClick={() => handleAnswer(shape.id)}
-                  className={`aspect-square rounded-2xl ${shape.color} ${shape.hover} flex flex-col items-center justify-center shadow-lg transition-all active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/30`}
-                >
-                  <span className="text-7xl font-black text-white drop-shadow-md">{shape.shape}</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">
+              {question.options.map((opt, idx) => {
+                const shape = SHAPES[idx];
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleAnswer(idx)}
+                    className={`relative flex items-center gap-4 rounded-2xl p-4 md:p-6 text-left text-white font-bold text-lg md:text-xl shadow-lg transition-all active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/30 ${shape.color} ${shape.hover}`}
+                  >
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-black/20 text-3xl font-black drop-shadow-md">
+                      {shape.shape}
+                    </span>
+                    <span className="flex-1 break-words">{opt}</span>
+                  </button>
+                );
+              })}
             </div>
-            <p className="text-center text-sm text-slate-500">Tap the shape that matches your teacher's screen!</p>
           </div>
         )}
 
+        {/* 3. ANSWERED STATE */}
         {gameState === "answered" && (
           <div className="text-center space-y-4">
             <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-brand-soft text-brand animate-bounce">
@@ -210,20 +219,32 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
           </div>
         )}
 
+        {/* 4. LEADERBOARD / REVEAL STATE */}
         {(gameState === "leaderboard" || gameState === "finished") && lastResult && (
-          <div className="w-full max-w-md space-y-6 animate-in fade-in zoom-in duration-300">
+          <div className="w-full max-w-2xl space-y-6 animate-in fade-in zoom-in duration-300">
+            {/* Result Banner */}
             <div className={`rounded-2xl p-6 text-center shadow-lg ${lastResult.correct ? "bg-green-500/20 border-2 border-green-500" : "bg-red-500/20 border-2 border-red-500"}`}>
               <h2 className="text-3xl font-black mb-1">{lastResult.correct ? "Correct!" : "Incorrect"}</h2>
+              
+              {/* ✅ SHOW CORRECT ANSWER IF THEY GOT IT WRONG */}
+              {!lastResult.correct && lastResult.correctAnswer && (
+                <p className="text-lg text-white/80 mb-2">
+                  The correct answer was: <span className="font-bold text-white">{lastResult.correctAnswer}</span>
+                </p>
+              )}
+              
               {lastResult.points > 0 && <p className="text-xl font-bold text-yellow-400">+{lastResult.points} points!</p>}
             </div>
 
+            {/* Mini Leaderboard */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <h3 className="text-center font-bold text-slate-400 mb-3 uppercase tracking-wider text-sm">
                 {gameState === "finished" ? "Final Standings" : "Top Players"}
               </h3>
               <div className="space-y-2">
-                {leaderboard.map((player, idx) => (
-                  <div key={player.id} className={`flex items-center justify-between rounded-xl p-3 ${player.name === playerName ? "bg-brand/20 border border-brand" : "bg-slate-800"}`}>
+                {/* ✅ SAFE CHECK: Ensure leaderboard is an array before mapping */}
+                {Array.isArray(leaderboard) && leaderboard.map((player, idx) => (
+                  <div key={player.id || idx} className={`flex items-center justify-between rounded-xl p-3 ${player.name === playerName ? "bg-brand/20 border border-brand" : "bg-slate-800"}`}>
                     <div className="flex items-center gap-3">
                       <span className={`flex h-8 w-8 items-center justify-center rounded-full font-bold text-sm ${idx === 0 ? "bg-yellow-500 text-black" : idx === 1 ? "bg-slate-400 text-black" : idx === 2 ? "bg-amber-700 text-white" : "bg-slate-700 text-slate-300"}`}>
                         {player.rank}

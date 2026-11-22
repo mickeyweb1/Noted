@@ -263,6 +263,9 @@ export function registerKahootGame(io) {
           rank: rankOf.get(p.id),
           players: board.length,
           correctCount: p.correctCount,
+          leaderboard: leaderboard(game, 5), // ✅ FIX: Send the actual leaderboard array
+          correctIndex: q.correctIndex,       // ✅ FIX: So frontend knows which was right
+          correctAnswer: q.correctAnswer,     // ✅ FIX: So frontend can display the right answer
         });
       }
     }
