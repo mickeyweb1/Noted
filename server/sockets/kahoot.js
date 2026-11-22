@@ -7,6 +7,7 @@ import { Quiz } from '../models/Quiz.js';
 import { KahootAttempt } from '../models/KahootAttempt.js';
 import { QuizSubmission } from '../models/QuizSubmission.js';
 import { User } from '../models/User.js';
+import { Organization } from '../models/Organization.js';
 
 const MAX_PLAYERS = 500;
 const NAME_MAX = 40;
@@ -44,7 +45,7 @@ const durationMsFor = (quiz) => {
   return Math.max(QUESTION_MIN_SECONDS, Math.min(seconds, QUESTION_MAX_SECONDS)) * 1000;
 };
 
-const makeAccessCode = (existing = new Set()) => {
+export const makeAccessCode = (existing = new Set()) => {
   let code;
   do {
     let suffix = '';
@@ -85,20 +86,77 @@ const publicAttemptForTeacher = (attempt, connected) => ({
   lastSeenAt: attempt.lastSeenAt,
 });
 
-const verifyHost = async (token, quiz) => {
-  if (!token || typeof token !== 'string') return false;
+export const verifyHost = async (token, quiz) => {
+  if (!token || typeof token !== 'string') {
+    return false;
+  }
+
   let payload;
+
   try {
     payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch {
     return false;
   }
 
-  const userId = payload.id || payload._id || payload.userId || payload.sub;
-  if (!mongoose.isValidObjectId(userId)) return false;
-  const user = await User.findById(userId).select('role isActive');
-  if (!user || user.isActive === false) return false;
-  return user.role === 'super_admin' || String(user._id) === String(quiz.createdBy);
+  const userId =
+    payload.id ||
+    payload._id ||
+    payload.userId ||
+    payload.sub;
+
+  if (!mongoose.isValidObjectId(userId)) {
+    return false;
+  }
+
+  const user = await User.findById(userId)
+    .select('role isActive');
+
+  if (!user || user.isActive === false) {
+    return false;
+  }
+
+  if (
+    user.role === 'super_admin' ||
+    String(user._id) === String(quiz.createdBy)
+  ) {
+    return true;
+  }
+
+  if (!['school_admin', 'hod'].includes(user.role)) {
+    return false;
+  }
+
+  const creator = await User.findById(quiz.createdBy)
+    .select('role schoolOwnerId hodId schoolId');
+
+  if (!creator || !['teacher', 'hod'].includes(creator.role)) {
+    return false;
+  }
+
+  if (user.role === 'hod') {
+    return (
+      creator.role === 'teacher' &&
+      String(creator.hodId) === String(user._id)
+    );
+  }
+
+  if (
+    creator.schoolOwnerId &&
+    String(creator.schoolOwnerId) === String(user._id)
+  ) {
+    return true;
+  }
+
+  const organization = await Organization.findOne({
+    adminId: user._id
+  }).select('_id');
+
+  return Boolean(
+    organization &&
+    creator.schoolId &&
+    String(creator.schoolId) === String(organization._id)
+  );
 };
 
 const clearAttemptTimer = (attemptId) => {
@@ -223,11 +281,53 @@ export function registerKahootGame(io) {
       }),
     };
 
-    await QuizSubmission.updateOne(
-      { quiz: quiz._id, accessCode: attempt.code },
-      { $set: submission },
-      { upsert: true, runValidators: true },
-    );
+    try {
+      await QuizSubmission.updateOne(
+        { quiz: quiz._id, accessCode: attempt.code },
+        { $set: submission },
+        { upsert: true, runValidators: true },
+      );
+      await KahootAttempt.updateOne(
+        { _id: attempt._id },
+        {
+          $set: {
+            submissionSavedAt: new Date(),
+            submissionSaveError: '',
+          },
+        },
+      );
+    } catch (error) {
+      await KahootAttempt.updateOne(
+        { _id: attempt._id },
+        {
+          $set: {
+            submissionSaveError: String(error.message || 'Submission save failed').slice(0, 500),
+            submissionSavedAt: null,
+          },
+          $inc: { submissionSaveAttempts: 1 },
+        },
+      ).catch(() => {});
+      throw error;
+    }
+  };
+
+  const retryPendingSubmissions = async () => {
+    const pendingAttempts = await KahootAttempt.find({
+      status: 'completed',
+      submissionSavedAt: null,
+    })
+      .sort({ completedAt: 1 })
+      .limit(100);
+
+    for (const attempt of pendingAttempts) {
+      const quiz = await Quiz.findById(attempt.quiz);
+      if (!quiz) continue;
+      try {
+        await saveSubmission(attempt, quiz);
+      } catch (error) {
+        console.error('[Kahoot] Pending result retry failed:', error.message);
+      }
+    }
   };
 
   const finishAttempt = async (attempt, quiz) => {
@@ -295,87 +395,160 @@ export function registerKahootGame(io) {
     return attempt;
   };
 
-  const recordAnswer = async (attemptId, selectedIndex, timedOut = false) => {
-    const attempt = await KahootAttempt.findById(attemptId);
-    if (!attempt || attempt.status !== 'in_progress') return null;
-    const quiz = await Quiz.findById(attempt.quiz);
-    if (!quiz) return null;
+const recordAnswer = async (attemptId, selectedIndex, timedOut = false) => {
+  const attempt = await KahootAttempt.findById(attemptId);
 
-    const questionIndex = attempt.currentQuestionIndex;
-    const question = quiz.questions[questionIndex];
-    if (!question) return null;
+  if (!attempt || attempt.status !== 'in_progress') {
+    return null;
+  }
 
-    const now = new Date();
-    const deadline = attempt.questionEndsAt ? new Date(attempt.questionEndsAt).getTime() : 0;
-    if (!timedOut && deadline && now.getTime() > deadline + 500) return null;
+  const quiz = await Quiz.findById(attempt.quiz);
 
-    // The atomic flag prevents two tabs/connections from submitting twice for one question.
-    const locked = await KahootAttempt.findOneAndUpdate(
-      {
-        _id: attempt._id,
-        status: 'in_progress',
-        currentQuestionIndex: questionIndex,
-        currentQuestionAnswered: false,
-      },
-      { $set: { currentQuestionAnswered: true } },
-      { new: true },
-    );
-    if (!locked) return null;
+  if (!quiz) return null;
 
-    const duration = durationMsFor(quiz);
-    const started = locked.questionStartedAt ? new Date(locked.questionStartedAt).getTime() : now.getTime();
-    const timeTakenMs = timedOut ? duration : Math.max(0, Math.min(duration, now.getTime() - started));
-    const validSelection = Number.isInteger(selectedIndex)
-      && selectedIndex >= 0
-      && selectedIndex < question.options.length;
-    const chosenIndex = validSelection && !timedOut ? selectedIndex : null;
-    const correctIndex = question.options.findIndex((option) => option === question.correctAnswer);
-    const isCorrect = chosenIndex !== null && chosenIndex === correctIndex;
-    const points = isCorrect
-      ? Math.max(100, Math.round(1000 * (1 - (timeTakenMs / duration) * 0.5)))
-      : 0;
+  const questionIndex = attempt.currentQuestionIndex;
+  const question = quiz.questions[questionIndex];
 
-    locked.answers.push({
-      questionId: question._id,
-      questionIndex,
-      selectedIndex: chosenIndex,
-      selectedAnswer: chosenIndex === null ? '' : question.options[chosenIndex],
-      isCorrect,
-      timedOut: Boolean(timedOut),
-      points,
-      timeTakenMs,
-      answeredAt: now,
-    });
-    locked.score += points;
-    if (isCorrect) locked.correctCount += 1;
-    locked.status = 'feedback';
-    locked.feedbackEndsAt = new Date(now.getTime() + FEEDBACK_DELAY_MS);
-    locked.questionEndsAt = null;
-    locked.lastSeenAt = now;
-    locked.lastResult = {
-      correct: isCorrect,
-      isCorrect,
-      timedOut: Boolean(timedOut),
-      selectedIndex: chosenIndex,
-      correctIndex,
-      selectedAnswer: chosenIndex === null ? '' : question.options[chosenIndex],
-      correctAnswer: question.correctAnswer,
-      explanation: question.explanation || '',
-      points,
-      score: locked.score,
-      correctCount: locked.correctCount,
-      questionIndex,
-      totalQuestions: quiz.questions.length,
-      feedbackEndsAt: locked.feedbackEndsAt.getTime(),
-    };
-    await locked.save();
+  if (!question) return null;
 
-    clearAttemptTimer(locked._id);
-    nsp.to(attemptRoom(locked._id)).emit('answer_result', locked.lastResult);
-    scheduleAttemptTimer(locked);
-    await emitHostState(quiz._id);
-    return locked;
+  const now = new Date();
+
+  const deadline = attempt.questionEndsAt
+    ? new Date(attempt.questionEndsAt).getTime()
+    : 0;
+
+  if (!deadline) return null;
+
+  if (timedOut && deadline > now.getTime()) {
+    return null;
+  }
+
+  if (!timedOut && now.getTime() > deadline + 500) {
+    return null;
+  }
+
+  const duration = durationMsFor(quiz);
+
+  const started = attempt.questionStartedAt
+    ? new Date(attempt.questionStartedAt).getTime()
+    : now.getTime();
+
+  const timeTakenMs = timedOut
+    ? duration
+    : Math.max(0, Math.min(duration, now.getTime() - started));
+
+  const validSelection =
+    Number.isInteger(selectedIndex) &&
+    selectedIndex >= 0 &&
+    selectedIndex < question.options.length;
+
+  const chosenIndex =
+    validSelection && !timedOut ? selectedIndex : null;
+
+  const correctIndex = question.options.findIndex(
+    (option) => option === question.correctAnswer
+  );
+
+  const isCorrect =
+    chosenIndex !== null && chosenIndex === correctIndex;
+
+  const points = isCorrect
+    ? Math.max(
+        100,
+        Math.round(1000 * (1 - timeTakenMs / duration * 0.5))
+      )
+    : 0;
+
+  const nextScore = (attempt.score || 0) + points;
+
+  const nextCorrectCount =
+    (attempt.correctCount || 0) + (isCorrect ? 1 : 0);
+
+  const feedbackEndsAt = new Date(
+    now.getTime() + FEEDBACK_DELAY_MS
+  );
+
+  const answerRecord = {
+    questionId: question._id,
+    questionIndex,
+    selectedIndex: chosenIndex,
+    selectedAnswer:
+      chosenIndex === null ? '' : question.options[chosenIndex],
+    isCorrect,
+    timedOut: Boolean(timedOut),
+    points,
+    timeTakenMs,
+    answeredAt: now
   };
+
+  const lastResult = {
+    correct: isCorrect,
+    isCorrect,
+    timedOut: Boolean(timedOut),
+    selectedIndex: chosenIndex,
+    correctIndex,
+    selectedAnswer: answerRecord.selectedAnswer,
+    correctAnswer: question.correctAnswer,
+    explanation: question.explanation || '',
+    points,
+    score: nextScore,
+    correctCount: nextCorrectCount,
+    questionIndex,
+    totalQuestions: quiz.questions.length,
+    feedbackEndsAt: feedbackEndsAt.getTime()
+  };
+
+  // One atomic operation prevents a question from being locked
+  // without its corresponding answer being stored.
+  const updated = await KahootAttempt.findOneAndUpdate(
+    {
+      _id: attempt._id,
+      status: 'in_progress',
+      currentQuestionIndex: questionIndex,
+      currentQuestionAnswered: false,
+      questionEndsAt: timedOut
+        ? { $lte: now }
+        : { $gte: new Date(now.getTime() - 500) }
+    },
+    {
+      $set: {
+        currentQuestionAnswered: true,
+        status: 'feedback',
+        feedbackEndsAt,
+        questionEndsAt: null,
+        lastSeenAt: now,
+        lastResult
+      },
+      $push: {
+        answers: answerRecord
+      },
+      $inc: {
+        score: points,
+        correctCount: isCorrect ? 1 : 0
+      }
+    },
+    {
+      new: true,
+      runValidators: true
+    }
+  );
+
+  // Another connection or the timeout handler may have won the race.
+  if (!updated) return null;
+
+  clearAttemptTimer(updated._id);
+
+  nsp.to(attemptRoom(updated._id)).emit(
+    'answer_result',
+    updated.lastResult
+  );
+
+  scheduleAttemptTimer(updated);
+
+  await emitHostState(quiz._id);
+
+  return updated;
+};
 
   async function processTimeout(attemptId) {
     try {
@@ -663,9 +836,24 @@ export function registerKahootGame(io) {
     }
   };
 
+  const pendingSubmissionTimer = setInterval(() => {
+    void retryPendingSubmissions().catch((error) => {
+      console.error('[Kahoot] Pending result retry process failed:', error.message);
+    });
+  }, 15000);
+  pendingSubmissionTimer.unref?.();
+
   if (mongoose.connection.readyState === 1) {
     void hydrateTimers();
+    void retryPendingSubmissions().catch((error) => {
+      console.error('[Kahoot] Pending result recovery failed:', error.message);
+    });
   } else {
-    mongoose.connection.once('connected', () => { void hydrateTimers(); });
+    mongoose.connection.once('connected', () => {
+      void hydrateTimers();
+      void retryPendingSubmissions().catch((error) => {
+        console.error('[Kahoot] Pending result recovery failed:', error.message);
+      });
+    });
   }
 }

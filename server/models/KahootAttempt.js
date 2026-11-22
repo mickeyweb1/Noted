@@ -43,10 +43,14 @@ const kahootAttemptSchema = new mongoose.Schema({
   startedAt: { type: Date, default: null },
   completedAt: { type: Date, default: null },
   lastSeenAt: { type: Date, default: Date.now },
+  submissionSavedAt: { type: Date, default: null },
+  submissionSaveAttempts: { type: Number, default: 0, min: 0 },
+  submissionSaveError: { type: String, default: '', maxlength: 500 },
 }, { timestamps: true });
 
 // A code can create exactly one attempt. A matching playerKey can reconnect to it.
 kahootAttemptSchema.index({ quiz: 1, code: 1 }, { unique: true });
 kahootAttemptSchema.index({ quiz: 1, status: 1, updatedAt: -1 });
+kahootAttemptSchema.index({ status: 1, submissionSavedAt: 1, completedAt: 1 });
 
 export const KahootAttempt = mongoose.model('KahootAttempt', kahootAttemptSchema);

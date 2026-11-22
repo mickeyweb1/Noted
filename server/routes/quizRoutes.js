@@ -776,27 +776,36 @@ router.post('/validate-code', async (req, res, next) => {
 
     const hasActiveSession = Boolean(await QuizSession.exists({ code }));
 
-    res.json({
-      success: true,
-      data: {
-        quizId: quiz._id.toString(),
-        title: quiz.title,
-        gameMode: quiz.gameMode,
-        difficulty: quiz.difficulty,
-        timeLimit: quiz.timeLimit,
-        timeUnit: quiz.timeUnit,
-        timeType: quiz.timeType,
-        maxTabSwitches: quiz.maxTabSwitches,
-        bonusMarks: quiz.bonusMarks,
-        layoutMode: quiz.layoutMode || 'scroll',
-        showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
-        passMark: quiz.passMark ?? 50,
-        hasActiveSession,
-        isOpen: quiz.gameMode === 'kahoot' ? (!quiz.kahootClosedAt && Boolean(quiz.autoStart || quiz.kahootIsOpen)) : undefined,
-        isFreeTier,
-        questions: quiz.questions.map((q) => ({ _id: q._id, question: q.question, options: q.options, imageUrl: q.imageUrl })),
-      },
-    });
+    const responseData = {
+      quizId: quiz._id.toString(),
+      title: quiz.title,
+      gameMode: quiz.gameMode,
+      difficulty: quiz.difficulty,
+      timeLimit: quiz.timeLimit,
+      timeUnit: quiz.timeUnit,
+      timeType: quiz.timeType,
+      maxTabSwitches: quiz.maxTabSwitches,
+      bonusMarks: quiz.bonusMarks,
+      layoutMode: quiz.layoutMode || 'scroll',
+      showAnswersAfterSubmission: quiz.showAnswersAfterSubmission !== false,
+      passMark: quiz.passMark ?? 50,
+      hasActiveSession,
+      isOpen: quiz.gameMode === 'kahoot'
+        ? (!quiz.kahootClosedAt && Boolean(quiz.autoStart || quiz.kahootIsOpen))
+        : undefined,
+      isFreeTier,
+    };
+
+    if (quiz.gameMode !== 'kahoot') {
+      responseData.questions = quiz.questions.map((q) => ({
+        _id: q._id,
+        question: q.question,
+        options: q.options,
+        imageUrl: q.imageUrl,
+      }));
+    }
+
+    res.json({ success: true, data: responseData });
   } catch (error) { next(error); }
 });
 

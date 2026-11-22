@@ -116,7 +116,9 @@ export default function KahootCreator() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiSeconds, setAiSeconds] = useState(0);
   const [creating, setCreating] = useState(false);
-    const [autoStart, setAutoStart] = useState(false);
+   const [autoStart, setAutoStart] = useState(
+  Boolean(draft?.autoStart)
+);
 
   /* ---------------- plan limits ---------------- */
   const maxQ = limits?.maxQuestionsPerQuiz ?? 50;
@@ -136,7 +138,16 @@ export default function KahootCreator() {
       return writeJson(DRAFT_KEY, { title, timeLimit, numStudents, numQuestions, notes, questions, activeTab, autoStart, savedAt: Date.now() });
     }, 500);
     return () => clearTimeout(timer);
-  }, [title, timeLimit, numStudents, numQuestions, notes, questions, activeTab]);
+  }, [
+  title,
+  timeLimit,
+  numStudents,
+  numQuestions,
+  notes,
+  questions,
+  activeTab,
+  autoStart
+]);
 
   useEffect(() => {
     if (!aiBusy) { setAiSeconds(0); return undefined; }
