@@ -1,293 +1,346 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { AlertCircle, Check, Clock3, Trophy, User, Wifi, WifiOff, X } from "lucide-react";
 import { createKahootSocket } from "../utils/socket";
-import { Trophy, AlertCircle, User, Check, X } from "lucide-react";
 
-// ✅ Pre-load sounds
 const SOUNDS = {
-  correct: new Audio("https://actions.google.com/sounds/v1/cartoon/clown_horn.ogg"), 
-  incorrect: new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"), 
+  correct: new Audio("https://actions.google.com/sounds/v1/cartoon/clown_horn.ogg"),
+  incorrect: new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"),
 };
 
 const SHAPES = [
-  { id: 0, color: "bg-red-500", hover: "hover:bg-red-600", shape: "▲", name: "Red Triangle" },
-  { id: 1, color: "bg-blue-500", hover: "hover:bg-blue-600", shape: "◆", name: "Blue Diamond" },
-  { id: 2, color: "bg-yellow-500", hover: "hover:bg-yellow-600", shape: "●", name: "Yellow Circle" },
-  { id: 3, color: "bg-green-500", hover: "hover:bg-green-600", shape: "■", name: "Green Square" },
+  { color: "bg-red-500", hover: "hover:bg-red-600", symbol: "▲" },
+  { color: "bg-blue-500", hover: "hover:bg-blue-600", symbol: "◆" },
+  { color: "bg-yellow-500", hover: "hover:bg-yellow-600", symbol: "●" },
+  { color: "bg-green-500", hover: "hover:bg-green-600", symbol: "■" },
 ];
+
+const makePlayerId = () => {
+  try {
+    return window.crypto?.randomUUID?.() || `p-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  } catch {
+    return `p-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+};
+
+const mapServerStatus = (status, answeredChoice) => {
+  if (status === "question") return answeredChoice !== null && answeredChoice !== undefined ? "answered" : "playing";
+  if (status === "reveal") return "reveal";
+  if (status === "finished") return "finished";
+  return "lobby";
+};
 
 export default function StudentGamePlay() {
   const navigate = useNavigate();
   const code = sessionStorage.getItem("kahoot_code");
-  const [playerName, setPlayerName] = useState(sessionStorage.getItem("playerName") || "");
-  const generatePlayerId = () => window.crypto?.randomUUID?.() || Math.random().toString(36).substring(2, 15);
-  const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId") || generatePlayerId());
-  
-  const [socket, setSocket] = useState(null);
-  const [gameState, setGameState] = useState("lobby"); 
+  const [playerName, setPlayerName] = useState(() => sessionStorage.getItem("playerName") || "");
+  const [nameDraft, setNameDraft] = useState(() => sessionStorage.getItem("playerName") || "");
+  const [playerId] = useState(() => {
+    const existing = sessionStorage.getItem("kahoot_playerId");
+    const id = existing || makePlayerId();
+    sessionStorage.setItem("kahoot_playerId", id);
+    return id;
+  });
+
+  const socketRef = useRef(null);
+  const revealTimerRef = useRef(null);
+  const audioUnlockedRef = useRef(false);
+
+  const [gameState, setGameState] = useState("lobby");
   const [question, setQuestion] = useState(null);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [selectedChoice, setSelectedChoice] = useState(null);
   const [myStats, setMyStats] = useState({ score: 0, rank: 0, correctCount: 0 });
   const [lastResult, setLastResult] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [connection, setConnection] = useState("connecting");
   const [error, setError] = useState("");
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-  // ✅ Unlock audio on first user interaction (browser requirement)
   const unlockAudio = () => {
-    if (!audioUnlocked) {
-      SOUNDS.correct.volume = 0.1;
-      SOUNDS.correct.play().catch(() => {});
-      setAudioUnlocked(true);
+    audioUnlockedRef.current = true;
+  };
+
+  const clearRevealTimer = () => {
+    if (revealTimerRef.current) {
+      window.clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
     }
   };
 
   useEffect(() => {
-    if (!code) { navigate("/"); return; }
-    if (!playerName) return; 
+    if (!code) {
+      navigate("/game-join", { replace: true });
+      return undefined;
+    }
+    if (!playerName) return undefined;
 
-    sessionStorage.setItem("kahoot_playerId", playerId);
-    const newSocket = createKahootSocket();
-    setSocket(newSocket);
+    let active = true;
+    const socket = createKahootSocket();
+    socketRef.current = socket;
 
-    newSocket.on("connect", () => {
-      console.log("✅ Student connected to /kahoot. Emitting player_join...");
-      newSocket.emit("player_join", { code, name: playerName, playerId });
-    });
+    const joinGame = () => {
+      if (!active) return;
+      setConnection("connected");
+      setError("");
+      socket.emit("player_join", { code, name: playerName, playerId });
+    };
 
-    newSocket.on("joined", (snapshot) => {
-      setGameState(snapshot.status);
-      setMyStats({ score: snapshot.me.score, rank: snapshot.me.rank, correctCount: 0 });
-      setLeaderboard(snapshot.leaderboard || []);
-      if (snapshot.question) {
-        setQuestion(snapshot.question);
-        setTimeLeft(Math.ceil((snapshot.question.endsAt - Date.now()) / 1000));
+    const onJoined = (snapshot) => {
+      if (!active) return;
+      clearRevealTimer();
+
+      const mappedState = mapServerStatus(snapshot.status, snapshot.answeredChoice);
+      setGameState(mappedState);
+      setMyStats({
+        score: snapshot.me?.score || 0,
+        rank: snapshot.me?.rank || 0,
+        correctCount: snapshot.me?.correctCount || 0,
+      });
+      setLeaderboard(Array.isArray(snapshot.leaderboard) ? snapshot.leaderboard : []);
+      setSelectedChoice(snapshot.answeredChoice ?? null);
+
+      if (snapshot.question) setQuestion(snapshot.question);
+      if (snapshot.status === "question" && snapshot.question?.endsAt) {
+        setTimeLeft(Math.max(0, Math.ceil((snapshot.question.endsAt - Date.now()) / 1000)));
       }
-    });
 
-    newSocket.on("question_start", (q) => {
+      if (snapshot.status === "reveal" || snapshot.status === "finished") {
+        const result = snapshot.lastResult
+          ? {
+              ...snapshot.lastResult,
+              correctAnswer: snapshot.reveal?.correctAnswer,
+              correctIndex: snapshot.reveal?.correctIndex,
+              explanation: snapshot.reveal?.explanation,
+              leaderboard: snapshot.leaderboard || [],
+            }
+          : null;
+        setLastResult(result);
+      } else {
+        setLastResult(null);
+      }
+
+      if (mappedState === "reveal") {
+        revealTimerRef.current = window.setTimeout(() => {
+          setGameState((current) => current === "reveal" ? "leaderboard" : current);
+        }, 3000);
+      }
+    };
+
+    const onQuestionStart = (nextQuestion) => {
+      if (!active) return;
+      clearRevealTimer();
+      setQuestion(nextQuestion);
       setGameState("playing");
-      setQuestion(q);
-      setTimeLeft(Math.ceil((q.endsAt - Date.now()) / 1000));
+      setSelectedChoice(null);
       setLastResult(null);
-    });
+      setTimeLeft(Math.max(0, Math.ceil((nextQuestion.endsAt - Date.now()) / 1000)));
+    };
 
-    newSocket.on("answer_locked", () => {
+    const onAnswerLocked = ({ choice } = {}) => {
+      if (!active) return;
+      if (Number.isInteger(choice)) setSelectedChoice(choice);
       setGameState("answered");
-    });
+    };
 
-    newSocket.on("answer_result", (result) => {
-      setGameState("reveal"); // ✅ New state for the massive animation
+    const onAnswerResult = (result) => {
+      if (!active) return;
+      clearRevealTimer();
       setLastResult(result);
-      setMyStats({ score: result.score, rank: result.rank, correctCount: result.correctCount });
-      setLeaderboard(result.leaderboard || []);
-      
-      if (audioUnlocked) {
-        if (result.correct) SOUNDS.correct.play().catch(() => {});
-        else SOUNDS.incorrect.play().catch(() => {});
+      setMyStats({
+        score: result.score || 0,
+        rank: result.rank || 0,
+        correctCount: result.correctCount || 0,
+      });
+      setLeaderboard(Array.isArray(result.leaderboard) ? result.leaderboard : []);
+      setGameState("reveal");
+
+      if (audioUnlockedRef.current) {
+        const sound = result.correct ? SOUNDS.correct : SOUNDS.incorrect;
+        sound.currentTime = 0;
+        sound.play().catch(() => {});
       }
 
-      // ✅ Auto-advance to leaderboard after 3 seconds of showing the result
-      setTimeout(() => {
-        setGameState("leaderboard");
+      revealTimerRef.current = window.setTimeout(() => {
+        setGameState((current) => current === "reveal" ? "leaderboard" : current);
       }, 3000);
-    });
+    };
 
-    newSocket.on("game_finished", (data) => {
+    const onGameFinished = (result) => {
+      if (!active) return;
+      clearRevealTimer();
       setGameState("finished");
-      setLeaderboard(data.leaderboard || []);
-    });
+      setLeaderboard(Array.isArray(result.leaderboard) ? result.leaderboard : []);
+    };
 
-    newSocket.on("game_error", (err) => {
-      setError(err.message);
-      setTimeout(() => navigate("/"), 3000);
-    });
+    const onFinalResult = (result) => {
+      if (!active) return;
+      setMyStats({
+        score: result.score || 0,
+        rank: result.rank || 0,
+        correctCount: result.correctCount || 0,
+      });
+      setGameState("finished");
+    };
 
-    return () => { newSocket.disconnect(); };
-  }, [code, playerName, playerId, navigate, audioUnlocked]);
+    const onGameError = (gameError) => {
+      if (!active) return;
+      setError(gameError?.message || "The game returned an error.");
+    };
+
+    socket.on("connect", joinGame);
+    socket.on("connect_error", () => {
+      if (active) setConnection("disconnected");
+    });
+    socket.on("disconnect", () => {
+      if (active) setConnection("disconnected");
+    });
+    socket.on("joined", onJoined);
+    socket.on("question_start", onQuestionStart);
+    socket.on("answer_locked", onAnswerLocked);
+    socket.on("answer_result", onAnswerResult);
+    socket.on("game_finished", onGameFinished);
+    socket.on("final_result", onFinalResult);
+    socket.on("game_error", onGameError);
+
+    if (socket.connected) joinGame();
+
+    return () => {
+      active = false;
+      clearRevealTimer();
+      socket.removeAllListeners();
+      socket.disconnect();
+      if (socketRef.current === socket) socketRef.current = null;
+    };
+  }, [code, playerName, playerId, navigate]);
 
   useEffect(() => {
-    if (gameState === "playing" && timeLeft > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1 && audioUnlocked) SOUNDS.incorrect.play().catch(() => {}); 
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [gameState, timeLeft, audioUnlocked]);
+    if (gameState !== "playing" || !question?.endsAt) return undefined;
 
-  const handleAnswer = (choiceId) => {
-    unlockAudio(); // ✅ Unlock audio when they click an answer
-    if (gameState !== "playing" || !socket) return;
-    socket.emit("player_answer", { choice: choiceId });
+    const updateTimer = () => {
+      setTimeLeft(Math.max(0, Math.ceil((question.endsAt - Date.now()) / 1000)));
+    };
+    updateTimer();
+    const timer = window.setInterval(updateTimer, 200);
+    return () => window.clearInterval(timer);
+  }, [gameState, question?.endsAt]);
+
+  const handleNameSubmit = (event) => {
+    event.preventDefault();
+    const cleanName = nameDraft.trim().replace(/\s+/g, " ");
+    if (!cleanName) return;
+    if (cleanName.length > 20) {
+      setError("Your name must be 20 characters or fewer.");
+      return;
+    }
+    sessionStorage.setItem("playerName", cleanName);
+    setPlayerName(cleanName);
+    setError("");
+    unlockAudio();
   };
+
+  const handleAnswer = (choiceIndex) => {
+    const socket = socketRef.current;
+    if (gameState !== "playing" || selectedChoice !== null || !socket?.connected) return;
+
+    unlockAudio();
+    setSelectedChoice(choiceIndex);
+    setGameState("answered");
+    socket.emit("player_answer", { choice: choiceIndex });
+  };
+
+  if (!code) return null;
 
   if (!playerName) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-4">
-        <div className="w-full max-w-md space-y-6 rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+      <main className="min-h-screen flex items-center justify-center bg-slate-950 p-4 text-white">
+        <form onSubmit={handleNameSubmit} className="w-full max-w-md space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
           <Trophy className="mx-auto h-12 w-12 text-brand" />
-          <h2 className="text-2xl font-bold">Join Kahoot</h2>
-          <p className="text-slate-400">Enter your nickname</p>
-          <input 
-            value={playerName} 
-            onChange={(e) => setPlayerName(e.target.value.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 15))} 
-            className="w-full rounded-xl border-2 border-slate-700 bg-slate-800 p-4 text-center text-xl text-white placeholder:text-slate-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-            placeholder="e.g. Alex"
+          <h1 className="text-2xl font-black">Join Noted Quiz Show</h1>
+          <p className="text-sm text-slate-400">Choose the name your teacher will see.</p>
+          {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+          <input
+            value={nameDraft}
+            onChange={(event) => setNameDraft(event.target.value.slice(0, 20))}
+            className="w-full rounded-xl border border-slate-700 bg-slate-800 p-4 text-center text-xl text-white focus:border-brand focus:outline-none"
+            placeholder="Your name"
+            maxLength={20}
             autoFocus
-            onKeyDown={(e) => { if (e.key === 'Enter') unlockAudio(); }}
           />
-          <button 
-            onClick={() => {
-              if (playerName.trim()) {
-                unlockAudio();
-                sessionStorage.setItem("playerName", playerName.trim());
-                setPlayerName(playerName.trim()); 
-              }
-            }}
-            disabled={!playerName.trim()}
-            className="w-full bg-brand text-white font-bold py-4 rounded-xl transition hover:bg-brand/90 disabled:opacity-50"
-          >
-            Join Game
+          <button type="submit" disabled={!nameDraft.trim()} className="w-full rounded-xl bg-brand py-4 font-bold text-white disabled:opacity-50">
+            Continue
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-4">
-        <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Game Error</h2>
-        <p className="text-slate-400 text-center">{error}</p>
-        <button onClick={() => navigate("/")} className="mt-6 px-6 py-3 bg-brand text-white rounded-xl font-bold">Return Home</button>
-      </div>
+        </form>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      {/* Header: Score & Rank */}
-      <div className="bg-slate-900 p-4 flex justify-between items-center border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-yellow-500" />
-          <span className="font-bold text-lg">#{myStats.rank}</span>
+    <main className="min-h-screen bg-slate-950 text-white">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 p-4">
+        <div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-yellow-400" /><span className="font-black">#{myStats.rank || "—"}</span></div>
+        <div className="min-w-0 text-center">
+          <p className="truncate font-black text-brand">{playerName}</p>
+          <p className={`inline-flex items-center gap-1 text-xs ${connection === "connected" ? "text-green-300" : "text-yellow-300"}`}>
+            {connection === "connected" ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            {connection === "connected" ? "Connected" : "Reconnecting"}
+          </p>
         </div>
-        <div className="text-center">
-          <h1 className="font-black text-xl tracking-wider text-brand">{playerName}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-lg">{myStats.score}</span>
-          <Trophy className="h-5 w-5 text-brand" />
-        </div>
-      </div>
+        <div className="flex items-center gap-2"><span className="font-black tabular-nums">{myStats.score}</span><Trophy className="h-5 w-5 text-brand" /></div>
+      </header>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6">
-        
-        {/* 1. LOBBY STATE */}
-        {gameState === "lobby" && (
-          <div className="text-center space-y-4 animate-pulse">
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-brand-soft text-brand">
-              <User className="h-12 w-12" />
-            </div>
-            <h2 className="text-3xl font-black">Waiting for host to start...</h2>
-            <p className="text-slate-400">Get ready!</p>
-          </div>
-        )}
+      {error && <div role="alert" className="mx-auto mt-4 flex max-w-2xl items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
 
-        {/* 2. PLAYING STATE (Shows Question + Shapes) */}
-        {gameState === "playing" && question && (
-          <div className="w-full max-w-3xl space-y-6">
-            <div className="text-center">
-              <div className="inline-flex items-center gap-2 rounded-full bg-red-500/20 px-4 py-1.5 text-red-400 font-bold text-xl mb-4">
-                {timeLeft}s
-              </div>
-              <h2 className="text-2xl md:text-4xl font-black text-white mb-8 px-4 leading-tight drop-shadow-lg">
-                {question.question}
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">
-              {question.options.map((opt, idx) => {
-                const shape = SHAPES[idx];
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleAnswer(idx)}
-                    className={`relative flex items-center gap-4 rounded-2xl p-4 md:p-6 text-left text-white font-bold text-lg md:text-xl shadow-xl transition-all active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/30 ${shape.color} ${shape.hover}`}
-                  >
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-black/20 text-3xl font-black drop-shadow-md">
-                      {shape.shape}
-                    </span>
-                    <span className="flex-1 break-words">{opt}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+      <section className="flex min-h-[calc(100vh-72px)] flex-col items-center justify-center gap-6 p-4">
+        {gameState === "lobby" && <div className="text-center"><User className="mx-auto mb-4 h-20 w-20 text-brand" /><h2 className="text-3xl font-black">You're in!</h2><p className="mt-2 text-slate-400">Waiting for your teacher to start.</p></div>}
 
-        {/* 3. ANSWERED STATE */}
-        {gameState === "answered" && (
-          <div className="text-center space-y-4">
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-brand-soft text-brand animate-bounce">
-              <Trophy className="h-12 w-12" />
-            </div>
-            <h2 className="text-2xl font-bold">Answer locked in!</h2>
-            <p className="text-slate-400">Waiting for the host to reveal the results...</p>
+        {gameState === "playing" && question && <div className="w-full max-w-3xl space-y-6">
+          <div className="text-center">
+            <div className="inline-flex items-center gap-2 rounded-full bg-red-500/15 px-4 py-2 text-xl font-black text-red-300"><Clock3 className="h-5 w-5" /> {timeLeft}s</div>
+            <p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-400">Question {(question.index ?? 0) + 1} of {question.total || "—"}</p>
+            <h2 className="mt-3 text-2xl font-black leading-tight md:text-4xl">{question.question}</h2>
           </div>
-        )}
+          {question.imageUrl && <img src={question.imageUrl} alt="Question illustration" className="mx-auto max-h-64 w-full rounded-xl bg-slate-800 object-contain" />}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(question.options || []).map((option, index) => {
+              const shape = SHAPES[index] || { color: "bg-slate-700", hover: "hover:bg-slate-600", symbol: String(index + 1) };
+              const selected = selectedChoice === index;
+              return <button
+                key={`${index}-${option}`}
+                type="button"
+                onClick={() => handleAnswer(index)}
+                disabled={gameState !== "playing" || selectedChoice !== null || timeLeft <= 0 || connection !== "connected"}
+                aria-pressed={selected}
+                className={`flex min-h-24 items-center gap-4 rounded-2xl p-4 text-left text-lg font-bold text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-70 ${shape.color} ${shape.hover} ${selected ? "ring-4 ring-white" : ""}`}
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-black/20 text-2xl font-black">{shape.symbol}</span>
+                <span className="break-words">{option}</span>
+              </button>;
+            })}
+          </div>
+        </div>}
 
-        {/* 4. ✅ MASSIVE REVEAL ANIMATION (The Kahoot Vibe) */}
-        {gameState === "reveal" && lastResult && (
-          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md animate-in zoom-in-95 duration-300 p-4">
-            <div className={`text-6xl md:text-8xl font-black mb-4 flex items-center gap-4 ${lastResult.correct ? "text-green-500 animate-bounce" : "text-red-500 animate-pulse"}`}>
-              {lastResult.correct ? <Check className="h-20 w-20" /> : <X className="h-20 w-20" />}
-              {lastResult.correct ? "CORRECT!" : "WRONG!"}
-            </div>
-            
-            {lastResult.points > 0 && (
-              <div className="text-4xl md:text-5xl font-black text-yellow-400 mb-6 animate-in slide-in-from-bottom-4">
-                +{lastResult.points} Points!
-              </div>
-            )}
-            
-            {!lastResult.correct && lastResult.correctAnswer && (
-              <div className="text-xl md:text-2xl text-white/80 mb-8 text-center px-4 max-w-2xl animate-in fade-in duration-500 delay-150">
-                The correct answer was: <span className="font-bold text-white block mt-2 text-3xl">{lastResult.correctAnswer}</span>
-              </div>
-            )}
-            
-            <p className="text-slate-400 animate-pulse mt-8">Showing leaderboard next...</p>
-          </div>
-        )}
+        {gameState === "answered" && <div className="text-center"><Check className="mx-auto mb-4 h-20 w-20 text-green-400" /><h2 className="text-3xl font-black">Answer locked in!</h2><p className="mt-2 text-slate-400">Waiting for the results...</p></div>}
 
-        {/* 5. LEADERBOARD / FINISHED STATE */}
-        {(gameState === "leaderboard" || gameState === "finished") && (
-          <div className="w-full max-w-2xl space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-500">
-            <h2 className="text-3xl font-black text-center text-white">
-              {gameState === "finished" ? "🏆 Final Standings 🏆" : "Live Leaderboard"}
-            </h2>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:p-6">
-              <div className="space-y-3">
-                {Array.isArray(leaderboard) && leaderboard.map((player, idx) => (
-                  <div key={player.id || idx} className={`flex items-center justify-between rounded-xl p-4 transition-all ${player.name === playerName ? "bg-brand/20 border-2 border-brand scale-105 shadow-lg shadow-brand/20" : "bg-slate-800 border border-slate-700"}`}>
-                    <div className="flex items-center gap-4">
-                      <span className={`flex h-10 w-10 items-center justify-center rounded-full font-black text-lg ${idx === 0 ? "bg-yellow-500 text-black" : idx === 1 ? "bg-slate-400 text-black" : idx === 2 ? "bg-amber-700 text-white" : "bg-slate-700 text-slate-300"}`}>
-                        {player.rank}
-                      </span>
-                      <span className="font-bold text-lg truncate max-w-[150px] md:max-w-xs">{player.name}</span>
-                    </div>
-                    <span className="font-black text-xl text-brand">{player.score} pts</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {gameState === "reveal" && lastResult && <div className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-900 p-6 text-center">
+          {lastResult.correct ? <Check className="mx-auto h-16 w-16 text-green-400" /> : <X className="mx-auto h-16 w-16 text-red-400" />}
+          <h2 className={`mt-3 text-4xl font-black ${lastResult.correct ? "text-green-400" : "text-red-400"}`}>{lastResult.correct ? "Correct!" : "Not quite"}</h2>
+          {lastResult.points > 0 && <p className="mt-3 text-2xl font-black text-yellow-300">+{lastResult.points} points</p>}
+          {lastResult.correctAnswer && <p className="mt-4 text-slate-300">Correct answer: <strong className="text-white">{lastResult.correctAnswer}</strong></p>}
+          {lastResult.explanation && <p className="mt-3 text-sm text-slate-400">{lastResult.explanation}</p>}
+          <p className="mt-6 text-xs text-slate-500">Leaderboard loading...</p>
+        </div>}
+
+        {(gameState === "leaderboard" || gameState === "finished") && <div className="w-full max-w-2xl space-y-5">
+          <div className="text-center"><Trophy className="mx-auto h-12 w-12 text-yellow-400" /><h2 className="mt-2 text-3xl font-black">{gameState === "finished" ? "Final standings" : "Leaderboard"}</h2></div>
+          <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            {leaderboard.map((player, index) => <div key={player.id || index} className={`flex items-center justify-between rounded-xl p-3 ${player.id === playerId ? "border border-brand bg-brand/15" : "bg-slate-800"}`}><span className="font-bold">{player.rank || index + 1}. {player.name}</span><span className="font-black text-brand">{player.score} pts</span></div>)}
+            {!leaderboard.length && <p className="py-4 text-center text-slate-400">Waiting for leaderboard...</p>}
           </div>
-        )}
-      </div>
-    </div>
+          {gameState === "finished" && <button type="button" onClick={() => navigate("/")} className="w-full rounded-xl bg-brand py-3 font-bold text-white">Return to Noted</button>}
+        </div>}
+
+        {gameState === "lobby" && connection !== "connected" && <p className="inline-flex items-center gap-2 text-sm text-yellow-300"><WifiOff className="h-4 w-4" /> Reconnecting to the game...</p>}
+      </section>
+    </main>
   );
 }
