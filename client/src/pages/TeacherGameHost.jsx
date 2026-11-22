@@ -1,147 +1,84 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  AlertCircle, CheckCircle2, Clock3, Loader2, Monitor, Play,
-  SkipForward, StopCircle, Users, Wifi, WifiOff, Trophy,
-} from "lucide-react";
-import { createKahootSocket } from "../utils/socket";
+  AlertCircle, CheckCircle2, Clipboard, ClipboardCheck, DoorOpen,
+  Loader2, Monitor, RefreshCw, Users, Wifi, WifiOff, XCircle,
+} from 'lucide-react';
+import { createKahootSocket } from '../utils/socket';
 
-const formatStatus = (status) => {
-  if (status === "question") return "Question in progress";
-  if (status === "reveal") return "Answer reveal";
-  if (status === "finished") return "Game finished";
-  return "Waiting for players";
+const statusLabel = (status) => {
+  if (status === 'completed') return 'Completed';
+  if (status === 'in_progress' || status === 'feedback') return 'In progress';
+  if (status === 'waiting') return 'Waiting';
+  if (status === 'not_used') return 'Not used';
+  return status || 'Not used';
+};
+
+const statusClass = (status) => {
+  if (status === 'completed') return 'bg-green-500/15 text-green-300';
+  if (status === 'in_progress' || status === 'feedback') return 'bg-blue-500/15 text-blue-300';
+  if (status === 'waiting') return 'bg-yellow-500/15 text-yellow-300';
+  return 'bg-slate-700 text-slate-300';
 };
 
 export default function TeacherGameHost() {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const socketRef = useRef(null);
-
   const [gameState, setGameState] = useState(null);
-  const [connection, setConnection] = useState("connecting");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [connection, setConnection] = useState('connecting');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [copiedCode, setCopiedCode] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
     const socket = createKahootSocket();
     socketRef.current = socket;
-
-    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
 
     const joinAsHost = () => {
       if (!token) {
-        setError("Your login session was not found. Please sign in again.");
-        setIsLoading(false);
+        setError('Your login session was not found. Please sign in again.');
+        setConnection('disconnected');
         return;
       }
-      socket.emit("host_join", { quizId, token });
+      socket.emit('host_join', { quizId, token });
     };
 
-    const onConnect = () => {
+    socket.on('connect', () => {
       if (!active) return;
-      setConnection("connected");
-      setError("");
+      setConnection('connected');
+      setError('');
       joinAsHost();
-    };
-
-    const onConnectError = (socketError) => {
+    });
+    socket.on('connect_error', (socketError) => {
       if (!active) return;
-      console.error("[Kahoot host] Socket connection failed:", socketError.message);
-      setConnection("disconnected");
-      setError("Cannot reach the live game server. Reconnecting...");
-      setIsLoading(false);
-    };
-
-    const onDisconnect = () => {
-      if (active) setConnection("disconnected");
-    };
-
-    const onHostState = (state) => {
+      console.error('[Kahoot teacher dashboard] Socket error:', socketError.message);
+      setConnection('disconnected');
+      setError('Cannot reach the quiz server. Reconnecting...');
+    });
+    socket.on('disconnect', () => {
+      if (active) setConnection('disconnected');
+    });
+    socket.on('host_state', (state) => {
       if (!active) return;
       setGameState(state);
-      setIsLoading(false);
-      setError("");
-    };
-
-    const onPlayersUpdate = ({ players, count }) => {
+      setError('');
+      setBusy(false);
+    });
+    socket.on('host_notice', ({ message } = {}) => {
+      if (active) setNotice(message || 'The quiz was updated.');
+      setBusy(false);
+    });
+    socket.on('game_error', (gameError) => {
       if (!active) return;
-      setGameState((previous) => previous ? {
-        ...previous,
-        players: Array.isArray(players) ? players : previous.players,
-        playerCount: count,
-      } : previous);
-    };
+      setError(gameError?.message || 'The quiz server returned an error.');
+      setBusy(false);
+    });
 
-    const onGameStarted = () => {
-      if (active) setGameState((previous) => previous ? { ...previous, status: "question" } : previous);
-    };
-
-    const onQuestionStart = (nextQuestion) => {
-      if (!active) return;
-      setGameState((previous) => ({
-        ...(previous || {}),
-        status: "question",
-        question: nextQuestion,
-        index: nextQuestion.index,
-        total: nextQuestion.total,
-        answered: 0,
-        reveal: null,
-      }));
-      setError("");
-    };
-
-    const onQuestionEnd = (reveal) => {
-      if (!active) return;
-      setGameState((previous) => ({
-        ...(previous || {}),
-        status: "reveal",
-        reveal,
-        leaderboard: reveal.leaderboard || previous?.leaderboard || [],
-      }));
-    };
-
-    const onAnswerCount = ({ answered, total }) => {
-      if (!active) return;
-      setGameState((previous) => previous ? {
-        ...previous,
-        answered: Number(answered) || 0,
-        connectedPlayers: Number(total) || 0,
-      } : previous);
-    };
-
-    const onGameFinished = (result) => {
-      if (!active) return;
-      setGameState((previous) => ({
-        ...(previous || {}),
-        status: "finished",
-        leaderboard: result.leaderboard || previous?.leaderboard || [],
-        finalPlayerCount: result.players ?? previous?.players?.length ?? 0,
-      }));
-    };
-
-    const onGameError = (gameError) => {
-      if (!active) return;
-      setError(gameError?.message || "The game server returned an error.");
-      setIsLoading(false);
-    };
-
-    socket.on("connect", onConnect);
-    socket.on("connect_error", onConnectError);
-    socket.on("disconnect", onDisconnect);
-    socket.on("host_state", onHostState);
-    socket.on("players_update", onPlayersUpdate);
-    socket.on("game_started", onGameStarted);
-    socket.on("question_start", onQuestionStart);
-    socket.on("question_end", onQuestionEnd);
-    socket.on("answer_count", onAnswerCount);
-    socket.on("game_finished", onGameFinished);
-    socket.on("game_error", onGameError);
-
-    if (socket.connected) onConnect();
-
+    if (socket.connected) joinAsHost();
     return () => {
       active = false;
       socket.removeAllListeners();
@@ -150,65 +87,53 @@ export default function TeacherGameHost() {
     };
   }, [quizId]);
 
-  const status = gameState?.status || "lobby";
-  const players = Array.isArray(gameState?.players) ? gameState.players : [];
-  const connectedPlayers = players.filter((player) => player.connected !== false).length;
-  const question = gameState?.question;
-  const reveal = gameState?.reveal;
-  const leaderboard = Array.isArray(gameState?.leaderboard) ? gameState.leaderboard : [];
-
-  useEffect(() => {
-    if (status !== "question" || !question?.endsAt) {
-      setTimeLeft(0);
-      return undefined;
-    }
-    const update = () => setTimeLeft(Math.max(0, Math.ceil((question.endsAt - Date.now()) / 1000)));
-    update();
-    const timer = window.setInterval(update, 250);
-    return () => window.clearInterval(timer);
-  }, [status, question?.endsAt]);
-
-  const emitHostAction = (eventName) => {
+  const emitAction = (eventName) => {
     const socket = socketRef.current;
-    if (!socket?.connected || !gameState?.quizId) {
-      setError("The game server is reconnecting. Try again when the connection returns.");
+    if (!socket?.connected) {
+      setError('The server is reconnecting. Try again when the connection returns.');
       return;
     }
-    setError("");
-    socket.emit(eventName, { quizId: gameState.quizId });
+    setError('');
+    setNotice('');
+    setBusy(true);
+    socket.emit(eventName, { quizId });
   };
 
-  const handleEndGame = () => {
-    if (window.confirm("End this game now? Students will see the final leaderboard.")) {
-      emitHostAction("host_end");
+  const copyCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      window.setTimeout(() => setCopiedCode(''), 1600);
+    } catch {
+      setError(`Could not copy ${code}. Select and copy it manually.`);
     }
   };
-
-  if (isLoading) {
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
-        <Loader2 className="mb-4 h-10 w-10 animate-spin text-brand" />
-        <p className="text-slate-300">Connecting to Noted Quiz Show...</p>
-        <p className="mt-2 text-xs text-slate-500">Keep this tab open while the game is running.</p>
-      </main>
-    );
-  }
 
   if (!gameState && error) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-950 p-4 text-white">
         <section className="max-w-md rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center">
           <AlertCircle className="mx-auto mb-3 h-10 w-10 text-red-400" />
-          <h1 className="text-xl font-bold">Unable to open this game</h1>
+          <h1 className="text-xl font-bold">Unable to open this Kahoot</h1>
           <p className="mt-2 text-sm text-slate-300">{error}</p>
-          <button type="button" onClick={() => navigate("/admin/kahoot")} className="mt-5 rounded-lg bg-brand px-4 py-2 font-semibold text-white">
-            Back to creator
-          </button>
+          <button type="button" onClick={() => navigate('/admin/quiz-results')} className="mt-5 rounded-lg bg-brand px-4 py-2 font-semibold text-white">Back to results</button>
         </section>
       </main>
     );
   }
-  if (!gameState) return null;
+
+  if (!gameState) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <Loader2 className="mb-4 h-10 w-10 animate-spin text-brand" />
+        <p className="text-slate-300">Opening teacher Kahoot dashboard...</p>
+      </main>
+    );
+  }
+
+  const summary = gameState.summary || {};
+  const codes = Array.isArray(gameState.codes) ? gameState.codes : [];
+  const isOpen = Boolean(gameState.isOpen);
 
   return (
     <main className="min-h-screen bg-slate-950 p-4 text-white md:p-8">
@@ -217,79 +142,100 @@ export default function TeacherGameHost() {
           <div className="flex items-center gap-3">
             <Monitor className="h-9 w-9 text-brand" />
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Noted Quiz Show</p>
-              <h1 className="text-2xl font-black md:text-3xl">{gameState.title}</h1>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Noted Kahoot</p>
+              <h1 className="text-xl font-black md:text-2xl">{gameState.title}</h1>
             </div>
           </div>
-          <div className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold ${connection === "connected" ? "bg-green-500/15 text-green-300" : "bg-yellow-500/15 text-yellow-300"}`}>
-            {connection === "connected" ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-            {connection === "connected" ? "Connected" : "Reconnecting"}
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`inline-flex items-center gap-2 text-xs ${connection === 'connected' ? 'text-green-300' : 'text-yellow-300'}`}>
+              {connection === 'connected' ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+              {connection === 'connected' ? 'Live updates connected' : 'Reconnecting'}
+            </span>
+            <button type="button" onClick={() => navigate(`/admin/quiz/${quizId}/results`)} className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-800">View results</button>
           </div>
         </header>
 
-        {error && <div role="status" className="flex items-start gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
+        {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
+        {notice && <div role="status" className="flex items-start gap-2 rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-200"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{notice}</div>}
 
-        <section className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-3xl border border-brand/40 bg-brand/10 p-6 text-center md:p-10">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand">Students join at</p>
-            <p className="mt-2 text-lg font-bold">usenotedai.com/game-join</p>
-            <p className="mt-7 text-xs font-bold uppercase tracking-[0.25em] text-brand">Game PIN</p>
-            <p className="mt-2 break-all text-5xl font-black tracking-widest md:text-7xl">{gameState.code || "LOADING"}</p>
-            <p className="mt-4 text-sm text-slate-400">{formatStatus(status)}</p>
+        <section className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-3xl border border-brand/40 bg-brand/10 p-6 text-center md:p-9">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand">Student join page</p>
+            <p className="mt-2 text-lg font-bold">{window.location.origin}/game-join</p>
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-900/70 px-4 py-2 text-sm font-bold">
+              <span className={`h-2.5 w-2.5 rounded-full ${isOpen ? 'bg-green-400' : 'bg-yellow-400'}`} />
+              {isOpen ? 'Quiz is open' : gameState.status === 'closed' ? 'Quiz is closed' : 'Waiting for teacher to open'}
+            </div>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              {!isOpen && (
+                <button type="button" disabled={busy || connection !== 'connected'} onClick={() => emitAction('host_start')} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-6 py-3 font-black text-white hover:bg-green-500 disabled:opacity-50">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <DoorOpen className="h-4 w-4" />} {gameState.status === 'closed' ? 'Reopen quiz for students' : 'Open quiz for students'}
+                </button>
+              )}
+              {isOpen && (
+                <button type="button" disabled={busy || connection !== 'connected'} onClick={() => emitAction('host_end')} className="inline-flex items-center gap-2 rounded-xl bg-red-600/90 px-6 py-3 font-bold text-white hover:bg-red-500 disabled:opacity-50">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Close new attempts
+                </button>
+              )}
+              {gameState.status === 'closed' && <p className="text-sm text-slate-300">New students are blocked until you reopen the quiz. Students who already started can finish.</p>}
+            </div>
+            <p className="mt-4 text-xs text-slate-400">
+              {gameState.autoStart ? 'Automatic mode: the quiz is available as soon as it is created.' : 'Teacher-controlled mode: open the quiz here before students can begin.'}
+            </p>
           </div>
 
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-lg font-bold"><Users className="h-5 w-5 text-brand" /> Players</h2>
-              <span className="rounded-full bg-slate-800 px-3 py-1 text-sm font-bold tabular-nums">{connectedPlayers}{gameState.maxPlayers ? ` / ${gameState.maxPlayers}` : ""}</span>
-            </div>
-            <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
-              {players.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">Waiting for students to join...</p> : players.map((player) => (
-                <div key={player.id} className="flex items-center justify-between rounded-xl bg-slate-800 px-3 py-2">
-                  <span className="truncate font-semibold">{player.name}</span>
-                  <span className={`ml-3 text-xs ${player.connected ? "text-green-300" : "text-slate-500"}`}>{player.connected ? "Connected" : "Disconnected"}</span>
+            <div className="flex items-center gap-2"><Users className="h-5 w-5 text-brand" /><h2 className="text-lg font-bold">Class progress</h2></div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              {[
+                ['Total codes', summary.total ?? codes.length],
+                ['Not started', summary.notStarted ?? 0],
+                ['In progress', summary.inProgress ?? 0],
+                ['Completed', summary.completed ?? 0],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl bg-slate-800 p-4">
+                  <p className="text-xs text-slate-400">{label}</p>
+                  <p className="mt-1 text-3xl font-black tabular-nums">{value}</p>
                 </div>
               ))}
             </div>
+            <p className="mt-4 text-xs text-slate-500">Progress updates automatically as each student joins, answers and completes the quiz.</p>
           </div>
         </section>
 
-        {status === "lobby" && <section className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <button type="button" onClick={() => emitHostAction("host_start")} disabled={!connectedPlayers || connection !== "connected"} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-7 py-4 text-lg font-black text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40"><Play className="h-5 w-5 fill-current" /> Start game</button>
-          <p className="w-full text-center text-sm text-slate-400">{connectedPlayers ? `${connectedPlayers} student(s) ready.` : "At least one student must join before you start."}</p>
-        </section>}
-
-        {status === "question" && question && <section className="space-y-5 rounded-3xl border border-slate-800 bg-slate-900 p-5 md:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-bold uppercase tracking-wider text-brand">Question {(question.index ?? 0) + 1} of {question.total || gameState.total}</p>
-            <div className="inline-flex items-center gap-2 rounded-full bg-red-500/15 px-4 py-2 text-xl font-black text-red-300"><Clock3 className="h-5 w-5" /> {timeLeft}s</div>
-          </div>
-          <h2 className="text-2xl font-black leading-tight md:text-4xl">{question.question}</h2>
-          {question.imageUrl && <img src={question.imageUrl} alt="Question illustration" className="max-h-72 w-full rounded-xl bg-slate-800 object-contain" />}
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(question.options || []).map((option, index) => <div key={`${index}-${option}`} className="flex items-center gap-3 rounded-xl bg-slate-800 p-4 text-lg font-semibold"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-700 font-black">{["▲", "◆", "●", "■"][index] || index + 1}</span><span className="break-words">{option}</span></div>)}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
-            <p className="text-sm text-slate-400">Answers received: <strong className="text-white">{gameState.answered || 0}</strong>{gameState.connectedPlayers != null ? ` / ${gameState.connectedPlayers}` : ""}</p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => emitHostAction("host_skip")} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 font-semibold hover:bg-slate-800"><SkipForward className="h-4 w-4" /> Reveal now</button>
-              <button type="button" onClick={handleEndGame} className="inline-flex items-center gap-2 rounded-lg bg-red-600/15 px-4 py-2 font-semibold text-red-300 hover:bg-red-600/25"><StopCircle className="h-4 w-4" /> End game</button>
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-bold">Individual student codes</h2>
+              <p className="mt-1 text-sm text-slate-400">Give each student one different code. A code can only be used by its assigned attempt.</p>
             </div>
+            <button type="button" onClick={() => socketRef.current?.connected && socketRef.current.emit('host_join', { quizId, token: localStorage.getItem('userToken') || localStorage.getItem('token') })} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-800">
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </button>
           </div>
-        </section>}
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[620px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-wider text-slate-500">
+                <tr><th className="px-3 py-3">#</th><th className="px-3 py-3">Student code</th><th className="px-3 py-3">Student</th><th className="px-3 py-3">Progress</th><th className="px-3 py-3">Score</th><th className="px-3 py-3">Copy</th></tr>
+              </thead>
+              <tbody>
+                {codes.map((entry, index) => (
+                  <tr key={entry.code} className="border-t border-slate-800">
+                    <td className="px-3 py-3 text-slate-500">{index + 1}</td>
+                    <td className="px-3 py-3 font-mono font-bold tracking-wider">{entry.code}</td>
+                    <td className="px-3 py-3">{entry.studentName || '—'}</td>
+                    <td className="px-3 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(entry.status)}`}>{statusLabel(entry.status)}</span></td>
+                    <td className="px-3 py-3 tabular-nums">{entry.score ?? 0}</td>
+                    <td className="px-3 py-3"><button type="button" onClick={() => copyCode(entry.code)} className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1.5 text-xs hover:bg-slate-800">{copiedCode === entry.code ? <ClipboardCheck className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}{copiedCode === entry.code ? 'Copied' : 'Copy'}</button></td>
+                  </tr>
+                ))}
+                {codes.length === 0 && <tr><td colSpan="6" className="px-3 py-8 text-center text-slate-500">No student codes were generated.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-        {status === "reveal" && reveal && <section className="space-y-5 rounded-3xl border border-green-500/30 bg-green-500/5 p-5 md:p-8">
-          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-green-300"><CheckCircle2 className="h-5 w-5" /> Correct answer</div>
-          <h2 className="text-2xl font-black md:text-3xl">{reveal.correctAnswer}</h2>
-          {reveal.explanation && <p className="text-slate-300">{reveal.explanation}</p>}
-          <div className="grid gap-3 sm:grid-cols-2">{(reveal.counts || []).map((count, index) => <div key={index} className={`rounded-xl p-4 ${index === reveal.correctIndex ? "bg-green-500/20 ring-2 ring-green-400" : "bg-slate-800"}`}><p className="font-semibold">{question?.options?.[index] || `Option ${index + 1}`}</p><p className="mt-1 text-2xl font-black tabular-nums">{count}</p><p className="text-xs text-slate-400">answers</p></div>)}</div>
-          {!gameState.autoStart ? <button type="button" onClick={() => emitHostAction("host_next")} className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 font-bold text-white hover:bg-brand/90"><SkipForward className="h-5 w-5" />{reveal.isLast ? "Show final results" : "Next question"}</button> : <p className="text-sm text-slate-400">The next question will start automatically.</p>}
-        </section>}
-
-        {status === "finished" && <section className="rounded-3xl border border-yellow-500/30 bg-slate-900 p-6 md:p-8">
-          <div className="mb-5 text-center"><Trophy className="mx-auto h-12 w-12 text-yellow-400" /><h2 className="mt-2 text-3xl font-black">Final leaderboard</h2><p className="mt-1 text-sm text-slate-400">The game has ended.</p></div>
-          <div className="mx-auto max-w-2xl space-y-2">{leaderboard.map((player, index) => <div key={player.id || index} className="flex items-center justify-between rounded-xl bg-slate-800 p-4"><span className="font-bold">{player.rank || index + 1}. {player.name}</span><span className="font-black text-brand">{player.score} pts</span></div>)}{!leaderboard.length && <p className="text-center text-slate-400">No player results are available.</p>}</div>
-        </section>}
+        <p className="text-center text-xs text-slate-500">You can leave this page and return from the Kahoot results page. Each student's saved attempt continues independently.</p>
       </div>
     </main>
   );
