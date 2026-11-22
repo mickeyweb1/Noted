@@ -133,7 +133,7 @@ export default function KahootCreator() {
     const timer = setTimeout(() => {
       const dirty = title.trim() || notes.trim() || questions.some((q) => !isBlank(q));
       if (!dirty) return removeKey(DRAFT_KEY);
-      return writeJson(DRAFT_KEY, { title, timeLimit, numStudents, numQuestions, notes, questions, activeTab, savedAt: Date.now() });
+      return writeJson(DRAFT_KEY, { title, timeLimit, numStudents, numQuestions, notes, questions, activeTab, autoStart, savedAt: Date.now() });
     }, 500);
     return () => clearTimeout(timer);
   }, [title, timeLimit, numStudents, numQuestions, notes, questions, activeTab]);
