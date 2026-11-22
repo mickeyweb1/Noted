@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { io } from "socket.io-client";
+import { createKahootSocket } from "../utils/socket";
 import { Trophy, AlertCircle, User } from "lucide-react";
-
-const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const SOUNDS = {
   correct: new Audio("https://actions.google.com/sounds/v1/cartoon/clown_horn.ogg"), 
@@ -36,14 +34,16 @@ const [playerId, setPlayerId] = useState(sessionStorage.getItem("kahoot_playerId
 
   useEffect(() => {
     if (!code) { navigate("/"); return; }
-    if (!playerName) return; // Wait for name input
+    if (!playerName) return; 
 
     sessionStorage.setItem("kahoot_playerId", playerId);
 
-    const newSocket = io(`${SOCKET_URL}/kahoot`, { transports: ["websocket"] });
+    // ✅ USE THE NEW HELPER HERE
+    const newSocket = createKahootSocket();
     setSocket(newSocket);
 
     newSocket.on("connect", () => {
+      console.log("✅ Student connected to /kahoot. Emitting player_join...");
       newSocket.emit("player_join", { code, name: playerName, playerId });
     });
 
