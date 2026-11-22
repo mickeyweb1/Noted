@@ -10,16 +10,17 @@ const submissionSchema = new mongoose.Schema({
     questionId: mongoose.Schema.Types.ObjectId,
     selectedAnswer: String,
     isCorrect: Boolean,
-    confidence: { type: String, enum: ['low', 'medium', 'high'], default: null }
+    confidence: { type: String, enum: ['low', 'medium', 'high'], default: null },
   }],
-  gameMode: { type: String, enum: ['test', 'gameShow'], default: 'test' },
+  gameMode: { type: String, enum: ['test', 'gameShow', 'kahoot'], default: 'test' },
   score: { type: Number, required: true },
-    maxScore: { type: Number },
+  maxScore: { type: Number },
+  gamePoints: { type: Number, default: 0 },
   totalQuestions: { type: Number, required: true },
   timeTaken: { type: Number, required: true },
   tabSwitchCount: { type: Number, default: 0 },
-   isLate: { type: Boolean, default: false }, 
-  submittedAt: { type: Date, default: Date.now }
+  isLate: { type: Boolean, default: false },
+  submittedAt: { type: Date, default: Date.now },
 });
 
 submissionSchema.index({ quiz: 1, accessCode: 1 }, { unique: true });
