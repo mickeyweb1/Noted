@@ -19,7 +19,7 @@ import { User } from '../models/User.js';
 const MAX_PLAYERS = 300;
 const NAME_MAX = 20;
 const AUTO_START_DELAY_MS = 3000;   // quiz.autoStart: start 3s after the first student joins
-const AUTO_ADVANCE_MS = 8000;       // quiz.autoStart: move to the next question by itself after the reveal
+const AUTO_ADVANCE_MS = 4000;       // quiz.autoStart: move to the next question by itself after the reveal
 const ANSWER_GRACE_MS = 400;        // network grace when an answer arrives right at the buzzer
 const FINISHED_TTL_MS = 30 * 60 * 1000;
 const STALE_GAME_MS = 6 * 60 * 60 * 1000;

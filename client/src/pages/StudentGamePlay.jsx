@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createKahootSocket } from "../utils/socket";
-import { Trophy, AlertCircle, User } from "lucide-react";
+import { Trophy, AlertCircle, User, Check, X } from "lucide-react";
 
+// ✅ Pre-load sounds
 const SOUNDS = {
   correct: new Audio("https://actions.google.com/sounds/v1/cartoon/clown_horn.ogg"), 
   incorrect: new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"), 
@@ -30,6 +31,16 @@ export default function StudentGamePlay() {
   const [lastResult, setLastResult] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [error, setError] = useState("");
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+
+  // ✅ Unlock audio on first user interaction (browser requirement)
+  const unlockAudio = () => {
+    if (!audioUnlocked) {
+      SOUNDS.correct.volume = 0.1;
+      SOUNDS.correct.play().catch(() => {});
+      setAudioUnlocked(true);
+    }
+  };
 
   useEffect(() => {
     if (!code) { navigate("/"); return; }
@@ -66,13 +77,20 @@ export default function StudentGamePlay() {
     });
 
     newSocket.on("answer_result", (result) => {
-      setGameState("leaderboard");
+      setGameState("reveal"); // ✅ New state for the massive animation
       setLastResult(result);
       setMyStats({ score: result.score, rank: result.rank, correctCount: result.correctCount });
-      setLeaderboard(result.leaderboard || []); // ✅ SAFE FALLBACK TO EMPTY ARRAY
+      setLeaderboard(result.leaderboard || []);
       
-      if (result.correct) SOUNDS.correct.play().catch(() => {});
-      else SOUNDS.incorrect.play().catch(() => {});
+      if (audioUnlocked) {
+        if (result.correct) SOUNDS.correct.play().catch(() => {});
+        else SOUNDS.incorrect.play().catch(() => {});
+      }
+
+      // ✅ Auto-advance to leaderboard after 3 seconds of showing the result
+      setTimeout(() => {
+        setGameState("leaderboard");
+      }, 3000);
     });
 
     newSocket.on("game_finished", (data) => {
@@ -86,21 +104,22 @@ export default function StudentGamePlay() {
     });
 
     return () => { newSocket.disconnect(); };
-  }, [code, playerName, playerId, navigate]);
+  }, [code, playerName, playerId, navigate, audioUnlocked]);
 
   useEffect(() => {
     if (gameState === "playing" && timeLeft > 0) {
       const timer = setInterval(() => {
         setTimeLeft((prev) => {
-          if (prev <= 1) SOUNDS.incorrect.play().catch(() => {}); 
+          if (prev <= 1 && audioUnlocked) SOUNDS.incorrect.play().catch(() => {}); 
           return prev - 1;
         });
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [gameState, timeLeft]);
+  }, [gameState, timeLeft, audioUnlocked]);
 
   const handleAnswer = (choiceId) => {
+    unlockAudio(); // ✅ Unlock audio when they click an answer
     if (gameState !== "playing" || !socket) return;
     socket.emit("player_answer", { choice: choiceId });
   };
@@ -118,10 +137,12 @@ export default function StudentGamePlay() {
             className="w-full rounded-xl border-2 border-slate-700 bg-slate-800 p-4 text-center text-xl text-white placeholder:text-slate-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
             placeholder="e.g. Alex"
             autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') unlockAudio(); }}
           />
           <button 
             onClick={() => {
               if (playerName.trim()) {
+                unlockAudio();
                 sessionStorage.setItem("playerName", playerName.trim());
                 setPlayerName(playerName.trim()); 
               }
@@ -179,12 +200,12 @@ export default function StudentGamePlay() {
 
         {/* 2. PLAYING STATE (Shows Question + Shapes) */}
         {gameState === "playing" && question && (
-          <div className="w-full max-w-2xl space-y-6">
+          <div className="w-full max-w-3xl space-y-6">
             <div className="text-center">
               <div className="inline-flex items-center gap-2 rounded-full bg-red-500/20 px-4 py-1.5 text-red-400 font-bold text-xl mb-4">
                 {timeLeft}s
               </div>
-              <h2 className="text-2xl md:text-3xl font-black text-white mb-6 px-4 leading-tight">
+              <h2 className="text-2xl md:text-4xl font-black text-white mb-8 px-4 leading-tight drop-shadow-lg">
                 {question.question}
               </h2>
             </div>
@@ -195,7 +216,7 @@ export default function StudentGamePlay() {
                   <button
                     key={idx}
                     onClick={() => handleAnswer(idx)}
-                    className={`relative flex items-center gap-4 rounded-2xl p-4 md:p-6 text-left text-white font-bold text-lg md:text-xl shadow-lg transition-all active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/30 ${shape.color} ${shape.hover}`}
+                    className={`relative flex items-center gap-4 rounded-2xl p-4 md:p-6 text-left text-white font-bold text-lg md:text-xl shadow-xl transition-all active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/30 ${shape.color} ${shape.hover}`}
                   >
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-black/20 text-3xl font-black drop-shadow-md">
                       {shape.shape}
@@ -219,39 +240,47 @@ export default function StudentGamePlay() {
           </div>
         )}
 
-        {/* 4. LEADERBOARD / REVEAL STATE */}
-        {(gameState === "leaderboard" || gameState === "finished") && lastResult && (
-          <div className="w-full max-w-2xl space-y-6 animate-in fade-in zoom-in duration-300">
-            {/* Result Banner */}
-            <div className={`rounded-2xl p-6 text-center shadow-lg ${lastResult.correct ? "bg-green-500/20 border-2 border-green-500" : "bg-red-500/20 border-2 border-red-500"}`}>
-              <h2 className="text-3xl font-black mb-1">{lastResult.correct ? "Correct!" : "Incorrect"}</h2>
-              
-              {/* ✅ SHOW CORRECT ANSWER IF THEY GOT IT WRONG */}
-              {!lastResult.correct && lastResult.correctAnswer && (
-                <p className="text-lg text-white/80 mb-2">
-                  The correct answer was: <span className="font-bold text-white">{lastResult.correctAnswer}</span>
-                </p>
-              )}
-              
-              {lastResult.points > 0 && <p className="text-xl font-bold text-yellow-400">+{lastResult.points} points!</p>}
+        {/* 4. ✅ MASSIVE REVEAL ANIMATION (The Kahoot Vibe) */}
+        {gameState === "reveal" && lastResult && (
+          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md animate-in zoom-in-95 duration-300 p-4">
+            <div className={`text-6xl md:text-8xl font-black mb-4 flex items-center gap-4 ${lastResult.correct ? "text-green-500 animate-bounce" : "text-red-500 animate-pulse"}`}>
+              {lastResult.correct ? <Check className="h-20 w-20" /> : <X className="h-20 w-20" />}
+              {lastResult.correct ? "CORRECT!" : "WRONG!"}
             </div>
+            
+            {lastResult.points > 0 && (
+              <div className="text-4xl md:text-5xl font-black text-yellow-400 mb-6 animate-in slide-in-from-bottom-4">
+                +{lastResult.points} Points!
+              </div>
+            )}
+            
+            {!lastResult.correct && lastResult.correctAnswer && (
+              <div className="text-xl md:text-2xl text-white/80 mb-8 text-center px-4 max-w-2xl animate-in fade-in duration-500 delay-150">
+                The correct answer was: <span className="font-bold text-white block mt-2 text-3xl">{lastResult.correctAnswer}</span>
+              </div>
+            )}
+            
+            <p className="text-slate-400 animate-pulse mt-8">Showing leaderboard next...</p>
+          </div>
+        )}
 
-            {/* Mini Leaderboard */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <h3 className="text-center font-bold text-slate-400 mb-3 uppercase tracking-wider text-sm">
-                {gameState === "finished" ? "Final Standings" : "Top Players"}
-              </h3>
-              <div className="space-y-2">
-                {/* ✅ SAFE CHECK: Ensure leaderboard is an array before mapping */}
+        {/* 5. LEADERBOARD / FINISHED STATE */}
+        {(gameState === "leaderboard" || gameState === "finished") && (
+          <div className="w-full max-w-2xl space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <h2 className="text-3xl font-black text-center text-white">
+              {gameState === "finished" ? "🏆 Final Standings 🏆" : "Live Leaderboard"}
+            </h2>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:p-6">
+              <div className="space-y-3">
                 {Array.isArray(leaderboard) && leaderboard.map((player, idx) => (
-                  <div key={player.id || idx} className={`flex items-center justify-between rounded-xl p-3 ${player.name === playerName ? "bg-brand/20 border border-brand" : "bg-slate-800"}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`flex h-8 w-8 items-center justify-center rounded-full font-bold text-sm ${idx === 0 ? "bg-yellow-500 text-black" : idx === 1 ? "bg-slate-400 text-black" : idx === 2 ? "bg-amber-700 text-white" : "bg-slate-700 text-slate-300"}`}>
+                  <div key={player.id || idx} className={`flex items-center justify-between rounded-xl p-4 transition-all ${player.name === playerName ? "bg-brand/20 border-2 border-brand scale-105 shadow-lg shadow-brand/20" : "bg-slate-800 border border-slate-700"}`}>
+                    <div className="flex items-center gap-4">
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-full font-black text-lg ${idx === 0 ? "bg-yellow-500 text-black" : idx === 1 ? "bg-slate-400 text-black" : idx === 2 ? "bg-amber-700 text-white" : "bg-slate-700 text-slate-300"}`}>
                         {player.rank}
                       </span>
-                      <span className="font-semibold truncate max-w-[120px]">{player.name}</span>
+                      <span className="font-bold text-lg truncate max-w-[150px] md:max-w-xs">{player.name}</span>
                     </div>
-                    <span className="font-bold text-brand">{player.score}</span>
+                    <span className="font-black text-xl text-brand">{player.score} pts</span>
                   </div>
                 ))}
               </div>
