@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { io } from "socket.io-client";
+import { createKahootSocket } from "../utils/socket";
 import { Users, Play, AlertCircle, Monitor, Loader2, SkipForward } from "lucide-react";
-
-const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function TeacherGameHost() {
   const { quizId } = useParams();
@@ -13,10 +11,11 @@ export default function TeacherGameHost() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+    useEffect(() => {
     console.log("🔌 Attempting to connect to /kahoot namespace. quizId:", quizId);
     
-    const newSocket = io(`${SOCKET_URL}/kahoot`, { transports: ["websocket"] });
+    // ✅ USE THE NEW HELPER HERE
+    const newSocket = createKahootSocket(); 
     setSocket(newSocket);
 
     const token = localStorage.getItem("token");
