@@ -5,6 +5,7 @@ import {
   Volume2, VolumeX, Loader2,
 } from 'lucide-react';
 import { createKahootSocket } from '../utils/socket';
+import MathRenderer from "../components/MathRenderer";
 
 const SHAPES = [
   { symbol: '▲', base: 'bg-red-600', hover: 'hover:bg-red-500' },
@@ -272,7 +273,9 @@ export default function StudentGamePlay() {
                 <Clock3 className="h-5 w-5" /> {isFeedback ? 'Answer checked' : `${timeLeft}s`}
               </div>
               <p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-400">Question {(question.index ?? 0) + 1} of {question.total || '—'}</p>
-              <h2 className="mt-3 text-2xl font-black leading-tight md:text-4xl">{question.question}</h2>
+              <h2 className="mt-3 text-2xl font-black leading-tight md:text-4xl">
+  <MathRenderer>{question.question}</MathRenderer>
+</h2>
             </div>
 
             {question.imageUrl && <img src={question.imageUrl} alt="Question illustration" className="mx-auto max-h-64 w-full rounded-xl bg-slate-800 object-contain" />}
@@ -301,7 +304,9 @@ export default function StudentGamePlay() {
                     className={`flex min-h-24 items-center gap-4 rounded-2xl p-4 text-left text-lg font-bold text-white shadow-lg transition duration-200 disabled:cursor-not-allowed ${colorClass} ${!isFeedback ? shape.hover : ''} ${isDimmed ? 'opacity-50' : ''} ${isSelected && !isFeedback ? 'ring-4 ring-white' : ''}`}
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-black/20 text-2xl font-black">{shape.symbol}</span>
-                    <span className="break-words">{option}</span>
+                    <span className="break-words">
+  <MathRenderer>{option}</MathRenderer>
+</span>
                     {isCorrect && <Check className="ml-auto h-6 w-6 shrink-0" />}
                     {isWrongSelection && <X className="ml-auto h-6 w-6 shrink-0" />}
                     {isSelected && answerSending && <Loader2 className="ml-auto h-5 w-5 animate-spin" />}

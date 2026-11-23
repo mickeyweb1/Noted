@@ -287,6 +287,7 @@ export default function QuestionsExport({ quiz, questions, onClose }) {
   const [showExplanations, setShowExplanations] = useState(false);
   const [studentLines, setStudentLines] = useState(true);
   const [isPreparingPrint, setIsPreparingPrint] = useState(false);
+  const [isPreparingWord, setIsPreparingWord] = useState(false);
 
   const dialogRef = useRef(null);
   const paperRef = useRef(null);

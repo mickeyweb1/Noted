@@ -760,13 +760,6 @@ router.post('/validate-code', async (req, res, next) => {
     const quiz = await findQuizByCode(code);
     if (!quiz) return res.status(404).json({ success: false, message: 'Invalid access code' });
 
-    if (quiz.gameMode === 'kahoot') {
-  return res.status(400).json({
-    success: false,
-    message: 'Kahoot quizzes must be joined through the Kahoot join page.'
-  });
-}
-
     const isFreeTier = await hasBranding(quiz.createdBy);
 
     if (isCodeExpired(quiz, code)) {
