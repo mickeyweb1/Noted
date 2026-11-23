@@ -386,6 +386,27 @@ export default function QuestionsExport({ quiz, questions, onClose }) {
     };
   }, [safeTitle]);
 
+  const handlePrint = useCallback(async () => {
+  if (isPreparingPrint || isPreparingWord || total === 0) return;
+
+  setIsPreparingPrint(true);
+
+  try {
+    await waitForPrintAssets(paperRef.current);
+
+    setIsPreparingPrint(false);
+
+    requestAnimationFrame(() => {
+      window.print();
+    });
+  } catch (error) {
+    console.error("Unable to prepare the quiz for printing:", error);
+
+    setIsPreparingPrint(false);
+    window.print();
+  }
+}, [isPreparingPrint, isPreparingWord, total]);
+
 const handleDownloadWord = useCallback(async () => {
   if (isPreparingWord || total === 0) return;
 
