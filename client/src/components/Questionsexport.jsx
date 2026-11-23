@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Printer, X, Info, Loader2 } from "lucide-react";
+import {
+  Printer,
+  X,
+  Info,
+  Loader2,
+  FileText,
+} from "lucide-react";
 import MathRenderer from "./MathRenderer";
+import { downloadQuizAsDocx } from "../utils/exportQuizDocx";
 
 /*
  * QuestionsExport
@@ -378,20 +385,37 @@ export default function QuestionsExport({ quiz, questions, onClose }) {
     };
   }, [safeTitle]);
 
-  const handlePrint = useCallback(async () => {
-    if (isPreparingPrint) return;
+const handleDownloadWord = useCallback(async () => {
+  if (isPreparingWord || total === 0) return;
 
-    setIsPreparingPrint(true);
-    try {
-      await waitForPrintAssets(paperRef.current);
-      setIsPreparingPrint(false);
-      requestAnimationFrame(() => window.print());
-    } catch (error) {
-      console.error("Unable to prepare the quiz for printing:", error);
-      setIsPreparingPrint(false);
-      window.print();
-    }
-  }, [isPreparingPrint]);
+  setIsPreparingWord(true);
+
+  try {
+    await downloadQuizAsDocx({
+      quiz,
+      questions: safeQuestions,
+      answerMode,
+      showExplanations,
+      studentLines,
+    });
+  } catch (error) {
+    console.error("Word export failed:", error);
+
+    window.alert(
+      "Unable to create the Word document. Please try again."
+    );
+  } finally {
+    setIsPreparingWord(false);
+  }
+}, [
+  quiz,
+  safeQuestions,
+  answerMode,
+  showExplanations,
+  studentLines,
+  isPreparingWord,
+  total,
+]);
 
   const modes = [
     { id: "none", label: "Questions only" },
@@ -421,12 +445,36 @@ export default function QuestionsExport({ quiz, questions, onClose }) {
             <button
               type="button"
               onClick={handlePrint}
-              disabled={isPreparingPrint || total === 0}
+             disabled={
+  isPreparingPrint ||
+  isPreparingWord ||
+  total === 0
+}
               className={`inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground shadow-sm transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
             >
               {isPreparingPrint ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
               {isPreparingPrint ? "Preparing PDF…" : "Print / Save as PDF"}
             </button>
+            <button
+  type="button"
+  onClick={handleDownloadWord}
+  disabled={
+    isPreparingWord ||
+    isPreparingPrint ||
+    total === 0
+  }
+  className={`inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
+>
+  {isPreparingWord ? (
+    <Loader2 className="h-4 w-4 animate-spin" />
+  ) : (
+    <FileText className="h-4 w-4" />
+  )}
+
+  {isPreparingWord
+    ? "Preparing Word..."
+    : "Download Word"}
+</button>
             <button
               ref={closeButtonRef}
               type="button"
