@@ -297,6 +297,54 @@ socket.on('leaderboard_update', (data) => {
               <div role="status" className={`kahoot-enter rounded-xl px-4 py-3 text-center text-xl font-black ${lastResult.correct ? 'bg-blue-600/20 text-blue-200 ring-1 ring-blue-400/40' : 'bg-red-600/20 text-red-200 ring-1 ring-red-400/40'}`}>
                 {lastResult.timedOut ? "Time's up!" : lastResult.correct ? '✓ Correct!' : '✕ Wrong answer'}
               </div>
+              
+              
+<div className="mt-5 rounded-2xl border border-slate-700 bg-slate-900 p-4 text-left">
+  <div className="mb-4 flex items-center justify-between">
+    <h3 className="text-lg font-black">
+      🏆 Live leaderboard
+    </h3>
+
+    <span className="text-sm text-slate-400">
+      Your rank: #{myRank ?? '—'}
+    </span>
+  </div>
+
+  <div className="space-y-2">
+    {leaderboard.map((player) => (
+      <div
+        key={`${player.rank}-${player.name}`}
+        className={`flex items-center justify-between rounded-xl p-3 ${
+          player.rank === myRank
+            ? 'border border-yellow-400/40 bg-yellow-400/10'
+            : 'bg-slate-800'
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="w-8 font-black text-yellow-400">
+            #{player.rank}
+          </span>
+
+          <div className="min-w-0">
+            <p className="truncate font-bold">
+              {player.name}
+              {player.rank === myRank ? ' (You)' : ''}
+            </p>
+
+            <p className="text-xs text-slate-400">
+              {player.correctCount} correct
+            </p>
+          </div>
+        </div>
+
+        <span className="font-black tabular-nums">
+          {player.score.toLocaleString()} pts
+        </span>
+      </div>
+    ))}
+  </div>
+</div>
+
             )}
 
             <div className="grid gap-3 sm:grid-cols-2">
