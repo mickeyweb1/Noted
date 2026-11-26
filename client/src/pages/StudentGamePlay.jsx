@@ -38,6 +38,8 @@ export default function StudentGamePlay() {
   const [selectedChoice, setSelectedChoice] = useState(null);
   const [lastResult, setLastResult] = useState(null);
   const [stats, setStats] = useState({ score: 0, correctCount: 0 });
+  const [leaderboard, setLeaderboard] = useState([]);
+const [myRank, setMyRank] = useState(null);
   const [connection, setConnection] = useState('connecting');
   const [error, setError] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -165,6 +167,17 @@ export default function StudentGamePlay() {
       setTimeLeft(Math.max(0, Math.ceil((nextQuestion.endsAt - Date.now()) / 1000)));
     });
     socket.on('answer_result', (result) => {
+      setLeaderboard(result.leaderboard || []);
+setMyRank(result.rank ?? null);
+
+
+socket.on('leaderboard_update', (data) => {
+  if (!active) return;
+
+  setLeaderboard(data.leaderboard || []);
+  setMyRank(data.rank ?? null);
+});
+
       if (!active) return;
       setLastResult(result);
       setSelectedChoice(result.selectedIndex ?? null);
