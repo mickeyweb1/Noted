@@ -228,6 +228,40 @@ export function registerKahootGame(io) {
     nsp.to(hostRoom(key)).emit('host_state', state);
   };
 
+
+const buildLeaderboard = async (quizId) => {
+  const attempts = await KahootAttempt.find({
+    quiz: quizId,
+    startedAt: { $ne: null },
+  })
+    .select('studentName status score correctCount answers')
+    .lean();
+
+  const ranked = attempts.map((attempt) => ({
+    name: attempt.studentName,
+    score: Number(attempt.score) || 0,
+    correctCount: Number(attempt.correctCount) || 0,
+    status: attempt.status,
+    timeTaken: (attempt.answers || []).reduce(
+      (total, answer) => total + (answer.timeTakenMs || 0),
+      0
+    ),
+  }));
+
+  ranked.sort((a, b) =>
+    b.score - a.score ||
+    b.correctCount - a.correctCount ||
+    a.timeTaken - b.timeTaken ||
+    a.name.localeCompare(b.name)
+  );
+
+  return ranked.map((player, index) => ({
+    ...player,
+    rank: index + 1,
+  }));
+};
+
+
   const sendQuestion = (attempt, quiz) => {
     const payload = questionForStudent(quiz, attempt.currentQuestionIndex, attempt);
     if (payload) nsp.to(attemptRoom(attempt._id)).emit('attempt_question', payload);
@@ -538,10 +572,36 @@ const recordAnswer = async (attemptId, selectedIndex, timedOut = false) => {
 
   clearAttemptTimer(updated._id);
 
-  nsp.to(attemptRoom(updated._id)).emit(
-    'answer_result',
-    updated.lastResult
+
+const leaderboard = await buildLeaderboard(quiz._id);
+
+const myStanding = leaderboard.find(
+  (player) => player.name === updated.studentName
+);
+
+nsp.to(attemptRoom(updated._id)).emit('answer_result', {
+  ...updated.lastResult,
+  leaderboard,
+  rank: myStanding?.rank ?? null,
+});
+
+// Update the leaderboard on every connected student's screen.
+const allAttempts = await KahootAttempt.find({
+  quiz: quiz._id,
+  startedAt: { $ne: null },
+}).select('_id studentName').lean();
+
+for (const attempt of allAttempts) {
+  const standing = leaderboard.find(
+    (player) => player.name === attempt.studentName
   );
+
+  nsp.to(attemptRoom(attempt._id)).emit('leaderboard_update', {
+    leaderboard,
+    rank: standing?.rank ?? null,
+  });
+}
+
 
   scheduleAttemptTimer(updated);
 
