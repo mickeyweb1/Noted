@@ -228,29 +228,32 @@ export function registerKahootGame(io) {
     nsp.to(hostRoom(key)).emit('host_state', state);
   };
 
-
 const buildLeaderboard = async (quizId) => {
+  // Only include students who have completed the entire quiz.
   const attempts = await KahootAttempt.find({
     quiz: quizId,
-    startedAt: { $ne: null },
+    status: 'completed',
+    completedAt: { $ne: null },
   })
-    .select('_id studentName status score correctCount answers')
+    .select('_id studentName score correctCount answers completedAt')
     .lean();
 
   const ranked = attempts.map((attempt) => ({
-    // Internal identifier used to match a leaderboard row to one attempt.
-    // It is removed before the leaderboard is sent to student browsers.
     attemptId: String(attempt._id),
     name: attempt.studentName,
     score: Number(attempt.score) || 0,
     correctCount: Number(attempt.correctCount) || 0,
-    status: attempt.status,
+    status: 'completed',
+
     timeTaken: (attempt.answers || []).reduce(
-      (total, answer) => total + (Number(answer.timeTakenMs) || 0),
+      (total, answer) =>
+        total + (Number(answer.timeTakenMs) || 0),
       0,
     ),
   }));
 
+  // Highest score first.
+  // Tie-break: correct answers, then fastest total time.
   ranked.sort((a, b) =>
     b.score - a.score ||
     b.correctCount - a.correctCount ||
@@ -263,7 +266,6 @@ const buildLeaderboard = async (quizId) => {
     rank: index + 1,
   }));
 };
-
 
   const sendQuestion = (attempt, quiz) => {
     const payload = questionForStudent(quiz, attempt.currentQuestionIndex, attempt);
@@ -367,31 +369,76 @@ const buildLeaderboard = async (quizId) => {
     }
   };
 
-  const finishAttempt = async (attempt, quiz) => {
-    if (attempt.status === 'completed') return;
-    clearAttemptTimer(attempt._id);
-    attempt.status = 'completed';
-    attempt.completedAt = new Date();
-    attempt.questionEndsAt = null;
-    attempt.feedbackEndsAt = null;
-    attempt.lastSeenAt = new Date();
-    await attempt.save();
+const finishAttempt = async (attempt, quiz) => {
+  if (attempt.status === 'completed') return;
 
-    try {
-      await saveSubmission(attempt, quiz);
-    } catch (error) {
-      // The attempt itself is already durable. A reconnect or teacher refresh can safely retry.
-      console.error('[Kahoot] Result save failed; it will be retried on the next sync:', error.message);
-    }
+  clearAttemptTimer(attempt._id);
 
-    nsp.to(attemptRoom(attempt._id)).emit('attempt_finished', {
-      score: attempt.score,
-      correctCount: attempt.correctCount,
-      totalQuestions: quiz.questions.length,
-      completedAt: attempt.completedAt,
-    });
-    await emitHostState(quiz._id);
-  };
+  attempt.status = 'completed';
+  attempt.completedAt = new Date();
+  attempt.questionEndsAt = null;
+  attempt.feedbackEndsAt = null;
+  attempt.lastSeenAt = new Date();
+
+  await attempt.save();
+
+  try {
+    await saveSubmission(attempt, quiz);
+  } catch (error) {
+    console.error(
+      '[Kahoot] Result save failed; it will be retried on the next sync:',
+      error.message,
+    );
+  }
+
+  // Rebuild the leaderboard after this student has completed.
+  const rankedLeaderboard = await buildLeaderboard(quiz._id);
+
+  const myStanding = rankedLeaderboard.find(
+    (player) => player.attemptId === String(attempt._id),
+  );
+
+  // Remove internal attempt IDs before sending data to browsers.
+  const leaderboard = rankedLeaderboard.map((player) => {
+    const { attemptId, ...publicPlayer } = player;
+    return publicPlayer;
+  });
+
+  // Send the completed student's final result and rank.
+  nsp.to(attemptRoom(attempt._id)).emit('attempt_finished', {
+    score: attempt.score,
+    correctCount: attempt.correctCount,
+    totalQuestions: quiz.questions.length,
+    completedAt: attempt.completedAt,
+    rank: myStanding?.rank ?? null,
+    leaderboard,
+  });
+
+  // Update every started student's leaderboard.
+  // This also updates students who have already finished.
+  const allAttempts = await KahootAttempt.find({
+    quiz: quiz._id,
+    startedAt: { $ne: null },
+  })
+    .select('_id')
+    .lean();
+
+  for (const otherAttempt of allAttempts) {
+    const standing = rankedLeaderboard.find(
+      (player) => player.attemptId === String(otherAttempt._id),
+    );
+
+    nsp.to(attemptRoom(otherAttempt._id)).emit(
+      'leaderboard_update',
+      {
+        leaderboard,
+        rank: standing?.rank ?? null,
+      },
+    );
+  }
+
+  await emitHostState(quiz._id);
+};
 
   const scheduleAttemptTimer = (attempt) => {
     clearAttemptTimer(attempt._id);

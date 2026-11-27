@@ -229,15 +229,25 @@ export default function StudentGamePlay() {
       }
     });
 
-    socket.on('attempt_finished', (result) => {
-      if (!active) return;
-      setStats({
-        score: Number(result.score) || 0,
-        correctCount: Number(result.correctCount) || 0,
-      });
-      setGameState('finished');
-      setTimeLeft(0);
-    });
+socket.on('attempt_finished', (result) => {
+  if (!active) return;
+
+  setStats({
+    score: Number(result.score) || 0,
+    correctCount: Number(result.correctCount) || 0,
+  });
+
+  setLeaderboard(
+    Array.isArray(result.leaderboard)
+      ? result.leaderboard
+      : [],
+  );
+
+  setMyRank(result.rank ?? null);
+
+  setGameState('finished');
+  setTimeLeft(0);
+});
 
     socket.on('game_error', (gameError) => {
       if (!active) return;
@@ -514,32 +524,105 @@ export default function StudentGamePlay() {
           </div>
         )}
 
-        {gameState === 'finished' && (
-          <div className="kahoot-enter w-full max-w-xl rounded-3xl border border-yellow-500/30 bg-slate-900 p-8 text-center">
-            <Trophy className="mx-auto h-16 w-16 text-yellow-400" />
-            <h2 className="mt-4 text-3xl font-black">Quiz completed!</h2>
-            <p className="mt-2 text-slate-300">Your answers have been saved.</p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-slate-800 p-4">
-                <p className="text-sm text-slate-400">Correct</p>
-                <p className="mt-1 text-3xl font-black text-blue-300">{stats.correctCount}</p>
-              </div>
-              <div className="rounded-xl bg-slate-800 p-4">
-                <p className="text-sm text-slate-400">Points</p>
-                <p className="mt-1 text-3xl font-black text-yellow-300">
-                  {stats.score.toLocaleString()}
-                </p>
-              </div>
+{gameState === 'finished' && (
+  <div className="kahoot-enter w-full max-w-xl space-y-5">
+    <div className="rounded-3xl border border-yellow-500/30 bg-slate-900 p-8 text-center">
+      <Trophy className="mx-auto h-16 w-16 text-yellow-400" />
+
+      <h2 className="mt-4 text-3xl font-black">
+        Quiz completed!
+      </h2>
+
+      <p className="mt-2 text-slate-300">
+        Your answers have been saved.
+      </p>
+
+      <div className="mt-6 rounded-2xl border border-yellow-400/20 bg-yellow-400/10 p-5">
+        <p className="text-sm text-slate-400">
+          Your final rank
+        </p>
+
+        <p className="mt-1 text-5xl font-black text-yellow-300">
+          #{myRank ?? '—'}
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-slate-800 p-4">
+          <p className="text-sm text-slate-400">Correct</p>
+          <p className="mt-1 text-3xl font-black text-blue-300">
+            {stats.correctCount}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-slate-800 p-4">
+          <p className="text-sm text-slate-400">Points</p>
+          <p className="mt-1 text-3xl font-black text-yellow-300">
+            {stats.score.toLocaleString()}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-black">
+          🏆 Final leaderboard
+        </h3>
+
+        <span className="text-xs text-slate-400">
+          Completed students
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {leaderboard.map((player) => (
+          <div
+            key={`${player.rank}-${player.name}`}
+            className={`flex items-center justify-between rounded-xl p-3 ${
+              player.rank === myRank
+                ? 'border border-yellow-400/40 bg-yellow-400/10'
+                : 'bg-slate-800'
+            }`}
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="w-8 font-black text-yellow-400">
+                #{player.rank}
+              </span>
+
+              <p className="truncate font-bold">
+                {player.name}
+                {player.rank === myRank ? ' (You)' : ''}
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="mt-6 w-full rounded-xl bg-brand py-3 font-bold text-white"
-            >
-              Return to Noted
-            </button>
+
+            <span className="font-black tabular-nums">
+              {Number(player.score || 0).toLocaleString()} pts
+            </span>
           </div>
+        ))}
+
+        {leaderboard.length === 0 && (
+          <p className="py-4 text-center text-sm text-slate-400">
+            Your result is being added to the leaderboard...
+          </p>
         )}
+      </div>
+
+      <p className="mt-4 text-center text-xs text-slate-400">
+        This leaderboard updates when another student completes the quiz.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => navigate('/')}
+      className="w-full rounded-xl bg-brand py-3 font-bold text-white"
+    >
+      Return to Noted
+    </button>
+  </div>
+)}
       </section>
     </main>
   );
