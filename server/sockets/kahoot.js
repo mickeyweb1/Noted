@@ -234,17 +234,20 @@ const buildLeaderboard = async (quizId) => {
     quiz: quizId,
     startedAt: { $ne: null },
   })
-    .select('studentName status score correctCount answers')
+    .select('_id studentName status score correctCount answers')
     .lean();
 
   const ranked = attempts.map((attempt) => ({
+    // Internal identifier used to match a leaderboard row to one attempt.
+    // It is removed before the leaderboard is sent to student browsers.
+    attemptId: String(attempt._id),
     name: attempt.studentName,
     score: Number(attempt.score) || 0,
     correctCount: Number(attempt.correctCount) || 0,
     status: attempt.status,
     timeTaken: (attempt.answers || []).reduce(
-      (total, answer) => total + (answer.timeTakenMs || 0),
-      0
+      (total, answer) => total + (Number(answer.timeTakenMs) || 0),
+      0,
     ),
   }));
 
@@ -573,35 +576,45 @@ const recordAnswer = async (attemptId, selectedIndex, timedOut = false) => {
   clearAttemptTimer(updated._id);
 
 
-const leaderboard = await buildLeaderboard(quiz._id);
+  const rankedLeaderboard = await buildLeaderboard(quiz._id);
 
-const myStanding = leaderboard.find(
-  (player) => player.name === updated.studentName
-);
-
-nsp.to(attemptRoom(updated._id)).emit('answer_result', {
-  ...updated.lastResult,
-  leaderboard,
-  rank: myStanding?.rank ?? null,
-});
-
-// Update the leaderboard on every connected student's screen.
-const allAttempts = await KahootAttempt.find({
-  quiz: quiz._id,
-  startedAt: { $ne: null },
-}).select('_id studentName').lean();
-
-for (const attempt of allAttempts) {
-  const standing = leaderboard.find(
-    (player) => player.name === attempt.studentName
+  // Find this student's position using the unique attempt ID, not the name.
+  // Two students are allowed to have the same display name.
+  const myStanding = rankedLeaderboard.find(
+    (player) => player.attemptId === String(updated._id),
   );
 
-  nsp.to(attemptRoom(attempt._id)).emit('leaderboard_update', {
-    leaderboard,
-    rank: standing?.rank ?? null,
+  // Do not send the internal attempt identifier to student browsers.
+  const leaderboard = rankedLeaderboard.map((player) => {
+    const { attemptId, ...publicPlayer } = player;
+    return publicPlayer;
   });
-}
 
+  nsp.to(attemptRoom(updated._id)).emit('answer_result', {
+    ...updated.lastResult,
+    leaderboard,
+    rank: myStanding?.rank ?? null,
+  });
+
+  // Send the refreshed leaderboard and each student's own rank to every
+  // started attempt in this quiz. Match by attempt ID, never by student name.
+  const allAttempts = await KahootAttempt.find({
+    quiz: quiz._id,
+    startedAt: { $ne: null },
+  })
+    .select('_id')
+    .lean();
+
+  for (const attempt of allAttempts) {
+    const standing = rankedLeaderboard.find(
+      (player) => player.attemptId === String(attempt._id),
+    );
+
+    nsp.to(attemptRoom(attempt._id)).emit('leaderboard_update', {
+      leaderboard,
+      rank: standing?.rank ?? null,
+    });
+  }
 
   scheduleAttemptTimer(updated);
 

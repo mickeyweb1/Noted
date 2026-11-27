@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertCircle, Check, Clock3, Trophy, Wifi, WifiOff, X,
-  Volume2, VolumeX, Loader2,
+  AlertCircle,
+  Check,
+  Clock3,
+  Trophy,
+  Wifi,
+  WifiOff,
+  X,
+  Volume2,
+  VolumeX,
+  Loader2,
 } from 'lucide-react';
 import { createKahootSocket } from '../utils/socket';
-import MathRenderer from "../components/MathRenderer";
+import MathRenderer from '../components/MathRenderer';
 
 const SHAPES = [
   { symbol: '▲', base: 'bg-red-600', hover: 'hover:bg-red-500' },
@@ -26,12 +34,16 @@ export default function StudentGamePlay() {
   const code = sessionStorage.getItem('kahoot_code');
   const [playerName] = useState(() => sessionStorage.getItem('playerName') || '');
   const [playerKey] = useState(() => (
-    sessionStorage.getItem('kahoot_playerKey') || sessionStorage.getItem('kahoot_playerId') || ''
+    sessionStorage.getItem('kahoot_playerKey') ||
+    sessionStorage.getItem('kahoot_playerId') ||
+    ''
   ));
 
   const socketRef = useRef(null);
   const audioContextRef = useRef(null);
   const musicTimerRef = useRef(null);
+  const soundEnabledRef = useRef(false);
+
   const [gameState, setGameState] = useState('waiting');
   const [question, setQuestion] = useState(null);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -39,11 +51,10 @@ export default function StudentGamePlay() {
   const [lastResult, setLastResult] = useState(null);
   const [stats, setStats] = useState({ score: 0, correctCount: 0 });
   const [leaderboard, setLeaderboard] = useState([]);
-const [myRank, setMyRank] = useState(null);
+  const [myRank, setMyRank] = useState(null);
   const [connection, setConnection] = useState('connecting');
   const [error, setError] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const soundEnabledRef = useRef(false);
   const [answerSending, setAnswerSending] = useState(false);
 
   const clearMusicTimer = useCallback(() => {
@@ -56,9 +67,11 @@ const [myRank, setMyRank] = useState(null);
   const tone = useCallback((frequency, duration = 0.2, waveform = 'sine', volume = 0.045) => {
     const context = audioContextRef.current;
     if (!context || context.state !== 'running') return;
+
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const now = context.currentTime;
+
     oscillator.type = waveform;
     oscillator.frequency.setValueAtTime(frequency, now);
     gain.gain.setValueAtTime(0.0001, now);
@@ -77,7 +90,11 @@ const [myRank, setMyRank] = useState(null);
         setError('This browser does not support in-game audio.');
         return;
       }
-      if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass();
+      }
+
       await audioContextRef.current.resume();
       soundEnabledRef.current = true;
       setSoundEnabled(true);
@@ -91,6 +108,7 @@ const [myRank, setMyRank] = useState(null);
     soundEnabledRef.current = false;
     setSoundEnabled(false);
     clearMusicTimer();
+
     if (audioContextRef.current?.state === 'running') {
       audioContextRef.current.suspend().catch(() => {});
     }
@@ -101,19 +119,24 @@ const [myRank, setMyRank] = useState(null);
       clearMusicTimer();
       return undefined;
     }
+
     const melody = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880, 698.46];
     let step = 0;
+
     tone(melody[0], 0.28, 'triangle', 0.018);
     musicTimerRef.current = window.setInterval(() => {
       tone(melody[step % melody.length], 0.28, 'triangle', 0.018);
       step += 1;
     }, 430);
+
     return clearMusicTimer;
   }, [soundEnabled, gameState, clearMusicTimer, tone]);
 
   useEffect(() => () => {
     clearMusicTimer();
-    if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+    }
   }, [clearMusicTimer]);
 
   useEffect(() => {
@@ -128,8 +151,8 @@ const [myRank, setMyRank] = useState(null);
 
     const applySnapshot = (snapshot) => {
       if (!active) return;
-      const nextState = getStatus(snapshot.status);
-      setGameState(nextState);
+
+      setGameState(getStatus(snapshot.status));
       setQuestion(snapshot.question || null);
       setLastResult(snapshot.lastResult || null);
       setSelectedChoice(snapshot.lastResult?.selectedIndex ?? null);
@@ -137,16 +160,27 @@ const [myRank, setMyRank] = useState(null);
         score: Number(snapshot.me?.score) || 0,
         correctCount: Number(snapshot.me?.correctCount) || 0,
       });
+
       if (snapshot.question?.endsAt) {
         setTimeLeft(Math.max(0, Math.ceil((snapshot.question.endsAt - Date.now()) / 1000)));
       }
+    };
+
+    const handleLeaderboardUpdate = (data = {}) => {
+      if (!active) return;
+      setLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
+      setMyRank(data.rank ?? null);
     };
 
     const join = () => {
       if (!active) return;
       setConnection('connected');
       setError('');
-      socket.emit('player_join', { code, name: playerName, playerId: playerKey });
+      socket.emit('player_join', {
+        code,
+        name: playerName,
+        playerId: playerKey,
+      });
     };
 
     socket.on('connect', join);
@@ -157,6 +191,7 @@ const [myRank, setMyRank] = useState(null);
       if (active) setConnection('disconnected');
     });
     socket.on('joined', applySnapshot);
+
     socket.on('attempt_question', (nextQuestion) => {
       if (!active) return;
       setQuestion(nextQuestion);
@@ -166,24 +201,24 @@ const [myRank, setMyRank] = useState(null);
       setAnswerSending(false);
       setTimeLeft(Math.max(0, Math.ceil((nextQuestion.endsAt - Date.now()) / 1000)));
     });
+
+    // Register this once when the socket is created, not inside answer_result.
+    socket.on('leaderboard_update', handleLeaderboardUpdate);
+
     socket.on('answer_result', (result) => {
-      setLeaderboard(result.leaderboard || []);
-setMyRank(result.rank ?? null);
-
-
-socket.on('leaderboard_update', (data) => {
-  if (!active) return;
-
-  setLeaderboard(data.leaderboard || []);
-  setMyRank(data.rank ?? null);
-});
-
       if (!active) return;
+
+      setLeaderboard(Array.isArray(result.leaderboard) ? result.leaderboard : []);
+      setMyRank(result.rank ?? null);
       setLastResult(result);
       setSelectedChoice(result.selectedIndex ?? null);
-      setStats({ score: Number(result.score) || 0, correctCount: Number(result.correctCount) || 0 });
+      setStats({
+        score: Number(result.score) || 0,
+        correctCount: Number(result.correctCount) || 0,
+      });
       setGameState('feedback');
       setAnswerSending(false);
+
       if (soundEnabledRef.current) {
         if (result.correct) {
           tone(783.99, 0.16, 'sine', 0.055);
@@ -193,12 +228,17 @@ socket.on('leaderboard_update', (data) => {
         }
       }
     });
+
     socket.on('attempt_finished', (result) => {
       if (!active) return;
-      setStats({ score: Number(result.score) || 0, correctCount: Number(result.correctCount) || 0 });
+      setStats({
+        score: Number(result.score) || 0,
+        correctCount: Number(result.correctCount) || 0,
+      });
       setGameState('finished');
       setTimeLeft(0);
     });
+
     socket.on('game_error', (gameError) => {
       if (!active) return;
       setError(gameError?.message || 'The quiz returned an error.');
@@ -207,6 +247,7 @@ socket.on('leaderboard_update', (data) => {
     });
 
     if (socket.connected) join();
+
     return () => {
       active = false;
       socket.removeAllListeners();
@@ -217,7 +258,11 @@ socket.on('leaderboard_update', (data) => {
 
   useEffect(() => {
     if (gameState !== 'playing' || !question?.endsAt) return undefined;
-    const update = () => setTimeLeft(Math.max(0, Math.ceil((question.endsAt - Date.now()) / 1000)));
+
+    const update = () => {
+      setTimeLeft(Math.max(0, Math.ceil((question.endsAt - Date.now()) / 1000)));
+    };
+
     update();
     const timer = window.setInterval(update, 200);
     return () => window.clearInterval(timer);
@@ -225,7 +270,17 @@ socket.on('leaderboard_update', (data) => {
 
   const answer = (index) => {
     const socket = socketRef.current;
-    if (gameState !== 'playing' || selectedChoice !== null || answerSending || !socket?.connected || timeLeft <= 0) return;
+
+    if (
+      gameState !== 'playing' ||
+      selectedChoice !== null ||
+      answerSending ||
+      !socket?.connected ||
+      timeLeft <= 0
+    ) {
+      return;
+    }
+
     setSelectedChoice(index);
     setAnswerSending(true);
     socket.emit('player_answer', { choice: index });
@@ -245,7 +300,11 @@ socket.on('leaderboard_update', (data) => {
       `}</style>
 
       <header className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 p-4">
-        <div className="flex items-center gap-2"><Trophy className="h-5 w-5 text-yellow-400" /><span className="font-black">{stats.correctCount} correct</span></div>
+        <div className="flex items-center gap-2">
+          <Trophy className="h-5 w-5 text-yellow-400" />
+          <span className="font-black">{stats.correctCount} correct</span>
+        </div>
+
         <div className="min-w-0 text-center">
           <p className="truncate font-black text-brand">{playerName}</p>
           <p className={`inline-flex items-center gap-1 text-xs ${connection === 'connected' ? 'text-green-300' : 'text-yellow-300'}`}>
@@ -253,6 +312,7 @@ socket.on('leaderboard_update', (data) => {
             {connection === 'connected' ? 'Connected' : 'Reconnecting'}
           </p>
         </div>
+
         <div className="flex items-center gap-3">
           <span className="font-black tabular-nums">{stats.score.toLocaleString()}</span>
           <button
@@ -267,15 +327,26 @@ socket.on('leaderboard_update', (data) => {
         </div>
       </header>
 
-      {error && <div role="alert" className="mx-auto mt-4 flex max-w-2xl items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
+      {error && (
+        <div role="alert" className="mx-auto mt-4 flex max-w-2xl items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       <section className="flex min-h-[calc(100vh-72px)] flex-col items-center justify-center gap-6 p-4">
         {gameState === 'waiting' && (
           <div className="kahoot-enter max-w-xl text-center">
             <Loader2 className="mx-auto mb-5 h-14 w-14 animate-spin text-brand" />
             <h2 className="text-3xl font-black">You're registered!</h2>
-            <p className="mt-3 text-slate-400">{connection === 'connected' ? 'Your teacher has not opened this quiz yet. Keep this page open.' : 'Reconnecting to your quiz...'}</p>
-            <p className="mt-5 text-xs text-slate-500">Your code is reserved for you. Refreshing this page will not erase your progress.</p>
+            <p className="mt-3 text-slate-400">
+              {connection === 'connected'
+                ? 'Your teacher has not opened this quiz yet. Keep this page open.'
+                : 'Reconnecting to your quiz...'}
+            </p>
+            <p className="mt-5 text-xs text-slate-500">
+              Your code is reserved for you. Refreshing this page will not erase your progress.
+            </p>
           </div>
         )}
 
@@ -283,91 +354,126 @@ socket.on('leaderboard_update', (data) => {
           <div key={question.index} className="kahoot-enter w-full max-w-4xl space-y-6">
             <div className="text-center">
               <div className="inline-flex items-center gap-2 rounded-full bg-red-500/15 px-4 py-2 text-xl font-black text-red-300">
-                <Clock3 className="h-5 w-5" /> {isFeedback ? 'Answer checked' : `${timeLeft}s`}
+                <Clock3 className="h-5 w-5" />
+                {isFeedback ? 'Answer checked' : `${timeLeft}s`}
               </div>
-              <p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-400">Question {(question.index ?? 0) + 1} of {question.total || '—'}</p>
+              <p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                Question {(question.index ?? 0) + 1} of {question.total || '—'}
+              </p>
               <h2 className="mt-3 text-2xl font-black leading-tight md:text-4xl">
-  <MathRenderer>{question.question}</MathRenderer>
-</h2>
+                <MathRenderer>{question.question}</MathRenderer>
+              </h2>
             </div>
 
-            {question.imageUrl && <img src={question.imageUrl} alt="Question illustration" className="mx-auto max-h-64 w-full rounded-xl bg-slate-800 object-contain" />}
+            {question.imageUrl && (
+              <img
+                src={question.imageUrl}
+                alt="Question illustration"
+                className="mx-auto max-h-64 w-full rounded-xl bg-slate-800 object-contain"
+              />
+            )}
 
             {isFeedback && (
-              <div role="status" className={`kahoot-enter rounded-xl px-4 py-3 text-center text-xl font-black ${lastResult.correct ? 'bg-blue-600/20 text-blue-200 ring-1 ring-blue-400/40' : 'bg-red-600/20 text-red-200 ring-1 ring-red-400/40'}`}>
-                {lastResult.timedOut ? "Time's up!" : lastResult.correct ? '✓ Correct!' : '✕ Wrong answer'}
-              </div>
-              
-              
-<div className="mt-5 rounded-2xl border border-slate-700 bg-slate-900 p-4 text-left">
-  <div className="mb-4 flex items-center justify-between">
-    <h3 className="text-lg font-black">
-      🏆 Live leaderboard
-    </h3>
+              <>
+                <div
+                  role="status"
+                  className={`kahoot-enter rounded-xl px-4 py-3 text-center text-xl font-black ${
+                    lastResult.correct
+                      ? 'bg-blue-600/20 text-blue-200 ring-1 ring-blue-400/40'
+                      : 'bg-red-600/20 text-red-200 ring-1 ring-red-400/40'
+                  }`}
+                >
+                  {lastResult.timedOut
+                    ? "Time's up!"
+                    : lastResult.correct
+                      ? '✓ Correct!'
+                      : '✕ Wrong answer'}
+                </div>
 
-    <span className="text-sm text-slate-400">
-      Your rank: #{myRank ?? '—'}
-    </span>
-  </div>
+                <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-900 p-4 text-left">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-black">🏆 Live leaderboard</h3>
+                    <span className="text-sm text-slate-400">
+                      Your rank: #{myRank ?? '—'}
+                    </span>
+                  </div>
 
-  <div className="space-y-2">
-    {leaderboard.map((player) => (
-      <div
-        key={`${player.rank}-${player.name}`}
-        className={`flex items-center justify-between rounded-xl p-3 ${
-          player.rank === myRank
-            ? 'border border-yellow-400/40 bg-yellow-400/10'
-            : 'bg-slate-800'
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="w-8 font-black text-yellow-400">
-            #{player.rank}
-          </span>
+                  <div className="space-y-2">
+                    {leaderboard.map((player) => (
+                      <div
+                        key={`${player.rank}-${player.name}`}
+                        className={`flex items-center justify-between rounded-xl p-3 ${
+                          player.rank === myRank
+                            ? 'border border-yellow-400/40 bg-yellow-400/10'
+                            : 'bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="w-8 font-black text-yellow-400">#{player.rank}</span>
+                          <div className="min-w-0">
+                            <p className="truncate font-bold">
+                              {player.name}
+                              {player.rank === myRank ? ' (You)' : ''}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {player.correctCount} correct
+                            </p>
+                          </div>
+                        </div>
+                        <span className="font-black tabular-nums">
+                          {Number(player.score || 0).toLocaleString()} pts
+                        </span>
+                      </div>
+                    ))}
 
-          <div className="min-w-0">
-            <p className="truncate font-bold">
-              {player.name}
-              {player.rank === myRank ? ' (You)' : ''}
-            </p>
-
-            <p className="text-xs text-slate-400">
-              {player.correctCount} correct
-            </p>
-          </div>
-        </div>
-
-        <span className="font-black tabular-nums">
-          {player.score.toLocaleString()} pts
-        </span>
-      </div>
-    ))}
-  </div>
-</div>
-
+                    {leaderboard.length === 0 && (
+                      <p className="py-4 text-center text-sm text-slate-400">
+                        The leaderboard will appear after the first answer.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="grid gap-3 sm:grid-cols-2">
               {(question.options || []).map((option, index) => {
-                const shape = SHAPES[index] || { symbol: String(index + 1), base: 'bg-slate-700', hover: 'hover:bg-slate-600' };
+                const shape = SHAPES[index] || {
+                  symbol: String(index + 1),
+                  base: 'bg-slate-700',
+                  hover: 'hover:bg-slate-600',
+                };
                 const isCorrect = isFeedback && index === lastResult.correctIndex;
                 const isWrongSelection = isFeedback && index === lastResult.selectedIndex && !lastResult.correct;
                 const isDimmed = isFeedback && !isCorrect && !isWrongSelection;
                 const isSelected = selectedChoice === index;
-                const colorClass = isCorrect ? 'bg-blue-600 ring-2 ring-blue-300' : isWrongSelection ? 'bg-red-600 ring-2 ring-red-300' : shape.base;
+                const colorClass = isCorrect
+                  ? 'bg-blue-600 ring-2 ring-blue-300'
+                  : isWrongSelection
+                    ? 'bg-red-600 ring-2 ring-red-300'
+                    : shape.base;
+
                 return (
                   <button
                     key={`${index}-${option}`}
                     type="button"
                     onClick={() => answer(index)}
-                    disabled={gameState !== 'playing' || selectedChoice !== null || answerSending || timeLeft <= 0 || connection !== 'connected'}
+                    disabled={
+                      gameState !== 'playing' ||
+                      selectedChoice !== null ||
+                      answerSending ||
+                      timeLeft <= 0 ||
+                      connection !== 'connected'
+                    }
                     aria-pressed={isSelected}
                     className={`flex min-h-24 items-center gap-4 rounded-2xl p-4 text-left text-lg font-bold text-white shadow-lg transition duration-200 disabled:cursor-not-allowed ${colorClass} ${!isFeedback ? shape.hover : ''} ${isDimmed ? 'opacity-50' : ''} ${isSelected && !isFeedback ? 'ring-4 ring-white' : ''}`}
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-black/20 text-2xl font-black">{shape.symbol}</span>
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-black/20 text-2xl font-black">
+                      {shape.symbol}
+                    </span>
                     <span className="break-words">
-  <MathRenderer>{option}</MathRenderer>
-</span>
+                      <MathRenderer>{option}</MathRenderer>
+                    </span>
                     {isCorrect && <Check className="ml-auto h-6 w-6 shrink-0" />}
                     {isWrongSelection && <X className="ml-auto h-6 w-6 shrink-0" />}
                     {isSelected && answerSending && <Loader2 className="ml-auto h-5 w-5 animate-spin" />}
@@ -377,13 +483,31 @@ socket.on('leaderboard_update', (data) => {
             </div>
 
             {isFeedback && (
-              <div className={`kahoot-enter rounded-2xl p-5 text-center ${lastResult.correct ? 'kahoot-correct border border-blue-400/40 bg-blue-500/15' : 'border border-red-400/40 bg-red-500/15'}`}>
+              <div
+                className={`kahoot-enter rounded-2xl p-5 text-center ${
+                  lastResult.correct
+                    ? 'kahoot-correct border border-blue-400/40 bg-blue-500/15'
+                    : 'border border-red-400/40 bg-red-500/15'
+                }`}
+              >
                 <h3 className={`text-3xl font-black ${lastResult.correct ? 'text-blue-300' : 'text-red-300'}`}>
-                  {lastResult.timedOut ? "Time's up!" : lastResult.correct ? 'Correct!' : 'Wrong answer'}
+                  {lastResult.timedOut
+                    ? "Time's up!"
+                    : lastResult.correct
+                      ? 'Correct!'
+                      : 'Wrong answer'}
                 </h3>
-                {!lastResult.correct && <p className="mt-2 text-slate-200">Correct answer: <strong className="text-blue-300">{lastResult.correctAnswer}</strong></p>}
-                {lastResult.correct && <p className="mt-2 text-blue-200">+{lastResult.points} points</p>}
-                {lastResult.explanation && <p className="mt-2 text-sm text-slate-300">{lastResult.explanation}</p>}
+                {!lastResult.correct && (
+                  <p className="mt-2 text-slate-200">
+                    Correct answer: <strong className="text-blue-300">{lastResult.correctAnswer}</strong>
+                  </p>
+                )}
+                {lastResult.correct && (
+                  <p className="mt-2 text-blue-200">+{lastResult.points} points</p>
+                )}
+                {lastResult.explanation && (
+                  <p className="mt-2 text-sm text-slate-300">{lastResult.explanation}</p>
+                )}
                 <p className="mt-3 text-xs text-slate-400">Loading your next question...</p>
               </div>
             )}
@@ -396,10 +520,24 @@ socket.on('leaderboard_update', (data) => {
             <h2 className="mt-4 text-3xl font-black">Quiz completed!</h2>
             <p className="mt-2 text-slate-300">Your answers have been saved.</p>
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-slate-800 p-4"><p className="text-sm text-slate-400">Correct</p><p className="mt-1 text-3xl font-black text-blue-300">{stats.correctCount}</p></div>
-              <div className="rounded-xl bg-slate-800 p-4"><p className="text-sm text-slate-400">Points</p><p className="mt-1 text-3xl font-black text-yellow-300">{stats.score.toLocaleString()}</p></div>
+              <div className="rounded-xl bg-slate-800 p-4">
+                <p className="text-sm text-slate-400">Correct</p>
+                <p className="mt-1 text-3xl font-black text-blue-300">{stats.correctCount}</p>
+              </div>
+              <div className="rounded-xl bg-slate-800 p-4">
+                <p className="text-sm text-slate-400">Points</p>
+                <p className="mt-1 text-3xl font-black text-yellow-300">
+                  {stats.score.toLocaleString()}
+                </p>
+              </div>
             </div>
-            <button type="button" onClick={() => navigate('/')} className="mt-6 w-full rounded-xl bg-brand py-3 font-bold text-white">Return to Noted</button>
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="mt-6 w-full rounded-xl bg-brand py-3 font-bold text-white"
+            >
+              Return to Noted
+            </button>
           </div>
         )}
       </section>
